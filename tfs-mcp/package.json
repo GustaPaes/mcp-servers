@@ -3,7 +3,10 @@
   "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "MCP server for ExampleProduct Azure DevOps / TFS — work items, PRs e code review automatizado.",
+  "description": "MCP server for TFS / Azure DevOps Server work items, PRs, reviews and delivery workflows.",
+  "license": "MIT",
+  "main": "index.js",
+  "keywords": ["mcp", "model-context-protocol", "tfs", "azure-devops", "work-items", "pull-requests"],
   "engines": { "node": ">=20" },
   "scripts": {
     "start": "node index.js",

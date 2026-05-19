@@ -1,0 +1,72 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "tfs-mcp": {
+      "type": "local",
+      "command": [
+        "node",
+        "C:/Workspace/MCP Servers/tfs-mcp/index.js"
+      ],
+      "enabled": false,
+      "env": {
+        "TFS_URL": "https://tfs.example.com",
+        "TFS_COLLECTION": "YourCollection",
+        "TFS_PROJECT": "YourProject",
+        "TFS_REPOS": "repo-one,repo-two",
+        "TFS_PAT": "replace-with-your-pat"
+      }
+    },
+    "career-development-mcp": {
+      "type": "local",
+      "command": [
+        "node",
+        "C:/Workspace/MCP Servers/career-development-mcp/index.js"
+      ],
+      "enabled": true,
+      "env": {
+        "LOG_LEVEL": "info",
+        "TFS_MCP_SERVER_DIR": "C:/Workspace/MCP Servers/tfs-mcp"
+      }
+    },
+    "playwright": {
+      "type": "local",
+      "command": [
+        "node",
+        "C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"
+      ],
+      "enabled": true,
+      "env": {
+        "PWMCP_DEFAULT_HEADLESS": "false",
+        "PWMCP_DEFAULT_BROWSER": "chromium",
+        "PWMCP_DEFAULT_CHANNEL": "chrome"
+      }
+    },
+    "azure": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "@azure/mcp@latest",
+        "server",
+        "start"
+      ],
+      "enabled": true
+    },
+    "oci-extras": {
+      "type": "local",
+      "command": [
+        "node",
+        "C:/Workspace/MCP Servers/oci-mcp/oci-extras-mcp/index.js"
+      ],
+      "enabled": false,
+      "env": {
+        "OCI_AUTH_METHOD": "session_token",
+        "OCI_REGION": "sa-saopaulo-1",
+        "OCI_MCP_DEFAULT_DRY_RUN": "true",
+        "OCI_MCP_ALLOW_DESTRUCTIVE": "false",
+        "OCI_MCP_ALLOW_SECRET_REVEAL": "false",
+        "OCI_MCP_ALLOW_THIRD_PARTY_MUTATION": "false"
+      }
+    }
+  }
+}

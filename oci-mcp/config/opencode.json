@@ -1,10 +1,10 @@
 {
-  "_comment": "OpenCode CLI config — place in ~/.opencode/config.json or your workspace .opencode.json",
+  "$schema": "https://opencode.ai/config.json",
   "mcp": {
     "oci-extras": {
       "type": "local",
       "command": ["node", "C:/Workspace/MCP Servers/oci-mcp/oci-extras-mcp/index.js"],
-      "environment": {
+      "env": {
         "OCI_CONFIG_PROFILE": "DEFAULT",
         "OCI_REGION": "sa-saopaulo-1",
         "OCI_MCP_DEFAULT_DRY_RUN": "true"
@@ -14,31 +14,31 @@
     "oci-api": {
       "type": "local",
       "command": ["cmd", "/c", "uvx", "oracle.oci-api-mcp-server@latest"],
-      "environment": { "OCI_CONFIG_PROFILE": "DEFAULT", "FASTMCP_LOG_LEVEL": "ERROR" },
+      "env": { "OCI_CONFIG_PROFILE": "DEFAULT", "FASTMCP_LOG_LEVEL": "ERROR" },
       "enabled": true
     },
     "oci-compute": {
       "type": "local",
       "command": ["cmd", "/c", "uvx", "oracle.oci-compute-mcp-server@latest"],
-      "environment": { "OCI_CONFIG_PROFILE": "DEFAULT", "FASTMCP_LOG_LEVEL": "ERROR" },
+      "env": { "OCI_CONFIG_PROFILE": "DEFAULT", "FASTMCP_LOG_LEVEL": "ERROR" },
       "enabled": true
     },
     "oci-identity": {
       "type": "local",
       "command": ["cmd", "/c", "uvx", "oracle.oci-identity-mcp-server@latest"],
-      "environment": { "OCI_CONFIG_PROFILE": "DEFAULT", "FASTMCP_LOG_LEVEL": "ERROR" },
+      "env": { "OCI_CONFIG_PROFILE": "DEFAULT", "FASTMCP_LOG_LEVEL": "ERROR" },
       "enabled": true
     },
     "oci-networking": {
       "type": "local",
       "command": ["cmd", "/c", "uvx", "oracle.oci-networking-mcp-server@latest"],
-      "environment": { "OCI_CONFIG_PROFILE": "DEFAULT", "FASTMCP_LOG_LEVEL": "ERROR" },
+      "env": { "OCI_CONFIG_PROFILE": "DEFAULT", "FASTMCP_LOG_LEVEL": "ERROR" },
       "enabled": true
     },
     "oci-monitoring": {
       "type": "local",
       "command": ["cmd", "/c", "uvx", "oracle.oci-monitoring-mcp-server@latest"],
-      "environment": { "OCI_CONFIG_PROFILE": "DEFAULT", "FASTMCP_LOG_LEVEL": "ERROR" },
+      "env": { "OCI_CONFIG_PROFILE": "DEFAULT", "FASTMCP_LOG_LEVEL": "ERROR" },
       "enabled": true
     }
   }

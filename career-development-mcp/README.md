@@ -9,6 +9,8 @@
 
 🇺🇸 **English** · 🇧🇷 [Português](#-português)
 
+Collection docs: [English](../README.en.md) | [Portugues](../README.pt-BR.md)
+
 ---
 
 ## Why

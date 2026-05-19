@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "MCP server para PDI, metas, evidencias e prontidao de carreira com integracao ao tfs-mcp.",
+  "description": "MCP server for PDIs, SMART goals, competencies, evidence and career review workflows.",
+  "license": "MIT",
+  "main": "index.js",
+  "keywords": ["mcp", "model-context-protocol", "career", "goals", "pdi", "evidence"],
   "engines": { "node": ">=20" },
   "scripts": {
     "start": "node index.js",
