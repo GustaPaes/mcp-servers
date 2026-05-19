@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+*.log
+logs/*.log
+logs/*.log.*
+output/
+!output/.gitkeep
+.DS_Store
+*.tsbuildinfo

@@ -1,0 +1,65 @@
+# =====================================================================
+# Monorepo root .gitignore — applies to every project folder.
+# Each project also has its own .gitignore for stack-specific rules.
+# =====================================================================
+
+# Secrets — defense in depth
+**/.env
+**/.env.local
+**/.env.*.local
+**/*.pem
+**/*.key
+**/oci_api_key*
+**/*-secret*.json
+
+# Node
+**/node_modules/
+**/npm-debug.log*
+**/.pnpm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+
+# Build / cache
+**/dist/
+**/build/
+**/.turbo/
+**/.next/
+**/*.tsbuildinfo
+
+# Logs / runtime artifacts
+**/logs/
+**/*.log
+**/output/
+!**/output/.gitkeep
+**/audit-*.jsonl
+
+# OCI runtime state
+**/.ownership-ledger.json
+**/.oci/
+
+# Playwright captured browser state
+**/browser/state/
+**/.profiles/
+
+# OS
+**/.DS_Store
+**/Thumbs.db
+**/desktop.ini
+
+# IDE / editors
+**/.vscode/*
+!**/.vscode/extensions.json
+**/.idea/
+**/*.swp
+
+# Python (helper scripts)
+**/__pycache__/
+**/*.py[cod]
+**/.venv/
+**/venv/
+
+# Local-only sprint/ad-hoc scripts (kept on disk, not published)
+tfs-mcp/scripts/sprint-archive/
+
+# Legacy files
+**/*.legacy

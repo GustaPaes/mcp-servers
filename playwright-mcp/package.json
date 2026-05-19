@@ -1,0 +1,37 @@
+{
+  "name": "playwright-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for Playwright browser automation (chromium/firefox/webkit + chrome/edge channels), multi-session, with HAR/video/tracing/PDF/intercept/stealth.",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "dist/index.js",
+  "bin": {
+    "playwright-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "test": "node --test --test-reporter=spec --import=tsx tests/smoke.test.ts",
+    "test:e2e": "node --test --test-reporter=spec --test-timeout=120000 --import=tsx tests/unattend-autofill.test.ts",
+    "test:all": "node --test --test-reporter=spec --test-timeout=120000 --import=tsx tests/smoke.test.ts tests/unattend-autofill.test.ts",
+    "test:install-browsers": "playwright install chromium",
+    "clean": "node -e \"import('node:fs').then(fs=>fs.rmSync('dist',{recursive:true,force:true}))\""
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "dotenv": "^16.4.5",
+    "pino": "^9.5.0",
+    "playwright": "^1.59.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.4",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2"
+  },
+  "license": "MIT"
+}

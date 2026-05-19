@@ -1,0 +1,45 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*-secret*.json
+.oci/
+oci_api_key*
+
+# Logs
+logs/
+*.log
+audit-*.jsonl
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Build
+dist/
+build/
+*.tsbuildinfo
+
+# Python (caso scripts auxiliares usem)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Ownership ledger (estado runtime)
+.ownership-ledger.json

@@ -1,0 +1,24 @@
+resolveRepository( call sites in pull-request.js (excluding import and function definition):
+
+Line 12:  return resolveRepository(preferredRepo, null, TFS_REPO);
+          Inside local wrapper resolveRepo() -- 3-arg form, NOT a replacement target.
+
+Line 38:  const repo = resolveRepository(ref.repo);
+          Inside Promise.allSettled map over prRefs.
+
+Line 76:  const repository = resolveRepository(repo);
+          toolListPRs -- after zod .parse(args), repo is optional string from args.
+
+Line 96:  const repository = resolveRepository(repo);
+          toolGetPR -- after zod .parse(args).
+
+Line 118: const repository = resolveRepository(repo);
+          toolGetPRDetails -- before Promise.all for PR + threads + iterations.
+
+Line 197: const repository = resolveRepository(repo);
+          Comment-on-PR tool -- before building threadPayload.
+
+Line 245: const repository = resolveRepository(repo);
+          PR review/vote tool -- before Promise.all for PR + iterations + workItems.
+
+Replacement targets (1-arg form): lines 38, 76, 96, 118, 197, 245.

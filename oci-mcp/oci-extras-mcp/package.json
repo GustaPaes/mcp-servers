@@ -1,0 +1,47 @@
+{
+  "name": "oci-extras-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP server for Oracle Cloud Infrastructure — OKE, Vault/Secrets, Functions and streaming logs. Complements oracle/mcp upstream.",
+  "license": "UPL-1.0",
+  "engines": { "node": ">=20" },
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "start:http": "node index.js --http",
+    "test": "node tests/smoke-stdio.mjs",
+    "test:http": "node tests/smoke-http.mjs",
+    "test:auth": "node tests/auth-resolver.test.mjs",
+    "lint": "node -e \"console.log('lint placeholder — add eslint when desired')\""
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "@kubernetes/client-node": "^1.0.0",
+    "dotenv": "^16.4.7",
+    "js-yaml": "^4.1.0",
+    "oci-common": "^2.95.0",
+    "oci-containerengine": "^2.95.0",
+    "oci-core": "^2.95.0",
+    "oci-functions": "^2.95.0",
+    "oci-identity": "^2.95.0",
+    "oci-keymanagement": "^2.95.0",
+    "oci-loggingsearch": "^2.95.0",
+    "oci-secrets": "^2.95.0",
+    "oci-vault": "^2.95.0",
+    "oci-workrequests": "^2.95.0",
+    "pino": "^9.6.0",
+    "zod": "^3.25.0"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "oci",
+    "oracle-cloud",
+    "oke",
+    "kubernetes",
+    "vault",
+    "secrets",
+    "functions"
+  ]
+}

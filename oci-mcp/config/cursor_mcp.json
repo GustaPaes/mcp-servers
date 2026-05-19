@@ -1,0 +1,51 @@
+{
+  "_comment": "Cursor config — copy mcpServers into .cursor/mcp.json (project) or %USERPROFILE%/.cursor/mcp.json (global). Identical schema to Claude Desktop.",
+  "mcpServers": {
+    "oci-extras": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["C:/Workspace/MCP Servers/oci-mcp/oci-extras-mcp/index.js"],
+      "env": {
+        "OCI_CONFIG_PROFILE": "DEFAULT",
+        "OCI_REGION": "sa-saopaulo-1",
+        "OCI_MCP_DEFAULT_DRY_RUN": "true"
+      }
+    },
+    "oci-api": {
+      "type": "stdio",
+      "command": "cmd",
+      "args": ["/c", "uvx", "oracle.oci-api-mcp-server@latest"],
+      "env": { "OCI_CONFIG_PROFILE": "DEFAULT", "FASTMCP_LOG_LEVEL": "ERROR" }
+    },
+    "oci-compute": {
+      "type": "stdio",
+      "command": "cmd",
+      "args": ["/c", "uvx", "oracle.oci-compute-mcp-server@latest"],
+      "env": { "OCI_CONFIG_PROFILE": "DEFAULT", "FASTMCP_LOG_LEVEL": "ERROR" }
+    },
+    "oci-identity": {
+      "type": "stdio",
+      "command": "cmd",
+      "args": ["/c", "uvx", "oracle.oci-identity-mcp-server@latest"],
+      "env": { "OCI_CONFIG_PROFILE": "DEFAULT", "FASTMCP_LOG_LEVEL": "ERROR" }
+    },
+    "oci-networking": {
+      "type": "stdio",
+      "command": "cmd",
+      "args": ["/c", "uvx", "oracle.oci-networking-mcp-server@latest"],
+      "env": { "OCI_CONFIG_PROFILE": "DEFAULT", "FASTMCP_LOG_LEVEL": "ERROR" }
+    },
+    "oci-monitoring": {
+      "type": "stdio",
+      "command": "cmd",
+      "args": ["/c", "uvx", "oracle.oci-monitoring-mcp-server@latest"],
+      "env": { "OCI_CONFIG_PROFILE": "DEFAULT", "FASTMCP_LOG_LEVEL": "ERROR" }
+    },
+    "oci-registry": {
+      "type": "stdio",
+      "command": "cmd",
+      "args": ["/c", "uvx", "oracle.oci-registry-mcp-server@latest"],
+      "env": { "OCI_CONFIG_PROFILE": "DEFAULT", "FASTMCP_LOG_LEVEL": "ERROR" }
+    }
+  }
+}

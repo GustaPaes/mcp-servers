@@ -1,0 +1,661 @@
+/**
+ * tools/work-item.js — Ferramentas de work item: leitura, análise, query,
+ * criação (NOVO) e atualização.
+ */
+import { z } from "zod";
+import { tfsGet, tfsPost, tfsJsonPatch } from "../tfs-client.js";
+import { TFS_PROJECT, TFS_URL, TFS_COLLECTION } from "../config.js";
+import { buildActivityTemplate, parseBusinessDescription } from "../activity-template.js";
+import {
+  formatWorkItem,
+  normalizeWorkItemId,
+  escapeWiql,
+  normalizeState,
+  asArray,
+  autoDecodeRichText,
+} from "../formatters.js";
+import {
+  calculateDescriptionQuality,
+  extractMissingWorkItemElements,
+  isUserStoryFormat,
+  hasGivenWhenThenFormat,
+  hasAcceptanceCriteria,
+  isActiveState,
+} from "../analytics.js";
+
+// ─── Zod schemas ───────────────────────────────────────────────────────────
+
+const zId = z.union([z.number(), z.string()]);
+
+const QueryArgs = z.object({
+  preset: z.enum(["sprint", "my_tasks", "active_pbis", "bugs", "user_stories", "active_tasks"]).optional(),
+  wiql: z.string().optional(),
+  search: z.string().optional(),
+  ids: z.string().optional(),
+  state: z.string().optional(),
+  work_item_type: z.string().optional(),
+  assigned_to: z.string().optional(),
+  area_path: z.string().optional(),
+  iteration_path: z.string().optional(),
+  top: z.number().int().min(1).max(200).default(30),
+});
+
+const UpdateArgs = z.object({
+  id: z.number().int().positive(),
+  state: z.string().optional(),
+  assigned_to: z.string().optional(),
+  comment: z.string().optional(),
+  title: z.string().optional(),
+  story_points: z.number().positive().optional(),
+  description: z.string().optional(),
+  acceptance_criteria: z.string().optional(),
+});
+
+const CreateArgs = z.object({
+  work_item_type: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().optional(),
+  acceptance_criteria: z.string().optional(),
+  assigned_to: z.string().optional(),
+  area_path: z.string().optional(),
+  iteration_path: z.string().optional(),
+  story_points: z.number().positive().optional(),
+  priority: z.number().int().min(1).max(4).optional(),
+  parent_id: z.number().int().positive().optional(),
+  tags: z.string().optional(),
+});
+
+const TemplateArgs = z.object({
+  title: z.string().optional(),
+  work_item_type: z.string().optional(),
+  actor: z.string().optional(),
+  intent: z.string().optional(),
+  outcome: z.string().optional(),
+  business_acceptance_criteria: z.array(z.string()).optional(),
+  visual_definitions: z.string().optional(),
+  technical_dependencies: z.string().optional(),
+  technical_acceptance_criteria: z.array(z.string()).optional(),
+  affected_locations: z.array(z.string()).optional(),
+  estimated_changed_lines: z.number().int().min(0).optional(),
+  detail_level: z.enum(["auto", "specific", "summary"]).default("auto"),
+});
+
+const TemplateFromItemsArgs = z.object({
+  ids: z.array(z.union([z.number(), z.string()])).min(1),
+  include_wiki: z.boolean().default(false),
+  wiki_search: z.string().optional(),
+  technical_dependencies: z.string().optional(),
+  technical_acceptance_criteria: z.array(z.string()).optional(),
+  affected_locations: z.array(z.string()).optional(),
+  estimated_changed_lines: z.number().int().min(0).optional(),
+  detail_level: z.enum(["auto", "specific", "summary"]).default("auto"),
+});
+
+// ─── Constants ─────────────────────────────────────────────────────────────
+
+export const WI_FIELDS = [
+  "System.Id",
+  "System.Title",
+  "System.State",
+  "System.WorkItemType",
+  "System.AssignedTo",
+  "System.IterationPath",
+  "System.AreaPath",
+  "System.Tags",
+  "System.Description",
+  "Microsoft.VSTS.Common.AcceptanceCriteria",
+  "Microsoft.VSTS.Scheduling.StoryPoints",
+  "Microsoft.VSTS.Common.Priority",
+  "example.DefinicoesDeNegocio",
+  "example.DefinicoesTecnicas",
+].join(",");
+
+function getBusinessFieldName(fields = {}, preferredField) {
+  if (preferredField === "example.DefinicoesDeNegocio") return "example.DefinicoesDeNegocio";
+  if (fields["example.DefinicoesDeNegocio"] !== undefined) return "example.DefinicoesDeNegocio";
+  return "System.Description";
+}
+
+function getTechnicalFieldName(fields = {}, preferredField) {
+  if (preferredField === "example.DefinicoesTecnicas") return "example.DefinicoesTecnicas";
+  if (fields["example.DefinicoesTecnicas"] !== undefined) return "example.DefinicoesTecnicas";
+  return "Microsoft.VSTS.Common.AcceptanceCriteria";
+}
+
+function extractUsNumber(title = "") {
+  const match = String(title).match(/US[-\s]*(\d+)/i);
+  return match ? String(Number(match[1])).padStart(3, "0") : "";
+}
+
+function buildWikiUsSearchVariants(title = "") {
+  const usNumber = extractUsNumber(title);
+  const normalizedTitle = String(title).replace(/[:]/g, " ").replace(/\s+/g, " ").trim();
+  return [
+    usNumber ? `US ${usNumber}` : "",
+    usNumber ? `US-${Number(usNumber)}` : "",
+    normalizedTitle,
+  ].filter(Boolean);
+}
+
+async function fetchWorkItemFieldMap(id) {
+  const workItem = await fetchWorkItemById(id, "all");
+  return {
+    workItem,
+    businessField: getBusinessFieldName(workItem.fields ?? {}),
+    technicalField: getTechnicalFieldName(workItem.fields ?? {}),
+  };
+}
+
+export const QUERY_PRESETS = {
+  sprint: `SELECT [System.Id] FROM WorkItems
+    WHERE [System.TeamProject] = '${TFS_PROJECT}'
+    AND [System.IterationPath] = @CurrentIteration
+    AND [System.State] <> 'Removed'
+    ORDER BY [System.WorkItemType],[System.State]`,
+
+  my_tasks: `SELECT [System.Id] FROM WorkItems
+    WHERE [System.TeamProject] = '${TFS_PROJECT}'
+    AND [System.IterationPath] = @CurrentIteration
+    AND [System.AssignedTo] = @Me
+    AND [System.State] <> 'Removed'
+    ORDER BY [System.State]`,
+
+  active_pbis: `SELECT [System.Id] FROM WorkItems
+    WHERE [System.TeamProject] = '${TFS_PROJECT}'
+    AND [System.WorkItemType] = 'Product Backlog Item'
+    AND [System.State] NOT IN ('Closed','Removed','Done')
+    ORDER BY [Microsoft.VSTS.Common.Priority],[System.ChangedDate] DESC`,
+
+  bugs: `SELECT [System.Id] FROM WorkItems
+    WHERE [System.TeamProject] = '${TFS_PROJECT}'
+    AND [System.WorkItemType] = 'Bug'
+    AND [System.State] NOT IN ('Closed','Removed')
+    ORDER BY [Microsoft.VSTS.Common.Priority],[System.ChangedDate] DESC`,
+
+  user_stories: `SELECT [System.Id] FROM WorkItems
+    WHERE [System.TeamProject] = '${TFS_PROJECT}'
+    AND [System.WorkItemType] = 'User Story'
+    AND [System.State] <> 'Removed'
+    ORDER BY [System.ChangedDate] DESC`,
+
+  active_tasks: `SELECT [System.Id] FROM WorkItems
+    WHERE [System.TeamProject] = '${TFS_PROJECT}'
+    AND [System.WorkItemType] = 'Sprint Task'
+    AND [System.State] NOT IN ('Closed','Removed','Done')
+    ORDER BY [System.ChangedDate] DESC`,
+};
+
+// ─── Fetchers ──────────────────────────────────────────────────────────────
+
+export async function fetchWorkItemById(id, expand = "all") {
+  return tfsGet(`/wit/workitems/${normalizeWorkItemId(id)}`, { "$expand": expand });
+}
+
+export async function fetchWorkItemsBatch(ids, { includeRelations = false } = {}) {
+  const normalized = asArray(ids).map(normalizeWorkItemId);
+  if (!normalized.length) return [];
+  if (includeRelations) {
+    return Promise.all(normalized.map((id) => fetchWorkItemById(id, "all")));
+  }
+  const data = await tfsGet("/wit/workitems", {
+    ids: normalized.join(","),
+    fields: WI_FIELDS,
+  });
+  return data.value ?? [];
+}
+
+export function extractArtifactLinks(workItem) {
+  return (workItem.relations ?? []).filter((r) => r.rel === "ArtifactLink");
+}
+
+export function extractPullRequestRefs(workItem) {
+  return extractArtifactLinks(workItem)
+    .filter((r) => /PullRequestId\//i.test(r.url ?? ""))
+    .map((r) => {
+      // parse: ...%2FprojectId%2Frepo%2FPullRequestId%2F123
+      const m = r.url?.match(/PullRequestId\/([^/]+)%2[fF]([^/]+)%2[fF](\d+)/i);
+      const numericMatch = r.url?.match(/_git\/([^/?#]+)\/pullrequest\/(\d+)/i);
+      const simpleMatch = r.url?.match(/(\d+)$/);
+      if (m) {
+        return { id: Number(m[3]), repo: decodeURIComponent(m[2]), artifactUrl: r.url, name: r.attributes?.name ?? "Pull Request" };
+      }
+      if (numericMatch) {
+        return { id: Number(numericMatch[2]), repo: numericMatch[1], artifactUrl: r.url, name: r.attributes?.name ?? "Pull Request" };
+      }
+      if (simpleMatch) {
+        return { id: Number(simpleMatch[1]), repo: null, artifactUrl: r.url, name: r.attributes?.name ?? "Pull Request" };
+      }
+      return null;
+    })
+    .filter(Boolean);
+}
+
+export async function loadRelatedItems(workItem) {
+  const RELATION_TYPES = new Set([
+    "System.LinkTypes.Hierarchy-Forward",
+    "System.LinkTypes.Hierarchy-Reverse",
+    "System.LinkTypes.Related",
+    "System.LinkTypes.Dependency-Forward",
+    "System.LinkTypes.Dependency-Reverse",
+  ]);
+
+  const relationIds = (workItem.relations ?? [])
+    .filter((r) => RELATION_TYPES.has(r.rel))
+    .map((r) => {
+      const m = r.url?.match(/\/(\d+)$/);
+      return m?.[1] ? { id: Number(m[1]), linkType: r.rel } : null;
+    })
+    .filter(Boolean);
+
+  if (!relationIds.length) return [];
+
+  const uniqueIds = [...new Set(relationIds.map((i) => i.id))];
+  const relatedItems = await fetchWorkItemsBatch(uniqueIds, { includeRelations: true });
+  const linkMap = new Map(relationIds.map((i) => [i.id, i.linkType]));
+
+  return relatedItems.map((item) => ({
+    id: item.id,
+    title: item.fields?.["System.Title"] ?? "",
+    type: item.fields?.["System.WorkItemType"] ?? "",
+    state: item.fields?.["System.State"] ?? "",
+    assignedTo: item.fields?.["System.AssignedTo"]?.displayName ?? "Unassigned",
+    linkType: linkMap.get(item.id) ?? null,
+    url:
+      item._links?.html?.href ??
+      `${TFS_URL}/${TFS_COLLECTION}/${TFS_PROJECT}/_workitems/edit/${item.id}`,
+  }));
+}
+
+function buildChecklist({ description, acceptanceCriteria, relatedItems }) {
+  const checklist = [
+    "Verificar se todos os criterios de aceite estao claros",
+    "Confirmar se ha dependencias tecnicas nao documentadas",
+    "Validar estimativa com a complexidade real",
+  ];
+  const blockedItems = relatedItems.filter((i) => !["Done", "Closed", "Resolved"].includes(i.state));
+  if (blockedItems.length)
+    checklist.push(`Verificar status de ${blockedItems.length} item(ns) relacionado(s) ainda em andamento`);
+  if (!hasGivenWhenThenFormat(`${description} ${acceptanceCriteria}`))
+    checklist.push("Definir cenarios de teste (Given/When/Then)");
+  if (!hasAcceptanceCriteria(description, acceptanceCriteria))
+    checklist.push("Documentar criterios de aceite detalhados");
+  return checklist;
+}
+
+// ─── Tools ────────────────────────────────────────────────────────────────
+
+export async function toolWorkItem(args) {
+  const { id } = z.object({ id: zId }).parse(args);
+  const wi = await fetchWorkItemById(id, "all");
+  return formatWorkItem(wi);
+}
+
+export async function toolAnalyzeWorkItem(args) {
+  const { id, include_related = true } = z
+    .object({ id: zId, include_related: z.boolean().default(true) })
+    .parse(args);
+
+  const workItem = await fetchWorkItemById(id, "all");
+  const formatted = formatWorkItem(workItem);
+  const relatedItems = include_related ? await loadRelatedItems(workItem) : [];
+
+  return {
+    id: formatted.id,
+    title: formatted.title,
+    type: formatted.type,
+    state: formatted.state,
+    url: formatted.url,
+    area: formatted.area,
+    iteration: formatted.iteration,
+    assignedTo: formatted.assignedTo,
+    qualityScore: calculateDescriptionQuality({
+      title: formatted.title,
+      description: formatted.description,
+      type: formatted.type,
+      acceptanceCriteria: formatted.acceptanceCriteria,
+    }),
+    isUserStoryFormat: isUserStoryFormat(formatted.title, formatted.description),
+    hasGivenWhenThen: hasGivenWhenThenFormat(`${formatted.description} ${formatted.acceptanceCriteria}`),
+    hasAcceptanceCriteria: hasAcceptanceCriteria(formatted.description, formatted.acceptanceCriteria),
+    missingElements: extractMissingWorkItemElements({
+      title: formatted.title,
+      description: formatted.description,
+      type: formatted.type,
+      acceptanceCriteria: formatted.acceptanceCriteria,
+    }),
+    checklist: buildChecklist({
+      description: formatted.description,
+      acceptanceCriteria: formatted.acceptanceCriteria,
+      relatedItems,
+    }),
+    relatedItems,
+    description: formatted.description,
+    acceptanceCriteria: formatted.acceptanceCriteria,
+  };
+}
+
+export async function toolWorkItemContext(args) {
+  const {
+    id,
+    include_related = true,
+    include_pull_requests = true,
+    include_wiki = true,
+    wiki_search,
+  } = z
+    .object({
+      id: zId,
+      include_related: z.boolean().default(true),
+      include_pull_requests: z.boolean().default(true),
+      include_wiki: z.boolean().default(true),
+      wiki_search: z.string().optional(),
+    })
+    .parse(args);
+
+  const { loadLinkedPullRequestsByItem } = await import("./pull-request.js");
+  const { findWikiMatches } = await import("./infra.js");
+
+  const workItem = await fetchWorkItemById(id, "all");
+  const formatted = formatWorkItem(workItem);
+  const analysis = await toolAnalyzeWorkItem({ id, include_related });
+  const linkedPullRequests = include_pull_requests
+    ? await loadLinkedPullRequestsByItem(workItem, 10)
+    : [];
+  const wikiMatches = include_wiki ? await findWikiMatches(wiki_search ?? formatted.title, 10) : [];
+
+  return {
+    workItem: formatted,
+    analysis,
+    linkedPullRequests,
+    wikiMatches,
+    artifacts: extractArtifactLinks(workItem).map((r) => ({
+      name: r.attributes?.name ?? r.rel,
+      url: r.url,
+    })),
+  };
+}
+
+export async function toolQueryWorkItems(args) {
+  const parsed = QueryArgs.parse(args);
+  const { preset, wiql, search, ids, state, work_item_type, assigned_to, area_path, iteration_path, top } = parsed;
+
+  // Direct IDs batch
+  if (ids) {
+    const directItems = await fetchWorkItemsBatch(
+      ids.split(",").map((s) => s.trim()).filter(Boolean)
+    );
+    return directItems.map(formatWorkItem);
+  }
+
+  let query = wiql;
+  if (!query) {
+    if (preset && QUERY_PRESETS[preset]) {
+      query = QUERY_PRESETS[preset];
+    } else {
+      const filters = [
+        `[System.TeamProject] = '${escapeWiql(TFS_PROJECT)}'`,
+        `[System.State] <> 'Removed'`,
+      ];
+      if (search) filters.push(`[System.Title] CONTAINS '${escapeWiql(search)}'`);
+      if (state) filters.push(`[System.State] = '${escapeWiql(normalizeState(state))}'`);
+      if (work_item_type) filters.push(`[System.WorkItemType] = '${escapeWiql(work_item_type)}'`);
+      if (assigned_to) filters.push(`[System.AssignedTo] CONTAINS '${escapeWiql(assigned_to)}'`);
+      if (area_path) filters.push(`[System.AreaPath] UNDER '${escapeWiql(area_path)}'`);
+      if (iteration_path)
+        filters.push(`[System.IterationPath] UNDER '${escapeWiql(iteration_path)}'`);
+      query = `SELECT [System.Id] FROM WorkItems WHERE ${filters.join(" AND ")} ORDER BY [System.ChangedDate] DESC`;
+    }
+  }
+
+  if (!query)
+    throw new Error(
+      `Preset desconhecido: ${preset}. Disponíveis: ${Object.keys(QUERY_PRESETS).join(", ")}`
+    );
+
+  const wiqlResult = await tfsPost("/wit/wiql", { query }, { "$top": top });
+  const itemRefs =
+    wiqlResult.workItems ??
+    wiqlResult.workItemRelations?.map((r) => r.target).filter(Boolean) ??
+    [];
+  if (!itemRefs.length) return [];
+
+  const batch = itemRefs
+    .slice(0, top)
+    .map((r) => r.id)
+    .join(",");
+  const data = await tfsGet("/wit/workitems", { ids: batch, fields: WI_FIELDS });
+  return (data.value ?? []).map(formatWorkItem);
+}
+
+export async function toolUpdateWorkItem(args) {
+  const { id, state, assigned_to, comment, title, story_points, description, acceptance_criteria } = UpdateArgs.parse(args);
+  const { businessField, technicalField } = await fetchWorkItemFieldMap(id);
+  const ops = [];
+  if (state) ops.push({ op: "add", path: "/fields/System.State", value: state });
+  if (assigned_to) ops.push({ op: "add", path: "/fields/System.AssignedTo", value: assigned_to });
+  if (title) ops.push({ op: "add", path: "/fields/System.Title", value: title });
+  if (description) ops.push({ op: "add", path: `/fields/${businessField}`, value: autoDecodeRichText(description) });
+  if (acceptance_criteria)
+    ops.push({
+      op: "add",
+      path: `/fields/${technicalField}`,
+      value: autoDecodeRichText(acceptance_criteria),
+    });
+  if (story_points)
+    ops.push({
+      op: "add",
+      path: "/fields/Microsoft.VSTS.Scheduling.StoryPoints",
+      value: story_points,
+    });
+  if (comment) ops.push({ op: "add", path: "/fields/System.History", value: comment });
+
+  if (!ops.length)
+    throw new Error(
+      "Nenhum campo para atualizar. Forneça state, assigned_to, comment, title, description, acceptance_criteria ou story_points."
+    );
+
+  const wi = await tfsJsonPatch("PATCH", `/wit/workitems/${id}`, ops);
+  const f = wi.fields ?? {};
+  return {
+    id: wi.id,
+    title: f["System.Title"],
+    state: f["System.State"],
+    assignedTo: f["System.AssignedTo"]?.displayName,
+    updated: ops.map((o) => o.path.replace("/fields/", "")),
+    url: wi._links?.html?.href,
+  };
+}
+
+export async function toolGenerateActivityTemplate(args) {
+  const parsed = TemplateArgs.parse(args ?? {});
+  return buildActivityTemplate({
+    title: parsed.title,
+    workItemType: parsed.work_item_type,
+    actor: parsed.actor,
+    intent: parsed.intent,
+    outcome: parsed.outcome,
+    businessAcceptanceCriteria: parsed.business_acceptance_criteria,
+    visualDefinitions: parsed.visual_definitions,
+    technicalDependencies: parsed.technical_dependencies,
+    technicalAcceptanceCriteria: parsed.technical_acceptance_criteria,
+    affectedLocations: parsed.affected_locations,
+    estimatedChangedLines: parsed.estimated_changed_lines,
+    detailLevel: parsed.detail_level,
+  });
+}
+
+export async function toolGenerateActivityTemplateFromItems(args) {
+  const parsed = TemplateFromItemsArgs.parse(args ?? {});
+  const items = await fetchWorkItemsBatch(parsed.ids, { includeRelations: true });
+  const { findWikiMatchesDeep, getWikiPageWithChildren } = await import("./infra.js");
+
+  const generated = await Promise.all(
+    items.map(async (item) => {
+      const title = item.fields?.["System.Title"] ?? "";
+      const businessSource = item.fields?.["example.DefinicoesDeNegocio"] ?? item.fields?.["System.Description"] ?? "";
+      const business = parseBusinessDescription(businessSource, title);
+      const wikiMatches = parsed.include_wiki
+        ? await findWikiMatchesDeep(parsed.wiki_search ?? title, 10).catch(() => [])
+        : [];
+      const wikiChildren = parsed.include_wiki
+        ? await getWikiPageWithChildren("/Analises/CNPJ e CPF em texto/Atividades", 100).catch(() => [])
+        : [];
+      const wikiUsVariants = buildWikiUsSearchVariants(title);
+      const matchedWikiChildren = wikiChildren.filter((page) =>
+        wikiUsVariants.some((variant) => page.path?.toLowerCase().includes(variant.toLowerCase()))
+      );
+
+      const technicalCriteria = [
+        ...(parsed.technical_acceptance_criteria ?? []),
+        ...(wikiMatches.length
+          ? [`Deve considerar como apoio técnico os artefatos/documentações relacionados encontrados na wiki para detalhar a implementação.`]
+          : []),
+        ...(matchedWikiChildren.length
+          ? [`Deve alinhar a implementação com o detalhamento técnico correspondente da wiki, adaptando a escrita sem copiar literalmente o conteúdo.`]
+          : []),
+      ];
+
+      const affectedLocations = [
+        ...(parsed.affected_locations ?? []),
+        ...wikiMatches.map((match) => match.url).slice(0, 3),
+        ...matchedWikiChildren.map((page) => page.url).slice(0, 2),
+      ];
+
+      return {
+        id: item.id,
+        title,
+        workItemType: item.fields?.["System.WorkItemType"] ?? "",
+        template: buildActivityTemplate({
+          title,
+          workItemType: item.fields?.["System.WorkItemType"] ?? "",
+          actor: business.actor,
+          intent: business.intent,
+          outcome: business.outcome,
+          businessAcceptanceCriteria: business.businessAcceptanceCriteria,
+          visualDefinitions: business.visualDefinitions,
+          technicalDependencies: parsed.technical_dependencies,
+          technicalAcceptanceCriteria: technicalCriteria,
+          affectedLocations,
+          estimatedChangedLines: parsed.estimated_changed_lines,
+          detailLevel: parsed.detail_level,
+        }),
+        wikiMatches,
+        wikiChildren: matchedWikiChildren,
+      };
+    })
+  );
+
+  return {
+    total: generated.length,
+    items: generated,
+  };
+}
+
+/**
+ * tfs_work_item_create — Cria um novo work item no TFS.
+ * Usa a API json-patch+json onde o tipo vai na URL: /wit/workitems/$User%20Story
+ */
+export async function toolCreateWorkItem(args) {
+  const {
+    work_item_type,
+    title,
+    description,
+    acceptance_criteria,
+    assigned_to,
+    area_path,
+    iteration_path,
+    story_points,
+    priority,
+    parent_id,
+    tags,
+  } = CreateArgs.parse(args);
+
+  // Tipos do ExampleProject que usam os campos customizados example.DefinicoesDeNegocio / example.DefinicoesTecnicas
+  // ao inves de System.Description / Microsoft.VSTS.Common.AcceptanceCriteria.
+  // User Story, Sprint Task, Product Backlog Item e Product Backlog Item Desenvolvimento
+  // seguem o template ExampleProject. Bug e Feature usam os campos padrao do TFS.
+  const usesExampleTemplate = /user story|sprint task|product backlog item/i.test(work_item_type);
+  const businessField = usesExampleTemplate ? "example.DefinicoesDeNegocio" : "System.Description";
+  const technicalField = usesExampleTemplate
+    ? "example.DefinicoesTecnicas"
+    : "Microsoft.VSTS.Common.AcceptanceCriteria";
+
+  const ops = [{ op: "add", path: "/fields/System.Title", value: title }];
+  if (description)
+    ops.push({ op: "add", path: `/fields/${businessField}`, value: autoDecodeRichText(description) });
+  if (acceptance_criteria)
+    ops.push({
+      op: "add",
+      path: `/fields/${technicalField}`,
+      value: autoDecodeRichText(acceptance_criteria),
+    });
+  if (assigned_to)
+    ops.push({ op: "add", path: "/fields/System.AssignedTo", value: assigned_to });
+  if (area_path) ops.push({ op: "add", path: "/fields/System.AreaPath", value: area_path });
+  if (iteration_path)
+    ops.push({ op: "add", path: "/fields/System.IterationPath", value: iteration_path });
+  if (story_points)
+    ops.push({
+      op: "add",
+      path: "/fields/Microsoft.VSTS.Scheduling.StoryPoints",
+      value: story_points,
+    });
+  if (priority)
+    ops.push({ op: "add", path: "/fields/Microsoft.VSTS.Common.Priority", value: priority });
+  if (tags) ops.push({ op: "add", path: "/fields/System.Tags", value: tags });
+
+  // Defaults obrigatorios do template ExampleProject para User Story / Sprint Task.
+  // O TFS rejeita criacao sem esses campos. Sao adicionados apenas se nao foram
+  // setados acima (verificacao por path) para nao sobrescrever overrides explicitos.
+  const isUserStoryLike = /user story|sprint task/i.test(work_item_type);
+  if (isUserStoryLike) {
+    const hasField = (path) => ops.some((op) => op.path === path);
+    if (!hasField("/fields/example.TipoDemanda")) {
+      ops.push({ op: "add", path: "/fields/example.TipoDemanda", value: "Planejada no plano de produto" });
+    }
+    if (!hasField("/fields/Example.Quarter")) {
+      ops.push({ op: "add", path: "/fields/Example.Quarter", value: "2026 Q2" });
+    }
+    if (!hasField("/fields/Example.Bloqueio")) {
+      ops.push({ op: "add", path: "/fields/Example.Bloqueio", value: "Não está bloqueado" });
+    }
+  }
+
+  // Defaults obrigatorios para Product Backlog Item / PBI Desenvolvimento.
+  const isPbi = /product backlog item/i.test(work_item_type);
+  if (isPbi) {
+    const hasField = (path) => ops.some((op) => op.path === path);
+    if (!hasField("/fields/ExampleOrg.RequestClassification")) {
+      ops.push({ op: "add", path: "/fields/ExampleOrg.RequestClassification", value: "Melhoria" });
+    }
+    if (!hasField("/fields/ExampleOrg.ClassificacaoIniciativaPBI")) {
+      ops.push({ op: "add", path: "/fields/ExampleOrg.ClassificacaoIniciativaPBI", value: "Backlog na CAPTAÇÃO" });
+    }
+  }
+
+  if (parent_id) {
+    ops.push({
+      op: "add",
+      path: "/relations/-",
+      value: {
+        rel: "System.LinkTypes.Hierarchy-Reverse",
+        url: `${TFS_URL}/${TFS_COLLECTION}/${TFS_PROJECT}/_apis/wit/workitems/${parent_id}`,
+        attributes: { comment: "Parent link set on creation" },
+      },
+    });
+  }
+
+  const typeEncoded = encodeURIComponent(work_item_type);
+  const wi = await tfsJsonPatch("POST", `/wit/workitems/$${typeEncoded}`, ops);
+  const f = wi.fields ?? {};
+  return {
+    id: wi.id,
+    type: f["System.WorkItemType"],
+    title: f["System.Title"],
+    state: f["System.State"],
+    assignedTo: f["System.AssignedTo"]?.displayName ?? "Unassigned",
+    iteration: f["System.IterationPath"],
+    area: f["System.AreaPath"],
+    url: wi._links?.html?.href ?? `${TFS_URL}/${TFS_COLLECTION}/${TFS_PROJECT}/_workitems/edit/${wi.id}`,
+    created: true,
+  };
+}

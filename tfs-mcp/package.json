@@ -1,0 +1,21 @@
+{
+  "name": "tfs-mcp",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP server for ExampleProduct Azure DevOps / TFS — work items, PRs e code review automatizado.",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node index.js",
+    "start:http": "node index.js --http",
+    "validate:premium": "node validate-premium.mjs",
+    "smoke:http": "node smoke-http.mjs",
+    "test": "node validate-premium.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "dotenv": "^16.4.7",
+    "pino": "^9.6.0",
+    "zod": "^3.25.0"
+  }
+}

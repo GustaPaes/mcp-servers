@@ -1,0 +1,22 @@
+{
+  "name": "career-development-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP server para PDI, metas, evidencias e prontidao de carreira com integracao ao tfs-mcp.",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node index.js",
+    "start:http": "node index.js --http",
+    "validate:tools": "node validate-tools.mjs",
+    "smoke:http": "node smoke-http.mjs",
+    "career-platform:capture": "node browser/career-platform-capture.cjs",
+    "test": "node validate-tools.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "dotenv": "^16.4.7",
+    "pino": "^9.6.0",
+    "zod": "^3.25.0"
+  }
+}

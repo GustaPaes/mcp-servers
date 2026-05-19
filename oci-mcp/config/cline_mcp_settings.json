@@ -1,0 +1,47 @@
+{
+  "_comment": "Cline (VS Code extension) config — copy mcpServers into cline_mcp_settings.json. Cline supports streamableHttp; use that for oci-extras if you prefer running it as a long-lived server.",
+  "mcpServers": {
+    "oci-extras": {
+      "autoApprove": [
+        "oke_list_clusters",
+        "oke_get_cluster",
+        "oke_list_node_pools",
+        "oke_list_addons",
+        "oke_recommend_setup",
+        "vault_list",
+        "vault_get",
+        "secret_list",
+        "k8s_list_namespaces",
+        "k8s_list_pods",
+        "fn_list_applications",
+        "fn_list_functions",
+        "oci_whoami",
+        "oci_list_regions",
+        "oci_list_compartments",
+        "oci_ledger_dump"
+      ],
+      "disabled": false,
+      "timeout": 60,
+      "type": "stdio",
+      "command": "node",
+      "args": ["C:/Workspace/MCP Servers/oci-mcp/oci-extras-mcp/index.js"],
+      "env": {
+        "OCI_CONFIG_PROFILE": "DEFAULT",
+        "OCI_REGION": "sa-saopaulo-1",
+        "OCI_MCP_DEFAULT_DRY_RUN": "true"
+      }
+    },
+    "oci-extras-http": {
+      "_comment": "Optional alternative — connects to an already-running HTTP server (npm run start:http).",
+      "type": "streamableHttp",
+      "url": "http://127.0.0.1:3020/mcp",
+      "disabled": true
+    },
+    "oci-api": {
+      "type": "stdio",
+      "command": "cmd",
+      "args": ["/c", "uvx", "oracle.oci-api-mcp-server@latest"],
+      "env": { "OCI_CONFIG_PROFILE": "DEFAULT", "FASTMCP_LOG_LEVEL": "ERROR" }
+    }
+  }
+}

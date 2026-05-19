@@ -1,0 +1,39 @@
+{
+  "_comment": "Example MCP client config for Claude Desktop / OpenCode / Cline. Copy the relevant block.",
+
+  "claude-desktop": {
+    "mcpServers": {
+      "playwright": {
+        "command": "node",
+        "args": ["C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"],
+        "env": {
+          "PWMCP_DEFAULT_HEADLESS": "false",
+          "PWMCP_DEFAULT_CHANNEL": "chrome"
+        }
+      }
+    }
+  },
+
+  "opencode": {
+    "$schema": "https://opencode.ai/config.json",
+    "mcp": {
+      "playwright": {
+        "type": "local",
+        "command": ["node", "C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"],
+        "enabled": true
+      }
+    }
+  },
+
+  "cline": {
+    "mcpServers": {
+      "playwright": {
+        "type": "stdio",
+        "command": "node",
+        "args": ["C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"],
+        "disabled": false,
+        "timeout": 60
+      }
+    }
+  }
+}
