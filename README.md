@@ -18,7 +18,6 @@
 - [`oci-mcp`](./oci-mcp) - Oracle Cloud Infrastructure toolkit plus custom OKE/Vault/Functions tools.
 - [`playwright-mcp`](./playwright-mcp) - Multi-session Playwright MCP with HAR, video, tracing and network tools.
 - [`career-development-mcp`](./career-development-mcp) - PDI, goals, competencies, evidence and career review MCP.
-- [`unattend-autofill`](./unattend-autofill) - Playwright automation for Windows unattended install form filling.
 
 ## Quick Start
 

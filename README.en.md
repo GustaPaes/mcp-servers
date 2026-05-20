@@ -32,7 +32,6 @@ It helps with:
 | [`oci-mcp`](./oci-mcp) | MCP toolkit | Combines official Oracle MCP servers with a custom `oci-extras-mcp` for OKE, Vault/Secrets, Kubernetes, Functions and streaming logs. | Node 20, OCI SDK, `uvx` | Stable |
 | [`playwright-mcp`](./playwright-mcp) | MCP server | Multi-session browser automation with Chromium/Firefox/WebKit, native Chrome/Edge, HAR, video, traces, PDF, request routing and light stealth. | TypeScript, Node 20, Playwright | Stable |
 | [`career-development-mcp`](./career-development-mcp) | MCP server | PDIs, SMART goals, competencies, evidence, career readiness, 1:1 preparation and optional TFS evidence import. | Node 20, ESM, local JSON storage | Beta |
-| [`unattend-autofill`](./unattend-autofill) | Automation tool | Standalone Playwright form-filler for `schneegans.de/windows/unattend-generator/`. Not an MCP server, but part of the same automation toolbox. | Node 20, Playwright, PowerShell | Stable |
 
 ## Repository Layout
 
@@ -51,7 +50,6 @@ mcp-servers/
 │   └── oci-extras-mcp/
 ├── playwright-mcp/
 ├── career-development-mcp/
-└── unattend-autofill/
 ```
 
 ## Requirements
@@ -67,7 +65,6 @@ Project-specific requirements:
 - `azure-mcp`: Azure CLI and an authenticated `az login` session.
 - `oci-mcp`: OCI CLI / OCI config, `uv` or `uvx`, and optional `kubectl` for Kubernetes workflows.
 - `playwright-mcp`: Playwright browser binaries, installed with `npx playwright install chromium` or the tool `browser_install`.
-- `unattend-autofill`: Windows recommended, because the generated output targets Windows unattended installations.
 
 ## Install the Collection
 
@@ -84,7 +81,6 @@ Install only what you need:
 cd tfs-mcp && npm install && cd ..
 cd career-development-mcp && npm install && cd ..
 cd playwright-mcp && npm install && npm run build && cd ..
-cd unattend-autofill && npm install && npx playwright install chromium && cd ..
 ```
 
 For `azure-mcp`, there is no local install step because it uses `npx -y @azure/mcp@latest server start`.
@@ -286,10 +282,6 @@ This server is intentionally different from Microsoft's Playwright MCP. It focus
 ### career-development-mcp
 
 This server stores career-development data locally and can optionally import TFS work items as evidence.
-
-### unattend-autofill
-
-This is not an MCP server. It is a Playwright automation kept here because it belongs to the same AI-assisted automation toolbox.
 
 ## License
 

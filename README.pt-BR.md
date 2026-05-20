@@ -32,7 +32,6 @@ Ele ajuda a:
 | [`oci-mcp`](./oci-mcp) | Toolkit MCP | Combina servidores oficiais da Oracle com `oci-extras-mcp` para OKE, Vault/Secrets, Kubernetes, Functions e streaming de logs. | Node 20, OCI SDK, `uvx` | Estavel |
 | [`playwright-mcp`](./playwright-mcp) | MCP server | Automacao de browser multi-sessao com Chromium/Firefox/WebKit, Chrome/Edge nativos, HAR, video, traces, PDF, rotas e stealth leve. | TypeScript, Node 20, Playwright | Estavel |
 | [`career-development-mcp`](./career-development-mcp) | MCP server | PDIs, metas SMART, competencias, evidencias, prontidao de carreira, preparo de 1:1 e importacao opcional de evidencias do TFS. | Node 20, ESM, JSON local | Beta |
-| [`unattend-autofill`](./unattend-autofill) | Ferramenta de automacao | Script Playwright standalone para preencher `schneegans.de/windows/unattend-generator/`. Nao e MCP server, mas faz parte da mesma toolbox. | Node 20, Playwright, PowerShell | Estavel |
 
 ## Layout do Repositorio
 
@@ -51,7 +50,6 @@ mcp-servers/
 │   └── oci-extras-mcp/
 ├── playwright-mcp/
 ├── career-development-mcp/
-└── unattend-autofill/
 ```
 
 ## Requisitos
@@ -67,7 +65,6 @@ Requisitos por projeto:
 - `azure-mcp`: Azure CLI e sessao autenticada com `az login`.
 - `oci-mcp`: OCI CLI / OCI config, `uv` ou `uvx`, e `kubectl` opcional para fluxos Kubernetes.
 - `playwright-mcp`: browsers do Playwright instalados com `npx playwright install chromium` ou pela tool `browser_install`.
-- `unattend-autofill`: Windows recomendado, pois a saida gerada e para instalacoes unattended do Windows.
 
 ## Instalar a Colecao
 
@@ -84,7 +81,6 @@ Instale apenas o que for usar:
 cd tfs-mcp && npm install && cd ..
 cd career-development-mcp && npm install && cd ..
 cd playwright-mcp && npm install && npm run build && cd ..
-cd unattend-autofill && npm install && npx playwright install chromium && cd ..
 ```
 
 Para `azure-mcp`, nao ha instalacao local porque ele usa `npx -y @azure/mcp@latest server start`.
@@ -286,10 +282,6 @@ Este servidor e intencionalmente diferente do Playwright MCP da Microsoft. Ele f
 ### career-development-mcp
 
 Este server armazena dados de desenvolvimento de carreira localmente e pode importar work items do TFS como evidencias.
-
-### unattend-autofill
-
-Nao e MCP server. E uma automacao Playwright mantida aqui porque pertence a mesma caixa de ferramentas de automacao assistida por IA.
 
 ## Licenca
 

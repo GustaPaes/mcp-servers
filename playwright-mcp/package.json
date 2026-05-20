@@ -16,8 +16,6 @@
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "test": "node --test --test-reporter=spec --import=tsx tests/smoke.test.ts",
-    "test:e2e": "node --test --test-reporter=spec --test-timeout=120000 --import=tsx tests/unattend-autofill.test.ts",
-    "test:all": "node --test --test-reporter=spec --test-timeout=120000 --import=tsx tests/smoke.test.ts tests/unattend-autofill.test.ts",
     "test:install-browsers": "playwright install chromium",
     "clean": "node -e \"import('node:fs').then(fs=>fs.rmSync('dist',{recursive:true,force:true}))\""
   },
