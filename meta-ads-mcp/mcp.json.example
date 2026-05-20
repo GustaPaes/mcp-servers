@@ -1,0 +1,72 @@
+{
+  "_comment": "Example MCP client config for Claude Desktop / OpenCode / Cline. Copy the relevant block. NEVER put real Meta tokens here — they must come from environment variables referenced by accounts.json (tokenEnvVar).",
+
+  "claude-desktop": {
+    "mcpServers": {
+      "meta-ads": {
+        "command": "node",
+        "args": ["C:/Workspace/MCP Servers/meta-ads-mcp/dist/server.js"],
+        "env": {
+          "READ_ONLY": "true",
+          "DRY_RUN": "true",
+          "ACCOUNTS_CONFIG_PATH": "C:/Workspace/MCP Servers/meta-ads-mcp/config/accounts.json",
+          "AUDIT_LOG_PATH": "C:/Workspace/MCP Servers/meta-ads-mcp/data/audit.log",
+          "STORAGE_PATH": "C:/Workspace/MCP Servers/meta-ads-mcp/data/storage.json",
+          "META_GRAPH_API_VERSION": "v21.0",
+          "GLOBAL_MAX_DAILY_BUDGET": "500",
+          "GLOBAL_MAX_BUDGET_CHANGE_PCT": "25",
+          "META_TOKEN_ACME_FASHION": "EAA-replace-or-prefer-os-env"
+        }
+      }
+    }
+  },
+
+  "opencode": {
+    "$schema": "https://opencode.ai/config.json",
+    "mcp": {
+      "meta-ads": {
+        "type": "local",
+        "command": ["node", "C:/Workspace/MCP Servers/meta-ads-mcp/dist/server.js"],
+        "enabled": true,
+        "env": {
+          "READ_ONLY": "true",
+          "DRY_RUN": "true",
+          "ACCOUNTS_CONFIG_PATH": "C:/Workspace/MCP Servers/meta-ads-mcp/config/accounts.json",
+          "GLOBAL_MAX_DAILY_BUDGET": "500",
+          "GLOBAL_MAX_BUDGET_CHANGE_PCT": "25"
+        }
+      }
+    }
+  },
+
+  "cline": {
+    "mcpServers": {
+      "meta-ads": {
+        "type": "stdio",
+        "command": "node",
+        "args": ["C:/Workspace/MCP Servers/meta-ads-mcp/dist/server.js"],
+        "disabled": false,
+        "timeout": 60,
+        "env": {
+          "READ_ONLY": "true",
+          "DRY_RUN": "true"
+        }
+      }
+    }
+  },
+
+  "http-remote": {
+    "_comment": "If you run the server in HTTP mode (MCP_TRANSPORT=http), point any HTTP-streamable MCP client at /mcp with a bearer token.",
+    "claude-desktop": {
+      "mcpServers": {
+        "meta-ads-remote": {
+          "transport": {
+            "type": "http",
+            "url": "https://meta-ads.internal.example.com/mcp",
+            "headers": { "Authorization": "Bearer REPLACE_WITH_STRONG_TOKEN" }
+          }
+        }
+      }
+    }
+  }
+}

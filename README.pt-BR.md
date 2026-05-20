@@ -18,6 +18,7 @@ Ele ajuda a:
 
 - Operar **Azure Cloud** com seguranca a partir do chat.
 - Operar **Oracle Cloud Infrastructure** com guardrails extras em OKE, Vault e Functions.
+- Operar **Facebook / Instagram Ads** (Meta Marketing API) multi-conta com dry-run, auditoria e tetos de orcamento.
 - Gerenciar **TFS / Azure DevOps Server**: work items, PRs, sprints, wiki e prontidao de entrega.
 - Controlar **Playwright multi-sessao** com screenshots, HAR, video e traces.
 - Gerenciar **PDIs, metas, evidencias e conversas de carreira** com dados estruturados.
@@ -27,6 +28,7 @@ Ele ajuda a:
 | Pasta | Tipo | O Que Faz | Stack | Status |
 |---|---|---|---|---|
 | [`azure-mcp`](./azure-mcp) | Wrapper MCP | Opera recursos Azure usando o servidor oficial `@azure/mcp` da Microsoft e adiciona scripts locais + politica de seguranca para LLM. | `npx`, Azure CLI, PowerShell | Estavel |
+| [`meta-ads-mcp`](./meta-ads-mcp) | MCP server | Servidor multi-conta para Meta Marketing API (Facebook Ads / Instagram Ads) com separacao estrita recomendar ↔ executar, dry-run, gate de mutacao, teto triplo de orcamento, auditoria e bloqueio de targeting por atributos protegidos. | TypeScript, Node 20, MCP SDK, undici, Zod | Beta |
 | [`tfs-mcp`](./tfs-mcp) | MCP server | Work items, PRs, code review, refinamento, release readiness, delivery risk e templates de escrita para TFS / Azure DevOps Server. | Node 20, ESM, MCP SDK | Estavel |
 | [`oci-mcp`](./oci-mcp) | Toolkit MCP | Combina servidores oficiais da Oracle com `oci-extras-mcp` para OKE, Vault/Secrets, Kubernetes, Functions e streaming de logs. | Node 20, OCI SDK, `uvx` | Estavel |
 | [`playwright-mcp`](./playwright-mcp) | MCP server | Automacao de browser multi-sessao com Chromium/Firefox/WebKit, Chrome/Edge nativos, HAR, video, traces, PDF, rotas e stealth leve. | TypeScript, Node 20, Playwright | Estavel |
@@ -53,6 +55,7 @@ mcp-servers/
 ├── config/
 │   └── opencode.example.json
 ├── azure-mcp/
+├── meta-ads-mcp/
 ├── tfs-mcp/
 ├── oci-mcp/
 │   └── oci-extras-mcp/
@@ -246,6 +249,8 @@ Regras operacionais comuns:
 Documentos de seguranca por projeto:
 
 - [`azure-mcp/AGENTS.md`](./azure-mcp/AGENTS.md)
+- [`meta-ads-mcp/AGENTS.md`](./meta-ads-mcp/AGENTS.md)
+- [`meta-ads-mcp/BEST_PRACTICES.md`](./meta-ads-mcp/BEST_PRACTICES.md)
 - [`playwright-mcp/AGENTS.md`](./playwright-mcp/AGENTS.md)
 - [`oci-mcp/BEST_PRACTICES.md`](./oci-mcp/BEST_PRACTICES.md)
 - [`oci-mcp/docs/07-security-checklist.md`](./oci-mcp/docs/07-security-checklist.md)
@@ -274,6 +279,10 @@ Nao commite:
 ### azure-mcp
 
 Esta pasta envelopa o servidor Azure MCP oficial da Microsoft com documentacao local, regras de seguranca e scripts auxiliares. Por padrao usa seu login da Azure CLI.
+
+### meta-ads-mcp
+
+MCP em TypeScript escrito do zero para a Meta Marketing API. Multi-conta por design: cada conta tem seu proprio modo (`read-only` / `dry-run` / `write-enabled`) e tetos de orcamento. Mutacoes exigem um contrato de confirmacao de quatro campos por cima do modo da conta E dos switches globais `READ_ONLY` / `DRY_RUN`. Engines (Optimization, Budget, Creative, Audience, PolicyRisk) sao deterministicas e nunca chamam a API; so a camada de tools chama. Targeting por atributos protegidos e rejeitado. Dois transportes (stdio + Streamable HTTP) saem do mesmo builder.
 
 ### tfs-mcp
 

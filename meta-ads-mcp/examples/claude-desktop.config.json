@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "meta-ads": {
+      "command": "node",
+      "args": ["C:/Workspace/MCP Servers/meta-ads-mcp/dist/server.js"],
+      "env": {
+        "NODE_ENV": "production",
+        "LOG_LEVEL": "info",
+        "ACCOUNTS_CONFIG_PATH": "C:/Workspace/MCP Servers/meta-ads-mcp/config/accounts.json",
+        "AUDIT_LOG_PATH": "C:/Workspace/MCP Servers/meta-ads-mcp/data/audit.log",
+        "STORAGE_PATH": "C:/Workspace/MCP Servers/meta-ads-mcp/data/storage.json",
+        "META_GRAPH_API_VERSION": "v21.0",
+        "READ_ONLY": "true",
+        "DRY_RUN": "true",
+        "META_TOKEN_ACME_FASHION": "REPLACE_WITH_REAL_TOKEN",
+        "META_TOKEN_ACME_SAAS": "REPLACE_WITH_REAL_TOKEN"
+      }
+    }
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "$schema": "../docs/accounts.schema.json",
+  "accounts": [
+    {
+      "id": "acme-fashion",
+      "name": "ACME Fashion BR",
+      "adAccountId": "act_1234567890",
+      "businessManagerId": "9876543210",
+      "tokenEnvVar": "META_TOKEN_ACME_FASHION",
+      "currency": "BRL",
+      "timezone": "America/Sao_Paulo",
+      "country": "BR",
+      "niche": "Moda feminina premium",
+      "primaryObjective": "OUTCOME_SALES",
+      "persona": {
+        "summary": "Mulheres 25-45, classe AB, interesse em moda autoral, ocasiões especiais.",
+        "ageRange": [25, 45],
+        "interestsKeywords": ["moda feminina", "casamentos", "eventos sociais"]
+      },
+      "audienceRestrictions": {
+        "excludeRecentBuyersDays": 30,
+        "blockedInterests": []
+      },
+      "productsServices": [
+        "Vestidos longos para casamento",
+        "Vestidos midi para eventos",
+        "Acessórios"
+      ],
+      "tone": "elegante, acolhedor, aspiracional, sem clichês",
+      "budgetLimits": {
+        "maxDailyBudget": 300,
+        "maxMonthlyBudget": 7000,
+        "maxBudgetChangePct": 20,
+        "maxPerExecutionChange": 100
+      },
+      "priorityConversionEvents": ["Purchase", "InitiateCheckout"],
+      "pixelId": "1112223334445556",
+      "capi": { "enabled": true, "datasetId": "1112223334445556" },
+      "facebookPageId": "111122223333",
+      "instagramAccountId": "17841400000000000",
+      "mode": "dry-run",
+      "internalPolicies": {
+        "forbiddenWords": ["garantia de resultado", "milagre"],
+        "requireDisclaimerForOffers": true
+      }
+    },
+    {
+      "id": "acme-saas",
+      "name": "ACME SaaS US",
+      "adAccountId": "act_2222222222",
+      "businessManagerId": "1111111111",
+      "tokenEnvVar": "META_TOKEN_ACME_SAAS",
+      "currency": "USD",
+      "timezone": "America/New_York",
+      "country": "US",
+      "niche": "B2B SaaS productivity",
+      "primaryObjective": "OUTCOME_LEADS",
+      "persona": {
+        "summary": "Mid-market ops managers, 28-50, evaluating productivity tools.",
+        "ageRange": [28, 55],
+        "interestsKeywords": ["productivity", "saas", "team management"]
+      },
+      "audienceRestrictions": { "excludeRecentBuyersDays": 0, "blockedInterests": [] },
+      "productsServices": ["Workflow automation platform"],
+      "tone": "claro, direto, orientado a benefícios mensuráveis",
+      "budgetLimits": {
+        "maxDailyBudget": 500,
+        "maxMonthlyBudget": 12000,
+        "maxBudgetChangePct": 15,
+        "maxPerExecutionChange": 150
+      },
+      "priorityConversionEvents": ["Lead", "CompleteRegistration"],
+      "pixelId": "2223334445556667",
+      "capi": { "enabled": true, "datasetId": "2223334445556667" },
+      "facebookPageId": "222233334444",
+      "instagramAccountId": "17841400000000001",
+      "mode": "read-only",
+      "internalPolicies": {
+        "forbiddenWords": ["guaranteed results", "instant ROI"],
+        "requireDisclaimerForOffers": false
+      }
+    }
+  ]
+}

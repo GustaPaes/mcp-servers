@@ -1,0 +1,36 @@
+// Prisma schema opcional para PrismaStorage.
+// Ative com: STORAGE_BACKEND=prisma e instale @prisma/client + prisma.
+//
+//   npm i @prisma/client
+//   npm i -D prisma
+//   npx prisma migrate dev --name init
+//
+// Tabela única "Draft" guarda campaign/adset/creative drafts em coluna JSON.
+// Mantém o modelo simples; auditoria continua em JSONL append-only no disco.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Draft {
+  id        String   @id
+  accountId String
+  kind      DraftKind
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([accountId])
+  @@index([kind])
+}
+
+enum DraftKind {
+  campaign
+  adset
+  creative
+}
