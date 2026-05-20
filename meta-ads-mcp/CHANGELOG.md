@@ -59,9 +59,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `README.md` (bilingual EN/PT), `AGENTS.md`, `BEST_PRACTICES.md`,
   `ARCHITECTURE.md`, `mcp.json.example`, `.env.example`,
   `config/accounts.example.json`.
-- Optional web-panel architecture in `web-panel/ARCHITECTURE.md`
-  (Next.js + shadcn + TanStack + Recharts, 8 screens, RBAC). Not
-  implemented in v0.1.
+- Optional `web-panel/` implementation in Next.js 15:
+  account selector, dashboard, campaigns, campaign detail,
+  recommendations, creative analysis, settings and audit screens.
+  The panel talks to the MCP over Streamable HTTP and never calls Meta
+  Graph API directly.
 
 ### Security
 - Tokens are read exclusively from environment variables referenced by
@@ -79,4 +81,5 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - No automated rules / scheduled mutations — every change is manual.
 - No `delete_campaign` / `delete_ad_set` / `delete_ad` tools. Use Meta
   Ads Manager for deletions.
-- Web panel is architecture-only.
+- Web panel v0.1 uses local password auth and server-rendered pages.
+  NextAuth/SSO, RBAC, TanStack Query and Recharts remain future upgrades.

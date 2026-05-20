@@ -110,7 +110,7 @@ Prompts encode repeatable operating workflows:
 - `campaign_launch_plan`
 - `creative_review_playbook`
 
-These surfaces keep LLM clients from re-discovering the same workflow every session and provide a stable bridge for the future web panel without bypassing tool-level guardrails.
+These surfaces keep LLM clients from re-discovering the same workflow every session and provide a stable bridge for the web panel without bypassing tool-level guardrails.
 
 ### D8 — Pluggable storage with file as default
 `Storage` is an interface (`read()`/`write()` of `StorageState`). The factory in `src/storage/factory.ts` picks the implementation:
@@ -122,7 +122,7 @@ These surfaces keep LLM clients from re-discovering the same workflow every sess
 Prisma schema in `prisma/schema.prisma` uses a single `Draft` table with a `kind` enum and a JSON `data` column. Trade-off: simple migrations, no per-domain joins; the MCP doesn't need them.
 
 ### D9 — Web panel stays out of the protocol
-The optional `web-panel/` (Next.js + shadcn + TanStack + Recharts, 8 screens) talks to the MCP over the HTTP transport. It does NOT call Meta directly. Every panel action flows through the same validation/audit chain that an LLM goes through. Currently architecture-only.
+The optional `web-panel/` is implemented as a Next.js admin panel over the MCP HTTP transport. It does NOT call Meta directly. Every panel action flows through the same validation/audit chain that an LLM goes through. v0.1 uses local password auth and server-rendered pages; NextAuth/RBAC, TanStack Query and Recharts remain upgrade paths described in `web-panel/ARCHITECTURE.md`.
 
 ## Data flow — applying a budget change
 

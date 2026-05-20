@@ -1,5 +1,7 @@
 # Painel Web Administrativo — Arquitetura (opcional)
 
+> Status v0.1: painel funcional implementado em Next.js 15 com autenticação local por cookie assinado, páginas server-rendered e integração MCP via Streamable HTTP. NextAuth.js, RBAC completo, TanStack Query, Recharts e shadcn/ui permanecem como evolução planejada desta arquitetura.
+
 Este documento descreve a arquitetura do painel web administrativo que
 complementa o MCP Server. O painel **não substitui** o Meta Ads Manager: ele
 é uma camada de visualização, configuração e aprovação de recomendações

@@ -332,7 +332,7 @@ meta-ads-mcp/
 ├── tests/                       # vitest — 22+ tests
 ├── config/accounts.example.json
 ├── examples/                    # example tool calls, client configs
-└── web-panel/ARCHITECTURE.md    # optional Next.js panel design (not implemented yet)
+└── web-panel/                  # optional Next.js administrative panel
 ```
 
 See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the full layered diagram and decision log.
@@ -357,7 +357,7 @@ Healthcheck (HTTP): `GET http://127.0.0.1:8787/healthz`.
 - **Lead Ads**, **Conversions API** ingestion and **asset upload** are NOT implemented in v0.1. Backlog.
 - **Audience overlap** and **automated rules** are not exposed. Use Meta Ads Manager.
 - **No multi-tenant SaaS mode**. This is single-operator (or single-team) by design.
-- The optional **web panel** in `web-panel/` is currently architecture only.
+- The optional **web panel** in `web-panel/` is implemented as a Next.js admin panel over the MCP HTTP transport. It is intentionally conservative and does not expose one-click real mutations in v0.1.
 
 ## Troubleshooting
 
