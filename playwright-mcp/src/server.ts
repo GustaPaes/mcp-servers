@@ -79,8 +79,12 @@ export function createServer(): Server {
       const result = await handler(args);
       const elapsed = Date.now() - start;
       logger.info({ tool: name, ms: elapsed }, "tool ok");
+      const text = typeof result === "string" ? result : JSON.stringify(result, null, 2);
       return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        content: [{ type: "text", text }],
+        ...(result && typeof result === "object"
+          ? { structuredContent: Array.isArray(result) ? { items: result } : result }
+          : {}),
       };
     } catch (err) {
       const elapsed = Date.now() - start;

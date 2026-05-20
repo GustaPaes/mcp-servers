@@ -42,10 +42,10 @@ export function buildServer() {
       async (args, ctx) => {
         const wrapped = withSafety(name, (a) => def.handler(a, ctx));
         const result = await wrapped(args ?? {});
+        const text = typeof result === "string" ? result : JSON.stringify(result, null, 2);
         return {
-          content: [
-            { type: "text", text: typeof result === "string" ? result : JSON.stringify(result, null, 2) },
-          ],
+          content: [{ type: "text", text }],
+          ...(result && typeof result === "object" ? { structuredContent: Array.isArray(result) ? { items: result } : result } : {}),
           isError: result?.ok === false,
         };
       }

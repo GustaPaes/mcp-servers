@@ -41,6 +41,10 @@
 **/browser/state/
 **/.profiles/
 
+# Local MCP runtime state
+career-development-mcp/data/
+**/chrome-profile/
+
 # OS
 **/.DS_Store
 **/Thumbs.db

@@ -168,6 +168,7 @@ All tools follow `<domain>_<verb>_<resource>` naming. Most accept an optional `p
 |------|---------|
 | `page_text_content` / `page_inner_text` / `page_inner_html` | Read element text/HTML. |
 | `page_get_attribute` | Read an HTML attribute. |
+| `page_console_messages` | Read captured console messages and page errors for frontend diagnostics. |
 | `page_evaluate` | Run a JS function in the page (sandboxed: blocks `eval`/`Function`/dynamic `import`/`chrome.webRequest`; 5 s default timeout). |
 | `page_query_selector_all` | Up to N matches with tag/text/bbox — great for scanning. |
 | `page_accessibility_snapshot` | YAML ARIA snapshot in `mode:"ai"` with `[ref=eN]` refs (the LLM-friendly view of the page). |
@@ -220,9 +221,9 @@ All tools follow `<domain>_<verb>_<resource>` naming. Most accept an optional `p
 
    > Install a route on `**/api/user` that fulfills with `{ "name": "Test", "role": "admin" }`. Then reload the page and confirm the username appears.
 
-5. **Run two parallel autofills**
+5. **Run two isolated browser flows**
 
-   > Launch two sessions; in each, open `unattend-generator`, paste this preset, click "Generate XML", and download the artifact. Save each result under `./output/downloads/run-A.xml` and `run-B.xml`.
+   > Launch two sessions; in each, open `https://example.com`, capture the accessibility snapshot and screenshot, then compare the titles and saved artifact paths.
 
 ---
 

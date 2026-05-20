@@ -25,6 +25,7 @@ import type {
   BrowserName,
   BrowserChannel,
   ContextRecord,
+  PageConsoleMessage,
   PageRecord,
   SessionRecord,
 } from "./types.js";
@@ -439,7 +440,27 @@ class SessionManager {
       createdAt: Date.now(),
       lastUsedAt: Date.now(),
       routes: new Set(),
+      consoleMessages: [],
     };
+    const pushConsoleMessage = (message: PageConsoleMessage) => {
+      rec.consoleMessages.push(message);
+      if (rec.consoleMessages.length > 500) rec.consoleMessages.splice(0, rec.consoleMessages.length - 500);
+    };
+    page.on("console", (msg) => {
+      pushConsoleMessage({
+        ts: new Date().toISOString(),
+        type: msg.type(),
+        text: msg.text(),
+        location: msg.location(),
+      });
+    });
+    page.on("pageerror", (err) => {
+      pushConsoleMessage({
+        ts: new Date().toISOString(),
+        type: "pageerror",
+        text: err.message,
+      });
+    });
     page.on("close", () => {
       ctx.pages.delete(id);
     });

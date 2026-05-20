@@ -52,7 +52,19 @@ export interface PageRecord {
   createdAt: number;
   lastUsedAt: number;
   routes: Set<string>;
+  consoleMessages: PageConsoleMessage[];
   cdp?: CDPSession;
+}
+
+export interface PageConsoleMessage {
+  ts: string;
+  type: string;
+  text: string;
+  location?: {
+    url: string;
+    lineNumber: number;
+    columnNumber: number;
+  };
 }
 
 export interface ToolDef {

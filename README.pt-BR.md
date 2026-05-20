@@ -1,8 +1,8 @@
 # MCP Servers por GustaPaes
 
-> Colecao curada de servidores [Model Context Protocol](https://modelcontextprotocol.io) e ferramentas de automacao com IA que uso no dia a dia.
+> Colecao curada de servidores [Model Context Protocol](https://modelcontextprotocol.io) que uso no dia a dia.
 
-Cada pasta e um projeto independente, com README, dependencias, configuracao e modelo operacional proprios. A colecao e intencionalmente pratica: foca em fluxos que realmente uso para cloud, TFS/Azure DevOps Server, automacao de browser, carreira e provisionamento Windows.
+Cada pasta e um projeto independente, com README, dependencias, configuracao e modelo operacional proprios. A colecao e intencionalmente pratica: foca em fluxos que realmente uso para cloud, TFS/Azure DevOps Server, automacao de browser e carreira.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![MCP](https://img.shields.io/badge/Model%20Context%20Protocol-1.x-6f42c1)](https://modelcontextprotocol.io)
@@ -21,7 +21,6 @@ Ele ajuda a:
 - Gerenciar **TFS / Azure DevOps Server**: work items, PRs, sprints, wiki e prontidao de entrega.
 - Controlar **Playwright multi-sessao** com screenshots, HAR, video e traces.
 - Gerenciar **PDIs, metas, evidencias e conversas de carreira** com dados estruturados.
-- Preencher o gerador de `autounattend.xml` do Windows com um preset conservador e documentado de Windows 11.
 
 ## Matriz de Projetos
 
@@ -32,6 +31,15 @@ Ele ajuda a:
 | [`oci-mcp`](./oci-mcp) | Toolkit MCP | Combina servidores oficiais da Oracle com `oci-extras-mcp` para OKE, Vault/Secrets, Kubernetes, Functions e streaming de logs. | Node 20, OCI SDK, `uvx` | Estavel |
 | [`playwright-mcp`](./playwright-mcp) | MCP server | Automacao de browser multi-sessao com Chromium/Firefox/WebKit, Chrome/Edge nativos, HAR, video, traces, PDF, rotas e stealth leve. | TypeScript, Node 20, Playwright | Estavel |
 | [`career-development-mcp`](./career-development-mcp) | MCP server | PDIs, metas SMART, competencias, evidencias, prontidao de carreira, preparo de 1:1 e importacao opcional de evidencias do TFS. | Node 20, ESM, JSON local | Beta |
+
+## Baseline de Qualidade e Seguranca
+
+- Tools expõem JSON schemas explicitos e rejeitam campos desconhecidos sempre que pratico.
+- Respostas estruturadas retornam `structuredContent` quando o server controla o formato da resposta MCP.
+- Tools mutativas e destrutivas usam annotations MCP e politicas operacionais documentadas.
+- Estado local, perfis de browser, logs, artefatos de output e arquivos `.env` ficam fora do Git.
+- Tools de cloud priorizam dry-run, auditoria, menor privilegio e confirmacao explicita para acoes de alto impacto.
+- READMEs por projeto incluem snippets de clientes e comandos de verificacao para testar cada server isoladamente.
 
 ## Layout do Repositorio
 

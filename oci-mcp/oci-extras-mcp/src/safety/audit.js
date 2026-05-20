@@ -21,18 +21,19 @@ ensureDir(config.auditLogFile);
 // JSONL audit stream (append-only)
 const auditStream = fs.createWriteStream(config.auditLogFile, { flags: "a" });
 
-const REDACT_KEYS = new Set([
-  "secretContent",
-  "secret",
-  "value",
-  "password",
-  "token",
-  "privateKey",
-  "private_key",
-  "api_key",
-  "client_secret",
-  "Authorization",
-]);
+const REDACT_KEY_PATTERNS = [
+  /secret/i,
+  /password/i,
+  /token/i,
+  /private[_-]?key/i,
+  /api[_-]?key/i,
+  /client[_-]?secret/i,
+  /^authorization$/i,
+];
+
+function shouldRedactKey(key) {
+  return REDACT_KEY_PATTERNS.some((pattern) => pattern.test(key));
+}
 
 export function redact(obj) {
   if (!config.redactSecrets) return obj;
@@ -41,7 +42,7 @@ export function redact(obj) {
   if (typeof obj === "object") {
     const out = {};
     for (const [k, v] of Object.entries(obj)) {
-      out[k] = REDACT_KEYS.has(k) ? "***REDACTED***" : redact(v);
+      out[k] = shouldRedactKey(k) ? "***REDACTED***" : redact(v);
     }
     return out;
   }

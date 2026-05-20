@@ -7,7 +7,7 @@
 Each tool below is tagged 🟢 READ / 🟡 WRITE / 🔴 DESTRUCTIVE. Match the user's intent against this list and confirm before invoking 🟡/🔴 in production-adjacent contexts.
 
 ### 🟢 READ (no side effects on remote systems)
-`browser_list`, `page_list`, `page_text_content`, `page_inner_text`, `page_inner_html`, `page_get_attribute`, `page_query_selector_all`, `page_accessibility_snapshot`, `page_get_url`, `page_get_title`, `page_get_cookies`, `page_screenshot`, `page_pdf`, `mcp_status`.
+`browser_list`, `page_list`, `page_console_messages`, `page_text_content`, `page_inner_text`, `page_inner_html`, `page_get_attribute`, `page_query_selector_all`, `page_accessibility_snapshot`, `page_get_url`, `page_get_title`, `page_get_cookies`, `page_screenshot`, `page_pdf`, `mcp_status`.
 
 (Note: these still cost local CPU/RAM and may write artifacts to `./output/`.)
 

@@ -9,6 +9,21 @@ import { checkSafeEval, evalTimeoutMs, withTimeout } from "../safety/safe-eval.j
 export const extractionTools: ToolModule = {
   defs: [
     {
+      name: "page_console_messages",
+      description:
+        "Return console messages and page errors captured for a page. Useful for diagnosing frontend failures without reading screenshots.",
+      annotations: { title: "Console messages", readOnlyHint: true },
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          page_id: { type: "string" },
+          level: { type: "string", enum: ["all", "error", "warning", "info", "debug"], default: "all" },
+          limit: { type: "number", default: 100 },
+        },
+      },
+    },
+    {
       name: "page_text_content",
       description: "Return the textContent of the first element matching selector.",
       annotations: { title: "Text content", readOnlyHint: true },
@@ -154,6 +169,25 @@ export const extractionTools: ToolModule = {
   ],
 
   handlers: {
+    async page_console_messages(args) {
+      const rec = sessionManager.resolvePage(args.page_id as string | undefined);
+      const level = String(args.level ?? "all");
+      const limit = (args.limit as number | undefined) ?? 100;
+      const severity: Record<string, number> = {
+        pageerror: 50,
+        error: 40,
+        warning: 30,
+        warn: 30,
+        info: 20,
+        log: 20,
+        debug: 10,
+      };
+      const min = level === "all" ? 0 : severity[level] ?? 0;
+      const messages = rec.consoleMessages
+        .filter((m) => (severity[m.type] ?? 20) >= min)
+        .slice(-Math.max(1, limit));
+      return { page_id: rec.id, count: messages.length, messages };
+    },
     async page_text_content(args) {
       const sel = String(args.selector);
       assertSelectorAllowed(sel);

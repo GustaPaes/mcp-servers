@@ -1,8 +1,8 @@
 # MCP Servers by GustaPaes
 
-> A curated collection of [Model Context Protocol](https://modelcontextprotocol.io) servers and AI-driven automation tools I use every day.
+> A curated collection of [Model Context Protocol](https://modelcontextprotocol.io) servers I use every day.
 
-Each folder is an independent project with its own README, dependencies, configuration and operating model. The collection is intentionally practical: it focuses on workflows I actually use for cloud operations, TFS/Azure DevOps Server, browser automation, career tracking and Windows provisioning.
+Each folder is an independent project with its own README, dependencies, configuration and operating model. The collection is intentionally practical: it focuses on workflows I actually use for cloud operations, TFS/Azure DevOps Server, browser automation and career tracking.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![MCP](https://img.shields.io/badge/Model%20Context%20Protocol-1.x-6f42c1)](https://modelcontextprotocol.io)
@@ -21,7 +21,6 @@ It helps with:
 - Managing **TFS / Azure DevOps Server** work items, PRs, sprints, wiki and delivery readiness.
 - Driving **multi-session Playwright** automations with screenshots, HAR, video and trace artifacts.
 - Managing **PDIs, goals, evidence and career conversations** with structured data.
-- Filling out the Windows `autounattend.xml` generator with a conservative, documented Windows 11 preset.
 
 ## Project Matrix
 
@@ -32,6 +31,15 @@ It helps with:
 | [`oci-mcp`](./oci-mcp) | MCP toolkit | Combines official Oracle MCP servers with a custom `oci-extras-mcp` for OKE, Vault/Secrets, Kubernetes, Functions and streaming logs. | Node 20, OCI SDK, `uvx` | Stable |
 | [`playwright-mcp`](./playwright-mcp) | MCP server | Multi-session browser automation with Chromium/Firefox/WebKit, native Chrome/Edge, HAR, video, traces, PDF, request routing and light stealth. | TypeScript, Node 20, Playwright | Stable |
 | [`career-development-mcp`](./career-development-mcp) | MCP server | PDIs, SMART goals, competencies, evidence, career readiness, 1:1 preparation and optional TFS evidence import. | Node 20, ESM, local JSON storage | Beta |
+
+## Quality and Safety Baseline
+
+- Tools expose explicit JSON schemas and reject unknown input fields where practical.
+- Structured tool responses are returned as `structuredContent` when the server owns the protocol response shape.
+- Mutating and destructive tools are annotated with MCP tool annotations and documented operating policies.
+- Runtime state, browser profiles, logs, output artifacts and local `.env` files are ignored by Git.
+- Cloud-facing tools favor dry-run, audit logging, least privilege and explicit confirmation for high-impact actions.
+- Project READMEs include client configuration snippets and verification commands so each server can be tested independently.
 
 ## Repository Layout
 
