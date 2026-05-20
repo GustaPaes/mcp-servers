@@ -22,6 +22,18 @@ Each tool is tagged 🟢 READ / 🟡 WRITE / 🔴 DESTRUCTIVE. Match the user's 
 
 These may still write to the local **audit log** and to the **draft storage** (file/Postgres). They never call mutating endpoints on Meta.
 
+### 🟢 RESOURCES / PROMPTS
+
+Resources are read-only context surfaces:
+`meta-ads://accounts/config-summary`, `meta-ads://audit/recent`,
+`meta-ads://audit/account/{accountId}`, `meta-ads://drafts/all`,
+`meta-ads://drafts/account/{accountId}`.
+
+Prompts are safe playbooks, not actions:
+`weekly_account_audit`, `campaign_launch_plan`, `creative_review_playbook`.
+
+Reading a resource may reveal business metadata or ad copy, but never tokens. Treat drafts and audit content as confidential.
+
 ### 🟡 WRITE (state changes on Meta or local drafts)
 
 - **Local-only drafts (no API call):** `create_campaign_draft`, `create_ad_set_draft`, `create_ad_creative_draft`, `update_account_profile`.

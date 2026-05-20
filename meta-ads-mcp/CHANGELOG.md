@@ -46,8 +46,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`adinterest`, `adinterestsuggestion`, `adlocale`, `adgeolocation`,
   `adeducationschool`, `adeducationmajor`, `adworkemployer`,
   `adworkposition`).
-- 19+ vitest tests covering policy, budget, permissions, secret redaction
-  and Zod schemas.
+- MCP **Resources** for secret-redacted operational context:
+  `meta-ads://accounts/config-summary`, `meta-ads://audit/recent`,
+  `meta-ads://audit/account/{accountId}`, `meta-ads://drafts/all`,
+  `meta-ads://drafts/account/{accountId}`.
+- MCP **Prompts** for repeatable workflows:
+  `weekly_account_audit`, `campaign_launch_plan`,
+  `creative_review_playbook`.
+- 22+ vitest tests covering policy, budget, permissions, secret redaction,
+  Zod schemas, resources and targeting search normalization.
 - Documentation suite aligned with the repo standard:
   `README.md` (bilingual EN/PT), `AGENTS.md`, `BEST_PRACTICES.md`,
   `ARCHITECTURE.md`, `mcp.json.example`, `.env.example`,

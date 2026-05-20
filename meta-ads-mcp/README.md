@@ -247,6 +247,30 @@ All tools follow `<domain>_<verb>_<resource>` naming. Every tool returns the sam
 
 ---
 
+## Resources
+
+The server also exposes MCP Resources for safe, navigable context. These are read-only and secrets are redacted before returning content.
+
+| Resource | Purpose |
+|----------|---------|
+| `meta-ads://accounts/config-summary` | Configured accounts without `tokenEnvVar` values or secrets. |
+| `meta-ads://audit/recent` | Last 100 audit entries, newest first. |
+| `meta-ads://audit/account/{accountId}` | Last 200 audit entries for one account. |
+| `meta-ads://drafts/all` | All campaign/ad set/creative drafts from the storage backend. |
+| `meta-ads://drafts/account/{accountId}` | Drafts filtered by account. |
+
+## Prompts
+
+Operational MCP Prompts are available for repeatable workflows:
+
+| Prompt | Purpose |
+|--------|---------|
+| `weekly_account_audit` | Weekly account audit: KPIs, waste, recommendations, policy risks, recent audit log. |
+| `campaign_launch_plan` | Safe launch workflow before local drafts and any later publish approval. |
+| `creative_review_playbook` | Creative clarity, audience fit, policy risk and A/B plan. |
+
+---
+
 ## Mutation contract
 
 Every mutating tool requires ALL of the following to actually call Meta:
@@ -278,6 +302,8 @@ meta-ads-mcp/
 │   │   ├── buildServer.ts       # wires ToolContext + registers all tools
 │   │   ├── registry.ts          # ALL_TOOLS master list
 │   │   ├── toolKit.ts           # defineTool + ok/fail envelope
+│   │   ├── resources.ts         # audit/draft/account MCP resources
+│   │   ├── prompts.ts           # weekly audit / launch / creative playbooks
 │   │   └── tools/               # 8 files, 26 tools
 │   ├── meta/
 │   │   ├── MetaAdsClient.ts     # Graph API client (retry, backoff, mask token)
@@ -303,7 +329,7 @@ meta-ads-mcp/
 │   ├── config/                  # env + AccountRegistry
 │   └── utils/                   # logger, retry
 ├── prisma/schema.prisma         # optional Prisma schema for STORAGE_BACKEND=prisma
-├── tests/                       # vitest — 19+ tests
+├── tests/                       # vitest — 22+ tests
 ├── config/accounts.example.json
 ├── examples/                    # example tool calls, client configs
 └── web-panel/ARCHITECTURE.md    # optional Next.js panel design (not implemented yet)
@@ -317,7 +343,7 @@ See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the full layered diagram and deci
 
 ```powershell
 npm run typecheck            # strict TS check
-npm test                     # vitest run (19+ tests, ~5s)
+npm test                     # vitest run (22+ tests, ~5s)
 npm start                    # stdio
 $env:MCP_TRANSPORT="http"; npm start    # HTTP transport on 127.0.0.1:8787
 ```

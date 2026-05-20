@@ -13,11 +13,13 @@
 │                          meta-ads-mcp                                 │
 │                                                                       │
 │  ┌──────────────────────────┐    ┌────────────────────────────────┐  │
-│  │   Transports             │    │   Tool registry (26 tools)     │  │
+│  │   Transports             │    │   MCP surfaces                  │  │
 │  │   • stdio                │    │   • accounts / campaigns /     │  │
 │  │   • Streamable HTTP      │───▶│     adsets / creatives /       │  │
 │  │     (bearer auth,        │    │     insights / optimization /  │  │
-│  │      stateful sessions)  │    │     policy / targeting         │  │
+│  │      stateful sessions)  │    │     policy / targeting tools   │  │
+│  │                          │    │   • audit/draft resources      │  │
+│  │                          │    │   • operational prompts        │  │
 │  └──────────────────────────┘    └────────────────┬───────────────┘  │
 │                                                    │                  │
 │                          ┌────────────────────────┼─────────────┐    │
@@ -93,7 +95,24 @@ HTTP supports:
 - **Bearer auth** via CSV in `MCP_HTTP_BEARER_TOKENS`. Empty = no auth (only safe on localhost; logged as warning otherwise).
 - **Healthcheck** at `GET /healthz`.
 
-### D7 — Pluggable storage with file as default
+### D7 — Resources and prompts are first-class MCP surfaces
+Resources provide read-only, secret-redacted context:
+
+- `meta-ads://accounts/config-summary`
+- `meta-ads://audit/recent`
+- `meta-ads://audit/account/{accountId}`
+- `meta-ads://drafts/all`
+- `meta-ads://drafts/account/{accountId}`
+
+Prompts encode repeatable operating workflows:
+
+- `weekly_account_audit`
+- `campaign_launch_plan`
+- `creative_review_playbook`
+
+These surfaces keep LLM clients from re-discovering the same workflow every session and provide a stable bridge for the future web panel without bypassing tool-level guardrails.
+
+### D8 — Pluggable storage with file as default
 `Storage` is an interface (`read()`/`write()` of `StorageState`). The factory in `src/storage/factory.ts` picks the implementation:
 
 - `file` — `FileStorage` writes JSON. Zero-config.
@@ -102,7 +121,7 @@ HTTP supports:
 
 Prisma schema in `prisma/schema.prisma` uses a single `Draft` table with a `kind` enum and a JSON `data` column. Trade-off: simple migrations, no per-domain joins; the MCP doesn't need them.
 
-### D8 — Web panel stays out of the protocol
+### D9 — Web panel stays out of the protocol
 The optional `web-panel/` (Next.js + shadcn + TanStack + Recharts, 8 screens) talks to the MCP over the HTTP transport. It does NOT call Meta directly. Every panel action flows through the same validation/audit chain that an LLM goes through. Currently architecture-only.
 
 ## Data flow — applying a budget change

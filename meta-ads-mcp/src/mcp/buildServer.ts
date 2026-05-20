@@ -18,6 +18,8 @@ import { AudienceStrategyEngine } from '../optimization/AudienceStrategyEngine.j
 import { PolicyRiskEngine } from '../optimization/PolicyRiskEngine.js';
 import { BudgetEngine } from '../optimization/BudgetEngine.js';
 import { ALL_TOOLS } from './registry.js';
+import { registerPrompts } from './prompts.js';
+import { registerResources } from './resources.js';
 import type { ToolContext } from './context.js';
 
 export interface BuiltServer {
@@ -52,7 +54,7 @@ export async function buildMcpServer(): Promise<BuiltServer> {
   const server = new McpServer(
     { name: 'meta-ads-mcp', version: '0.1.0' },
     {
-      capabilities: { tools: {}, logging: {} },
+      capabilities: { tools: {}, resources: {}, prompts: {}, logging: {} },
       instructions: [
         'Servidor MCP para Meta Marketing API (Facebook/Instagram Ads).',
         'NUNCA execute mudanças que gastem dinheiro sem confirm=true, reason, requestedBy e dryRun=false.',
@@ -99,6 +101,9 @@ export async function buildMcpServer(): Promise<BuiltServer> {
       },
     );
   }
+
+  registerResources(server, ctx);
+  registerPrompts(server);
 
   return { server, ctx, toolCount: ALL_TOOLS.length };
 }
