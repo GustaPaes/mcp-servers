@@ -46,7 +46,7 @@
       "command": [
         "npx",
         "-y",
-        "@azure/mcp@latest",
+        "@azure/mcp@3.0.0-beta.18",
         "server",
         "start"
       ],

@@ -4,14 +4,14 @@
 
 .DESCRIPTION
     - Limpa o cache do npx para forcar re-download.
-    - Baixa @azure/mcp@latest e mostra a versao instalada.
+    - Baixa a versao pinada do @azure/mcp e mostra a versao instalada.
     - Opcionalmente, instala globalmente para acelerar cold starts.
 
 .PARAMETER Global
-    Tambem instala globalmente (`npm install -g @azure/mcp@latest`).
+    Tambem instala globalmente (`npm install -g @azure/mcp@<versao>`).
 
 .PARAMETER Pin
-    Versao especifica a fixar (ex: "2.0.0"). Default: latest.
+    Versao especifica a fixar. Default: versao validada no workspace.
 
 .EXAMPLE
     .\update-server.ps1
@@ -22,7 +22,7 @@
 [CmdletBinding()]
 param(
     [switch] $Global,
-    [string] $Pin = "latest"
+    [string] $Pin = "3.0.0-beta.18"
 )
 
 $ErrorActionPreference = 'Stop'

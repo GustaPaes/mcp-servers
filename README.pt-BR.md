@@ -94,7 +94,7 @@ cd career-development-mcp && npm install && cd ..
 cd playwright-mcp && npm install && npm run build && cd ..
 ```
 
-Para `azure-mcp`, nao ha instalacao local porque ele usa `npx -y @azure/mcp@latest server start`.
+Para `azure-mcp`, nao ha instalacao local porque ele usa `npx -y @azure/mcp@3.0.0-beta.18 server start`.
 
 Para `oci-mcp`, siga [`oci-mcp/docs/01-installation.md`](./oci-mcp/docs/01-installation.md), pois ele combina Node, OCI CLI e servidores MCP Python da Oracle.
 
@@ -127,7 +127,7 @@ Use [`config/opencode.example.json`](./config/opencode.example.json) como ponto 
     },
     "azure": {
       "type": "local",
-      "command": ["npx", "-y", "@azure/mcp@latest", "server", "start"],
+      "command": ["npx", "-y", "@azure/mcp@3.0.0-beta.18", "server", "start"],
       "enabled": true
     }
   }
@@ -142,7 +142,7 @@ Use `claude mcp add`:
 
 ```bash
 claude mcp add playwright node "C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"
-claude mcp add azure -- npx -y @azure/mcp@latest server start
+claude mcp add azure -- npx -y @azure/mcp@3.0.0-beta.18 server start
 claude mcp list
 ```
 
@@ -167,7 +167,7 @@ Edite `%APPDATA%\Claude\claude_desktop_config.json` no Windows ou `~/Library/App
     },
     "azure": {
       "command": "npx",
-      "args": ["-y", "@azure/mcp@latest", "server", "start"]
+      "args": ["-y", "@azure/mcp@3.0.0-beta.18", "server", "start"]
     }
   }
 }
@@ -203,7 +203,7 @@ args = ["C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"]
 
 [mcp_servers.azure]
 command = "npx"
-args = ["-y", "@azure/mcp@latest", "server", "start"]
+args = ["-y", "@azure/mcp@3.0.0-beta.18", "server", "start"]
 ```
 
 ## Instalar no Continue

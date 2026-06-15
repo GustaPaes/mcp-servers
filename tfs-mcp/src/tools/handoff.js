@@ -3,7 +3,7 @@
  */
 import { z } from "zod";
 import { tfsGet } from "../tfs-client.js";
-import { formatWorkItem } from "../formatters.js";
+import { formatWorkItem, normalizeWorkItemId } from "../formatters.js";
 import {
   calculateDescriptionQuality,
   isUserStoryFormat,
@@ -130,7 +130,7 @@ export async function toolWorkItemHandoff(args) {
     })
     .parse(args);
 
-  const wid = Number(id);
+  const wid = normalizeWorkItemId(id);
   const workItem = await fetchWorkItemById(wid, "all");
   const relatedItems = include_related ? await loadRelatedItems(workItem) : [];
   const linkedPRs = include_pull_requests ? await loadLinkedPullRequestsByItem(workItem, 5) : [];
@@ -208,7 +208,7 @@ export async function toolPrepareRefinement(args) {
     })
     .parse(args);
 
-  const wid = Number(id);
+  const wid = normalizeWorkItemId(id);
   const workItem = await fetchWorkItemById(wid, "all");
   const relatedItems = await loadRelatedItems(workItem);
   const wikiMatches = include_wiki

@@ -21,7 +21,11 @@ export function ensureOutputDir(): string {
 
 export function outputPath(sub: OutputSubdir, ...rest: string[]): string {
   ensureOutputDir();
-  const p = path.join(config.outputDir, sub, ...rest);
+  const base = path.resolve(config.outputDir, sub);
+  const p = path.resolve(base, ...rest);
+  if (p !== base && !p.startsWith(base + path.sep)) {
+    throw new Error(`output path escapes ${sub} directory`);
+  }
   fs.mkdirSync(path.dirname(p), { recursive: true });
   return p;
 }

@@ -29,6 +29,12 @@ const REDACT_KEY_PATTERNS = [
   /api[_-]?key/i,
   /client[_-]?secret/i,
   /^authorization$/i,
+  /^value$/i,
+  /^yaml$/i,
+  /kubeconfig/i,
+  /^data$/i,
+  /cert(ificate)?/i,
+  /^message$/i,
 ];
 
 function shouldRedactKey(key) {
@@ -46,8 +52,14 @@ export function redact(obj) {
     }
     return out;
   }
-  if (typeof obj === "string" && obj.length > 200 && /^-----BEGIN/.test(obj)) {
+  if (typeof obj === "string" && /^-----BEGIN/.test(obj)) {
     return "***REDACTED-PEM***";
+  }
+  if (typeof obj === "string" && /\bBearer\s+[A-Za-z0-9._~+/=-]+/i.test(obj)) {
+    return obj.replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer ***REDACTED***");
+  }
+  if (typeof obj === "string" && /\b[A-Za-z0-9+/]{80,}={0,2}\b/.test(obj)) {
+    return "***REDACTED-LONG-TOKEN***";
   }
   return obj;
 }

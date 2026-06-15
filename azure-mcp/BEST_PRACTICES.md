@@ -159,7 +159,7 @@ Doc: <https://github.com/microsoft/mcp/blob/main/docs/sovereign-clouds.md>
 ### Startup lento (`npx` baixando o pacote)
 Solução A — instalar global:
 ```powershell
-npm install -g @azure/mcp@latest
+npm install -g @azure/mcp@3.0.0-beta.18
 ```
 Edite `mcp.json`:
 ```json
@@ -193,12 +193,12 @@ Solução B — pinar versão no `mcp.json`:
 ### Modo debug
 Adicione `--debug` em `args` no `mcp.json`:
 ```json
-"args": ["-y", "@azure/mcp@latest", "server", "start", "--debug"]
+"args": ["-y", "@azure/mcp@3.0.0-beta.18", "server", "start", "--debug"]
 ```
 
 ### Listar tools disponíveis
 ```powershell
-npx -y @azure/mcp@latest tools list
+npx -y @azure/mcp@3.0.0-beta.18 tools list
 ```
 
 ### Diagnóstico end-to-end
@@ -218,7 +218,7 @@ npx -y @azure/mcp@latest tools list
     tenant-id: ${{ secrets.AZURE_TENANT_ID }}
     subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-- run: npm install -g @azure/mcp@latest
+- run: npm install -g @azure/mcp@3.0.0-beta.18
 - run: azmcp <comando>
 ```
 
@@ -240,11 +240,11 @@ docker run --rm \
 
 | Estratégia | Quando usar | Pro | Contra |
 |---|---|---|---|
-| `@latest` (atual) | Dev individual | Sempre atualizado, novas tools | Pode quebrar ao rodar `npx` se houver breaking change |
+| `@latest` | Sandbox individual | Sempre atualizado, novas tools | Pode quebrar ao rodar `npx` se houver breaking change |
 | `@x.y.z` (pinado) | Times, CI | Reprodutível | Update manual |
 | Global install | Dev frequente | Cold start rápido | Update manual |
 | Docker tag fixa | CI/CD | Imutável, isolado | Latência maior |
 
-**Recomendação para você (dev local, multi-tenant):** `@latest` agora; pinar a primeira versão estável que validou se começar a notar breaking changes.
+**Recomendação para este workspace:** usar o pin `@azure/mcp@3.0.0-beta.18` em clientes e scripts. Testar `@latest` apenas em sandbox e promover o novo pin depois de validação com `scripts\verify-auth.ps1 -Version "<versao>"`.
 
 Releases: <https://github.com/microsoft/mcp/releases?q=Azure.Mcp.Server->

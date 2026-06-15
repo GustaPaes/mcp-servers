@@ -10,16 +10,57 @@ import crypto from "node:crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { buildServer } from "./server.js";
 import { logger } from "./safety/audit.js";
-import { validateConfigForAuth } from "./config.js";
+import { config, validateConfigForAuth } from "./config.js";
+
+function isLoopback(host) {
+  return ["127.0.0.1", "localhost", "::1"].includes(String(host ?? "").toLowerCase());
+}
+
+function isAuthorized(req) {
+  if (!config.httpToken) return true;
+  return String(req.headers.authorization ?? "") === `Bearer ${config.httpToken}`;
+}
 
 export async function startHttpStreamable({ port, host }) {
   validateConfigForAuth();
-  const sessions = new Map(); // sessionId -> { server, transport }
+  if (!isLoopback(host) && !config.httpToken) {
+    throw new Error("MCP_HTTP_TOKEN is required when binding oci-extras-mcp HTTP outside loopback");
+  }
+  const sessions = new Map(); // sessionId -> { server, transport, timer }
+
+  function closeSession(sessionId) {
+    const entry = sessions.get(sessionId);
+    if (!entry) return;
+    clearTimeout(entry.timer);
+    sessions.delete(sessionId);
+    entry.transport?.close?.().catch?.(() => {});
+  }
 
   const server = http.createServer(async (req, res) => {
+    if ((req.url === "/health" || req.url === "/healthz") && req.method === "GET") {
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ status: "ok", transport: "streamable-http", activeSessions: sessions.size }));
+      return;
+    }
+
     if (!req.url?.startsWith("/mcp")) {
       res.statusCode = 404;
       res.end("Not Found. Use /mcp");
+      return;
+    }
+
+    if (!isAuthorized(req)) {
+      res.statusCode = 401;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ error: "unauthorized" }));
+      return;
+    }
+
+    const contentLength = Number(req.headers["content-length"] ?? 0);
+    if (contentLength > config.httpBodyLimitBytes) {
+      res.statusCode = 413;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ error: "payload_too_large" }));
       return;
     }
 
@@ -33,7 +74,8 @@ export async function startHttpStreamable({ port, host }) {
         sessionIdGenerator: () => sessionId,
       });
       await mcp.connect(transport);
-      entry = { server: mcp, transport };
+      const timer = setTimeout(() => closeSession(sessionId), config.httpSessionTtlMs);
+      entry = { server: mcp, transport, timer };
       sessions.set(sessionId, entry);
       res.setHeader("mcp-session-id", sessionId);
       logger.info({ sessionId }, "new MCP session");

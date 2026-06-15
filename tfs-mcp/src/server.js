@@ -55,6 +55,7 @@ import {
   toolListRepos,
 } from "./tools/infra.js";
 import { runWithRequestContext } from "./request-context.js";
+import { MutationControlsSchema } from "./safety.js";
 
 // ─── Tool metadata helpers ─────────────────────────────────────────────────
 
@@ -197,6 +198,7 @@ const TOOL_DEFS = [
         priority: { type: "number", enum: [1, 2, 3, 4], description: "Prioridade: 1 (alta) a 4 (baixa)" },
         parent_id: { type: "number", description: "ID do work item pai para criar hierarquia" },
         tags: { type: "string", description: "Tags separadas por ponto-e-virgula" },
+        ...MutationControlsSchema,
       },
       required: ["work_item_type", "title"],
     },
@@ -447,6 +449,7 @@ const TOOL_DEFS = [
             "HTML rico para o campo tecnico. Mesmo padrao de description.",
         },
         story_points: { type: "number" },
+        ...MutationControlsSchema,
       },
       required: ["id"],
     },
@@ -464,6 +467,7 @@ const TOOL_DEFS = [
         repo: { type: "string" },
         file_path: { type: "string" },
         line: { type: "number" },
+        ...MutationControlsSchema,
       },
       required: ["id", "comment"],
     },
@@ -481,6 +485,11 @@ const TOOL_DEFS = [
         dry_run: { type: "boolean", default: true },
         include_pr_hygiene: { type: "boolean", default: true },
         max_comments: { type: "number", default: 6 },
+        confirm: MutationControlsSchema.confirm,
+        reason: MutationControlsSchema.reason,
+        requestedBy: MutationControlsSchema.requestedBy,
+        requested_by: MutationControlsSchema.requested_by,
+        confirm_high_impact: MutationControlsSchema.confirm_high_impact,
       },
       required: ["id"],
     },
@@ -504,6 +513,10 @@ const TOOL_DEFS = [
     inputSchema: { type: "object", properties: {} },
   },
 ];
+
+export function getToolCount() {
+  return TOOL_DEFS.length;
+}
 
 // ─── Dispatch table ────────────────────────────────────────────────────────
 

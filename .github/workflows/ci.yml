@@ -14,16 +14,22 @@ jobs:
         include:
           - name: tfs-mcp
             dir: tfs-mcp
-            command: node -e "import('./src/server.js').then(() => console.log('server module ok'))"
+            command: npm test
           - name: career-development-mcp
             dir: career-development-mcp
-            command: node -e "import('./src/server.js').then(() => console.log('server module ok'))"
+            command: npm test
           - name: playwright-mcp
             dir: playwright-mcp
             command: npm run build
           - name: oci-extras-mcp
             dir: oci-mcp/oci-extras-mcp
             command: npm test
+          - name: meta-ads-mcp
+            dir: meta-ads-mcp
+            command: npm test && npm run typecheck && npm run build
+          - name: meta-ads-mcp-web-panel
+            dir: meta-ads-mcp/web-panel
+            command: npm run typecheck && npm run build
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

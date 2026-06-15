@@ -86,7 +86,7 @@ Verifique se alguma storage account tem "Allow public blob access" habilitado e 
 ```
 
 ```text
-Mostre as connection strings da storage account "stexample-productdev". (vou usar so para teste local)
+Liste os nomes das connection strings da storage account "stexample-productdev" e mostre valores mascarados. Se eu pedir o valor real depois, exija justificativa e confirme o contexto Azure antes.
 ```
 
 ```text
@@ -106,7 +106,7 @@ Liste os secrets do vault "kv-example-app-dev" (apenas nomes, sem valores).
 ```
 
 ```text
-Pegue o valor do secret "DbConnectionString" do vault "kv-example-app-dev".
+Verifique se o secret "DbConnectionString" existe no vault "kv-example-app-dev" sem revelar o valor. Se eu pedir o valor real depois, exija justificativa explícita e mascare ao resumir.
 ```
 
 ```text
@@ -223,6 +223,14 @@ Mostre as funcoes da Function App "func-example-app-jobs" e o gatilho de cada um
 
 ```text
 Liste todas as VMs da subscription com size, OS, power state.
+```
+
+```text
+Para a VM "BuildPullRequest01", mostre tenant, subscription, resource group e power state atual. Se eu confirmar, use o padrao do workspace para ligar ou desligar com deallocate.
+```
+
+```text
+Quero agendar a VM "BuildPullRequest01" para ligar as 08:00 no horario local e desligar com menor custo as 18:00. Use o padrao do workspace: Scheduled Task local para start e Azure auto-shutdown para stop, e me mostre o plano antes de aplicar.
 ```
 
 ```text

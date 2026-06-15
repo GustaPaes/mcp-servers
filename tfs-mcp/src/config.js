@@ -89,6 +89,14 @@ export const TFS_REPOS = unique([
 ]);
 export const TFS_REPO = TFS_REPOS[0] ?? "ExampleProject";
 export const TFS_PAT = firstNonEmpty(process.env.TFS_PAT);
+export const TFS_AUDIT_LOG_PATH = firstNonEmpty(
+  process.env.TFS_AUDIT_LOG_PATH,
+  path.join(__dirname, "../data/audit.log")
+);
+export const TFS_DEFAULT_QUARTER = firstNonEmpty(
+  process.env.TFS_DEFAULT_QUARTER,
+  `${new Date().getFullYear()} Q${Math.floor(new Date().getMonth() / 3) + 1}`
+);
 export const TFS_PAT_ALIASES = Object.freeze(
   Object.fromEntries(
     Object.entries(process.env)
@@ -101,6 +109,9 @@ export const TFS_DEFAULT_AUTH_ALIAS = normalizeAlias(process.env.TFS_DEFAULT_AUT
 
 /** Token opcional para autenticar clientes no modo HTTP (Bearer). */
 export const MCP_HTTP_TOKEN = firstNonEmpty(process.env.MCP_HTTP_TOKEN);
+export const MCP_HTTP_HOST = firstNonEmpty(process.env.MCP_HTTP_HOST, "127.0.0.1");
+export const MCP_HTTP_BODY_LIMIT_BYTES = Number(process.env.MCP_HTTP_BODY_LIMIT_BYTES ?? 1_048_576);
+export const MCP_HTTP_SESSION_TTL_MS = Number(process.env.MCP_HTTP_SESSION_TTL_MS ?? 30 * 60_000);
 
 /** Base URL de todos os endpoints _apis do projeto. */
 export const BASE = `${PROJECT_BASE_URL}/_apis`;

@@ -11,6 +11,13 @@ import {
 } from "../config.js";
 import { formatPR, resolveRepository, normalizePullRequestRef } from "../formatters.js";
 import { runPatternChecks, scoreReview } from "../rules.js";
+import { getRequestContext } from "../request-context.js";
+import {
+  buildMutationPlan,
+  detectHighImpact,
+  executeGuardedMutation,
+  normalizeMutationControls,
+} from "../safety.js";
 import {
   summarizeFileChanges,
   detectCriticalFileAreas,
@@ -541,17 +548,25 @@ export async function toolReviewPR(args) {
 }
 
 export async function toolAddPRComment(args) {
-  const { id, repo, comment, file_path, line } = z
+  const { id, repo, comment, file_path, line, dry_run, confirm, reason, requestedBy, requested_by, confirm_high_impact } = z
     .object({
       id: z.union([z.number(), z.string()]),
       repo: z.string().optional(),
       comment: z.string().min(1),
       file_path: z.string().optional(),
       line: z.number().int().positive().optional(),
+      dry_run: z.boolean().default(true),
+      confirm: z.boolean().optional(),
+      reason: z.string().optional(),
+      requestedBy: z.string().optional(),
+      requested_by: z.string().optional(),
+      confirm_high_impact: z.string().optional(),
     })
     .parse(args);
 
-  const { repository, parsedRef } = await resolvePullRequestTarget(id, repo);
+  const parsedArgs = { dry_run, confirm, reason, requestedBy, requested_by, confirm_high_impact };
+  const { repository, pr, parsedRef } = await resolvePullRequestTarget(id, repo);
+  const formattedPr = formatPR(pr);
   const threadPayload = {
     comments: [{ parentCommentId: 0, content: comment, commentType: 1 }],
     status: 1,
@@ -562,11 +577,56 @@ export async function toolAddPRComment(args) {
       ...(line != null ? { rightFileStart: { line, offset: 1 }, rightFileEnd: { line, offset: 2 } } : {}),
     };
   }
-  const result = await tfsPost(
-    `/git/repositories/${repository}/pullrequests/${parsedRef.id}/threads`,
-    threadPayload
+
+  const controls = normalizeMutationControls(parsedArgs);
+  const impact = detectHighImpact(
+    repository,
+    formattedPr.title,
+    formattedPr.sourceBranch,
+    formattedPr.targetBranch,
+    file_path
   );
-  return { threadId: result.id, status: result.status, comment };
+  const context = getRequestContext();
+  const plan = buildMutationPlan({
+    tool: "tfs_add_pr_comment",
+    target: {
+      pullRequestId: parsedRef.id,
+      title: formattedPr.title,
+      repository,
+      sourceBranch: formattedPr.sourceBranch,
+      targetBranch: formattedPr.targetBranch,
+      filePath: file_path ?? null,
+      line: line ?? null,
+      url: formattedPr.url,
+    },
+    operation: "add pull request comment",
+    changes: [
+      {
+        field: file_path ? "threadContext/comment" : "comment",
+        filePath: file_path ?? null,
+        line: line ?? null,
+        valuePreview: comment.length > 160 ? `${comment.slice(0, 160)}...[truncated:${comment.length}]` : comment,
+      },
+    ],
+    controls,
+    highImpact: impact.highImpact,
+    highImpactMatch: impact.match,
+    highImpactConfirmation: String(parsedRef.id),
+    authAlias: context.authAlias,
+    repo: repository,
+  });
+
+  return executeGuardedMutation({
+    plan,
+    controls,
+    apply: async () => {
+      const result = await tfsPost(
+        `/git/repositories/${repository}/pullrequests/${parsedRef.id}/threads`,
+        threadPayload
+      );
+      return { threadId: result.id, status: result.status, comment };
+    },
+  });
 }
 
 export async function toolCommentReviewFindings(args) {
@@ -576,6 +636,11 @@ export async function toolCommentReviewFindings(args) {
     dry_run = true,
     include_pr_hygiene = true,
     max_comments = 6,
+    confirm,
+    reason,
+    requestedBy,
+    requested_by,
+    confirm_high_impact,
   } = z
     .object({
       id: z.union([z.number(), z.string()]),
@@ -583,6 +648,11 @@ export async function toolCommentReviewFindings(args) {
       dry_run: z.boolean().default(true),
       include_pr_hygiene: z.boolean().default(true),
       max_comments: z.number().int().min(1).max(20).default(6),
+      confirm: z.boolean().optional(),
+      reason: z.string().optional(),
+      requestedBy: z.string().optional(),
+      requested_by: z.string().optional(),
+      confirm_high_impact: z.string().optional(),
     })
     .parse(args);
 
@@ -640,6 +710,7 @@ export async function toolCommentReviewFindings(args) {
   }
 
   const appliedComments = [];
+  const blockedComments = [];
   for (const entry of plannedComments) {
     const result = await toolAddPRComment({
       id: parsedRef.id,
@@ -647,7 +718,21 @@ export async function toolCommentReviewFindings(args) {
       comment: entry.comment,
       file_path: entry.file_path ?? undefined,
       line: entry.line ?? undefined,
+      dry_run,
+      confirm,
+      reason,
+      requestedBy,
+      requested_by,
+      confirm_high_impact,
     });
+    if (result?.willMutate === false) {
+      blockedComments.push({
+        ...entry,
+        blockReasons: result.blockReasons ?? [],
+        correlationId: result.correlationId,
+      });
+      continue;
+    }
     appliedComments.push({
       ...entry,
       threadId: result.threadId,
@@ -660,6 +745,7 @@ export async function toolCommentReviewFindings(args) {
     dryRun: false,
     totalFindings: review.reviewFindings.length,
     appliedComments,
+    blockedComments,
   };
 }
 
@@ -770,15 +856,26 @@ export async function toolPreparePRReview(args) {
     "Garantir que não há segredos hardcoded",
     ...(criticalAreas.areas.length > 0 ? [`Revisão extra: ${criticalAreas.areas.slice(0, 2).join(", ")}`] : []),
   ];
+  const formattedPr = formatPR(pr);
+  const pipeline = include_pipeline
+    ? await import("./infra.js")
+        .then(({ toolPipelineStatus }) =>
+          toolPipelineStatus({ branch: formattedPr.targetBranch || "master", top: 3 })
+        )
+        .catch((err) => ({
+          unavailable: true,
+          error: err instanceof Error ? err.message : String(err),
+        }))
+    : null;
 
   return {
-    pullRequest: formatPR(pr),
+    pullRequest: formattedPr,
     linkedWorkItems: formattedWorkItems,
     signals,
     risks,
     checklist,
     suggestedFocus,
     codeReview: include_code_review ? { openComments: openThreads.length, totalThreads: threads.length } : null,
-    pipeline: null,
+    pipeline,
   };
 }

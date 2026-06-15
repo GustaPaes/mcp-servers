@@ -12,8 +12,12 @@
     "start": "node index.js",
     "start:http": "node index.js --http",
     "validate:premium": "node validate-premium.mjs",
+    "validate:live": "node validate-premium.mjs",
+    "test:unit": "node --test tests",
+    "test:smoke": "node -e \"import('./src/server.js').then(() => console.log('server module ok'))\"",
+    "test:http": "node smoke-http.mjs",
     "smoke:http": "node smoke-http.mjs",
-    "test": "node validate-premium.mjs"
+    "test": "node --test tests"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",

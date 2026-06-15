@@ -5,7 +5,7 @@
 .DESCRIPTION
     1. Confirma az login (tenant, subscription, usuario).
     2. Lista subscriptions disponiveis.
-    3. Executa `npx -y @azure/mcp@latest tools list` para validar o server.
+    3. Executa `npx -y @azure/mcp@<versao>` tools list para validar o server.
     4. Retorna exit code != 0 se algo falhar.
 
 .EXAMPLE
@@ -13,7 +13,9 @@
 #>
 
 [CmdletBinding()]
-param()
+param(
+    [string] $Version = "3.0.0-beta.18"
+)
 
 $ErrorActionPreference = 'Stop'
 
@@ -89,12 +91,14 @@ try {
 }
 
 # ---------- 4. Azure MCP Server ----------
-Write-Section "4/4  Azure MCP Server (npx @azure/mcp tools list)"
+$pkg = "@azure/mcp@$Version"
+
+Write-Section "4/4  Azure MCP Server (npx $pkg tools list)"
 Write-Host "  (na primeira execucao pode demorar 5-10s para baixar o pacote)" -ForegroundColor DarkGray
 Write-Host ""
 
 try {
-    $output = & npx -y "@azure/mcp@latest" tools list 2>&1
+    $output = & npx -y $pkg tools list 2>&1
     if ($LASTEXITCODE -ne 0) {
         Write-Err "Falha ao executar `npx @azure/mcp tools list`."
         Write-Host $output

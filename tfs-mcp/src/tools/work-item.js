@@ -4,8 +4,15 @@
  */
 import { z } from "zod";
 import { tfsGet, tfsPost, tfsJsonPatch } from "../tfs-client.js";
-import { TFS_PROJECT, TFS_URL, TFS_COLLECTION } from "../config.js";
+import { TFS_PROJECT, TFS_URL, TFS_COLLECTION, TFS_DEFAULT_QUARTER } from "../config.js";
 import { buildActivityTemplate, parseBusinessDescription } from "../activity-template.js";
+import { getRequestContext } from "../request-context.js";
+import {
+  buildMutationPlan,
+  detectHighImpact,
+  executeGuardedMutation,
+  normalizeMutationControls,
+} from "../safety.js";
 import {
   formatWorkItem,
   normalizeWorkItemId,
@@ -49,6 +56,12 @@ const UpdateArgs = z.object({
   story_points: z.number().positive().optional(),
   description: z.string().optional(),
   acceptance_criteria: z.string().optional(),
+  dry_run: z.boolean().default(true),
+  confirm: z.boolean().optional(),
+  reason: z.string().optional(),
+  requestedBy: z.string().optional(),
+  requested_by: z.string().optional(),
+  confirm_high_impact: z.string().optional(),
 });
 
 const CreateArgs = z.object({
@@ -63,6 +76,12 @@ const CreateArgs = z.object({
   priority: z.number().int().min(1).max(4).optional(),
   parent_id: z.number().int().positive().optional(),
   tags: z.string().optional(),
+  dry_run: z.boolean().default(true),
+  confirm: z.boolean().optional(),
+  reason: z.string().optional(),
+  requestedBy: z.string().optional(),
+  requested_by: z.string().optional(),
+  confirm_high_impact: z.string().optional(),
 });
 
 const TemplateArgs = z.object({
@@ -135,6 +154,24 @@ function buildWikiUsSearchVariants(title = "") {
     usNumber ? `US-${Number(usNumber)}` : "",
     normalizedTitle,
   ].filter(Boolean);
+}
+
+function summarizePatchOps(ops) {
+  return ops.map((op) => {
+    const field = op.path.replace("/fields/", "");
+    if (field === "/relations/-" || op.path === "/relations/-") {
+      return { op: op.op, path: op.path, relation: op.value?.rel ?? "relation" };
+    }
+    const value = op.value;
+    if (typeof value === "string") {
+      return {
+        op: op.op,
+        field,
+        valuePreview: value.length > 120 ? `${value.slice(0, 120)}...[truncated:${value.length}]` : value,
+      };
+    }
+    return { op: op.op, field, value };
+  });
 }
 
 async function fetchWorkItemFieldMap(id) {
@@ -427,8 +464,9 @@ export async function toolQueryWorkItems(args) {
 }
 
 export async function toolUpdateWorkItem(args) {
-  const { id, state, assigned_to, comment, title, story_points, description, acceptance_criteria } = UpdateArgs.parse(args);
-  const { businessField, technicalField } = await fetchWorkItemFieldMap(id);
+  const parsed = UpdateArgs.parse(args);
+  const { id, state, assigned_to, comment, title, story_points, description, acceptance_criteria } = parsed;
+  const { workItem, businessField, technicalField } = await fetchWorkItemFieldMap(id);
   const ops = [];
   if (state) ops.push({ op: "add", path: "/fields/System.State", value: state });
   if (assigned_to) ops.push({ op: "add", path: "/fields/System.AssignedTo", value: assigned_to });
@@ -453,16 +491,54 @@ export async function toolUpdateWorkItem(args) {
       "Nenhum campo para atualizar. Forneça state, assigned_to, comment, title, description, acceptance_criteria ou story_points."
     );
 
-  const wi = await tfsJsonPatch("PATCH", `/wit/workitems/${id}`, ops);
-  const f = wi.fields ?? {};
-  return {
-    id: wi.id,
-    title: f["System.Title"],
-    state: f["System.State"],
-    assignedTo: f["System.AssignedTo"]?.displayName,
-    updated: ops.map((o) => o.path.replace("/fields/", "")),
-    url: wi._links?.html?.href,
-  };
+  const formatted = formatWorkItem(workItem);
+  const controls = normalizeMutationControls(parsed);
+  const impact = detectHighImpact(
+    formatted.title,
+    formatted.area,
+    formatted.iteration,
+    formatted.tags,
+    state,
+    title,
+    assigned_to,
+    ops.map((op) => op.value)
+  );
+  const context = getRequestContext();
+  const plan = buildMutationPlan({
+    tool: "tfs_update_work_item",
+    target: {
+      id,
+      title: formatted.title,
+      state: formatted.state,
+      area: formatted.area,
+      iteration: formatted.iteration,
+      url: formatted.url,
+    },
+    operation: "update work item fields",
+    changes: summarizePatchOps(ops),
+    controls,
+    highImpact: impact.highImpact,
+    highImpactMatch: impact.match,
+    highImpactConfirmation: String(id),
+    authAlias: context.authAlias,
+  });
+
+  return executeGuardedMutation({
+    plan,
+    controls,
+    apply: async () => {
+      const wi = await tfsJsonPatch("PATCH", `/wit/workitems/${id}`, ops);
+      const f = wi.fields ?? {};
+      return {
+        id: wi.id,
+        title: f["System.Title"],
+        state: f["System.State"],
+        assignedTo: f["System.AssignedTo"]?.displayName,
+        updated: ops.map((o) => o.path.replace("/fields/", "")),
+        url: wi._links?.html?.href,
+      };
+    },
+  });
 }
 
 export async function toolGenerateActivityTemplate(args) {
@@ -613,7 +689,7 @@ export async function toolCreateWorkItem(args) {
       ops.push({ op: "add", path: "/fields/example.TipoDemanda", value: "Planejada no plano de produto" });
     }
     if (!hasField("/fields/Example.Quarter")) {
-      ops.push({ op: "add", path: "/fields/Example.Quarter", value: "2026 Q2" });
+      ops.push({ op: "add", path: "/fields/Example.Quarter", value: TFS_DEFAULT_QUARTER });
     }
     if (!hasField("/fields/Example.Bloqueio")) {
       ops.push({ op: "add", path: "/fields/Example.Bloqueio", value: "Não está bloqueado" });
@@ -644,18 +720,45 @@ export async function toolCreateWorkItem(args) {
     });
   }
 
-  const typeEncoded = encodeURIComponent(work_item_type);
-  const wi = await tfsJsonPatch("POST", `/wit/workitems/$${typeEncoded}`, ops);
-  const f = wi.fields ?? {};
-  return {
-    id: wi.id,
-    type: f["System.WorkItemType"],
-    title: f["System.Title"],
-    state: f["System.State"],
-    assignedTo: f["System.AssignedTo"]?.displayName ?? "Unassigned",
-    iteration: f["System.IterationPath"],
-    area: f["System.AreaPath"],
-    url: wi._links?.html?.href ?? `${TFS_URL}/${TFS_COLLECTION}/${TFS_PROJECT}/_workitems/edit/${wi.id}`,
-    created: true,
-  };
+  const controls = normalizeMutationControls(args);
+  const impact = detectHighImpact(work_item_type, title, area_path, iteration_path, tags);
+  const context = getRequestContext();
+  const plan = buildMutationPlan({
+    tool: "tfs_work_item_create",
+    target: {
+      workItemType: work_item_type,
+      title,
+      areaPath: area_path ?? null,
+      iterationPath: iteration_path ?? null,
+      parentId: parent_id ?? null,
+    },
+    operation: "create work item",
+    changes: summarizePatchOps(ops),
+    controls,
+    highImpact: impact.highImpact,
+    highImpactMatch: impact.match,
+    highImpactConfirmation: title,
+    authAlias: context.authAlias,
+  });
+
+  return executeGuardedMutation({
+    plan,
+    controls,
+    apply: async () => {
+      const typeEncoded = encodeURIComponent(work_item_type);
+      const wi = await tfsJsonPatch("POST", `/wit/workitems/$${typeEncoded}`, ops);
+      const f = wi.fields ?? {};
+      return {
+        id: wi.id,
+        type: f["System.WorkItemType"],
+        title: f["System.Title"],
+        state: f["System.State"],
+        assignedTo: f["System.AssignedTo"]?.displayName ?? "Unassigned",
+        iteration: f["System.IterationPath"],
+        area: f["System.AreaPath"],
+        url: wi._links?.html?.href ?? `${TFS_URL}/${TFS_COLLECTION}/${TFS_PROJECT}/_workitems/edit/${wi.id}`,
+        created: true,
+      };
+    },
+  });
 }

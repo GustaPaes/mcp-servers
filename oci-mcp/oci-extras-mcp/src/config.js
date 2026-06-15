@@ -36,6 +36,9 @@ export const config = Object.freeze({
   httpPort: Number(envOr("MCP_HTTP_PORT", 3020)),
   httpHost: envOr("MCP_HTTP_HOST", "127.0.0.1"),
   httpBaseUrl: envOr("MCP_HTTP_BASE_URL", "http://127.0.0.1:3020"),
+  httpToken: envOr("MCP_HTTP_TOKEN", ""),
+  httpBodyLimitBytes: Number(envOr("MCP_HTTP_BODY_LIMIT_BYTES", 1_048_576)),
+  httpSessionTtlMs: Number(envOr("MCP_HTTP_SESSION_TTL_MS", 30 * 60_000)),
 
   // ----- Kubernetes -----
   kubeconfigPath: envOr("KUBECONFIG", path.join(os.homedir(), ".kube", "config")),

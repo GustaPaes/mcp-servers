@@ -43,6 +43,7 @@
 
 # Local MCP runtime state
 career-development-mcp/data/
+tfs-mcp/data/
 **/chrome-profile/
 
 # OS

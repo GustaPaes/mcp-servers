@@ -6,12 +6,16 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { sessionManager } from "../session-manager.js";
 import type { BrowserChannel, BrowserName, ToolModule } from "../types.js";
-import { ensureOutputDir, outputPath } from "../output-dir.js";
+import { outputPath } from "../output-dir.js";
 import { config } from "../config.js";
 import { logger } from "../logger.js";
 
 const browserEnum = ["chromium", "firefox", "webkit"];
 const channelEnum = ["", "chrome", "chrome-beta", "chrome-dev", "chrome-canary", "msedge", "msedge-beta", "msedge-dev", "msedge-canary"];
+
+function storagePath(input: string): string {
+  return outputPath("storage", input);
+}
 
 export const browserTools: ToolModule = {
   defs: [
@@ -189,7 +193,7 @@ export const browserTools: ToolModule = {
         locale: args.locale as string | undefined,
         timezoneId: args.timezone_id as string | undefined,
         userAgent: args.user_agent as string | undefined,
-        storageStatePath: args.storage_state_path as string | undefined,
+        storageStatePath: args.storage_state_path ? storagePath(String(args.storage_state_path)) : undefined,
         recordVideo: args.record_video as boolean | undefined,
         recordHar: args.record_har as boolean | undefined,
         ignoreHttpsErrors: args.ignore_https_errors as boolean | undefined,
@@ -215,10 +219,10 @@ export const browserTools: ToolModule = {
       const { ctx } = sessionManager.requireContext(String(args.context_id));
       const mode = String(args.mode);
       if (mode === "save") {
-        ensureOutputDir();
         const file =
-          (args.path as string | undefined) ??
-          outputPath("storage", `${ctx.id}-${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
+          args.path
+            ? storagePath(String(args.path))
+            : outputPath("storage", `${ctx.id}-${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
         const state = await ctx.context.storageState({ path: file });
         return {
           saved: true,
@@ -228,7 +232,7 @@ export const browserTools: ToolModule = {
         };
       }
       if (mode === "load") {
-        const file = args.path as string | undefined;
+        const file = args.path ? storagePath(String(args.path)) : undefined;
         if (!file) throw new Error("path is required when mode=load");
         const raw = await fs.readFile(file, "utf8");
         const state = JSON.parse(raw) as { cookies?: unknown[]; origins?: unknown[] };

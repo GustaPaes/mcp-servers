@@ -17,7 +17,10 @@ export const MCP_HTTP_PORT = Number(process.env.MCP_HTTP_PORT ?? 3020);
 export const MCP_HTTP_TOKEN = firstNonEmpty(process.env.MCP_HTTP_TOKEN);
 export const TEAM_GUIDE_NAME = "career-development-mcp";
 export const ROOT_DIR = path.join(__dirname, "..");
-export const DATA_DIR = path.join(ROOT_DIR, "data");
+const configuredDataDir = firstNonEmpty(process.env.CAREER_MCP_DATA_DIR);
+export const DATA_DIR = configuredDataDir
+  ? path.resolve(ROOT_DIR, configuredDataDir)
+  : path.join(ROOT_DIR, "data");
 export const ONLINE_DIR = path.join(DATA_DIR, "online");
 export const PDIS_DIR = path.join(DATA_DIR, "pdis");
 export const GOALS_DIR = path.join(DATA_DIR, "goals");

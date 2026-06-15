@@ -1,31 +1,59 @@
 /**
  * http.js — Modo HTTP Streamable MCP.
- * Inclui auth opcional via Bearer token e health endpoint rico.
+ * Inclui Bearer auth para uso remoto, body limit e health endpoint rico.
  */
 import http from "http";
 import { randomUUID } from "crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { buildMcpServer } from "./server.js";
-import { MCP_HTTP_TOKEN } from "./config.js";
+import { buildMcpServer, getToolCount } from "./server.js";
+import {
+  MCP_HTTP_BODY_LIMIT_BYTES,
+  MCP_HTTP_HOST,
+  MCP_HTTP_SESSION_TTL_MS,
+  MCP_HTTP_TOKEN,
+} from "./config.js";
 import { checkTfsConnectivity } from "./tfs-client.js";
 import { logger } from "./logger.js";
 
-const TOTAL_TOOLS = 21;
-
-// Session store: sessionId → { transport }
+// Session store: sessionId → { transport, expiresAt, timer }
 const sessions = new Map();
 
-export async function startHttpStreamable(port) {
+function isLoopback(host) {
+  return ["127.0.0.1", "localhost", "::1"].includes(String(host ?? "").toLowerCase());
+}
+
+function closeSession(sessionId) {
+  const entry = sessions.get(sessionId);
+  if (!entry) return;
+  clearTimeout(entry.timer);
+  sessions.delete(sessionId);
+  entry.transport?.close?.().catch?.(() => {});
+}
+
+function registerSession(sessionId, transport) {
+  const timer = setTimeout(() => closeSession(sessionId), MCP_HTTP_SESSION_TTL_MS);
+  sessions.set(sessionId, {
+    transport,
+    expiresAt: Date.now() + MCP_HTTP_SESSION_TTL_MS,
+    timer,
+  });
+}
+
+export async function startHttpStreamable(port, host = MCP_HTTP_HOST) {
+  if (!isLoopback(host) && !MCP_HTTP_TOKEN) {
+    throw new Error("MCP_HTTP_TOKEN is required when MCP_HTTP_HOST is not loopback");
+  }
+
   const httpServer = http.createServer(async (req, res) => {
     try {
       // ── Health endpoint (unauthenticated) ───────────────────────────────
-      if (req.url === "/health" && req.method === "GET") {
+      if ((req.url === "/health" || req.url === "/healthz") && req.method === "GET") {
         const tfsHealth = await checkTfsConnectivity();
         const body = JSON.stringify({
           status: "ok",
           transport: "streamable-http",
-          endpoint: `http://localhost:${port}/mcp`,
-          tools: TOTAL_TOOLS,
+          endpoint: `http://${host}:${port}/mcp`,
+          tools: getToolCount(),
           tfs: tfsHealth,
           version: "2.0.0",
           activeSessions: sessions.size,
@@ -35,7 +63,7 @@ export async function startHttpStreamable(port) {
         return;
       }
 
-      // ── Optional Bearer auth ────────────────────────────────────────────
+      // ── Bearer auth, mandatory when token is configured or host is remote ─
       if (MCP_HTTP_TOKEN) {
         const authHeader = (req.headers["authorization"] ?? "").trim();
         const expected = `Bearer ${MCP_HTTP_TOKEN}`;
@@ -64,7 +92,17 @@ export async function startHttpStreamable(port) {
       let parsedBody;
       if (req.method === "POST") {
         const chunks = [];
-        for await (const chunk of req) chunks.push(Buffer.from(chunk));
+        let totalBytes = 0;
+        for await (const chunk of req) {
+          const buffer = Buffer.from(chunk);
+          totalBytes += buffer.length;
+          if (totalBytes > MCP_HTTP_BODY_LIMIT_BYTES) {
+            res.writeHead(413, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "payload_too_large" }));
+            return;
+          }
+          chunks.push(buffer);
+        }
         const raw = Buffer.concat(chunks).toString("utf8");
         try {
           parsedBody = raw ? JSON.parse(raw) : undefined;
@@ -81,17 +119,24 @@ export async function startHttpStreamable(port) {
 
       if (sessionId && sessions.has(sessionId)) {
         // Existing session — reuse transport
-        transport = sessions.get(sessionId);
+        const entry = sessions.get(sessionId);
+        if (entry.expiresAt < Date.now()) {
+          closeSession(sessionId);
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "session_expired" }));
+          return;
+        }
+        transport = entry.transport;
       } else if (!sessionId && req.method === "POST" && parsedBody?.method === "initialize") {
         // New session — initialize
         transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: () => randomUUID(),
           onsessioninitialized: (sid) => {
-            sessions.set(sid, transport);
+            registerSession(sid, transport);
             logger.debug({ sessionId: sid }, "MCP session initialized");
           },
           onsessionclosed: (sid) => {
-            sessions.delete(sid);
+            closeSession(sid);
             logger.debug({ sessionId: sid }, "MCP session closed");
           },
         });
@@ -116,14 +161,14 @@ export async function startHttpStreamable(port) {
 
   await new Promise((resolve, reject) => {
     httpServer.once("error", reject);
-    httpServer.listen(port, () => {
+    httpServer.listen(port, host, () => {
       httpServer.off("error", reject);
       resolve();
     });
   });
 
   logger.info(
-    { port, endpoint: `http://localhost:${port}/mcp`, health: `http://localhost:${port}/health` },
+    { host, port, endpoint: `http://${host}:${port}/mcp`, health: `http://${host}:${port}/healthz` },
     "MCP HTTP server started"
   );
 }

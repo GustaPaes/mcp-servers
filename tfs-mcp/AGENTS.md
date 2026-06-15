@@ -12,7 +12,9 @@ READ tools may be used without extra confirmation, but summarize sensitive resul
 ### WRITE
 `tfs_work_item_create`, `tfs_update_work_item`, `tfs_add_pr_comment`, `tfs_comment_review_findings`.
 
-Before WRITE tools, show the intended target, fields/comments to be changed, and whether the call is a dry run when supported. Wait for explicit user approval.
+WRITE tools are server-gated. They default to `dry_run:true` and return a mutation plan instead of changing TFS. To execute a real mutation, the call must include `dry_run:false`, `confirm:true`, `reason`, and `requestedBy`/`requested_by`.
+
+For high-impact targets (production/release/main/master/hml/homolog patterns), the dry-run response will also require `confirm_high_impact` with an exact value. Do not guess that value; copy it from the returned mutation plan only after user approval.
 
 ## Defaults
 

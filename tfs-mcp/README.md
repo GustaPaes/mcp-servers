@@ -129,6 +129,10 @@ See the [root README](../README.md#%EF%B8%8F-install-in-your-mcp-client) for rea
 | `TFS_DEFAULT_AUTH_ALIAS` | _(empty)_ | Alias used when calls don't specify `auth_alias` |
 | `TFS_WORKSPACE_ROOT` | _(auto)_ | Helps repo auto-detection from working dir |
 | `MCP_HTTP_PORT` | `3010` | Port for `--http` mode |
+| `MCP_HTTP_HOST` | `127.0.0.1` | Host for HTTP mode; non-loopback requires `MCP_HTTP_TOKEN` |
+| `MCP_HTTP_TOKEN` | _(empty)_ | Bearer token for HTTP mode |
+| `TFS_AUDIT_LOG_PATH` | `./data/audit.log` | Append-only JSONL audit log for mutation attempts |
+| `TFS_DEFAULT_QUARTER` | _(current quarter)_ | Default value for ExampleOrg quarter fields during creation |
 | `LOG_LEVEL` | `info` | `trace`/`debug`/`info`/`warn`/`error` |
 
 ---
@@ -161,7 +165,11 @@ See the [root README](../README.md#%EF%B8%8F-install-in-your-mcp-client) for rea
 - `tfs_list_repos`, `tfs_wiki`
 
 ### Controlled mutation
-- `tfs_update_work_item` — change state, owner, comment, title or story points
+- `tfs_work_item_create` — create a work item; defaults to `dry_run:true`
+- `tfs_update_work_item` — change state, owner, comment, title, story points or rich text; defaults to `dry_run:true`
+- `tfs_add_pr_comment` — add a PR comment; defaults to `dry_run:true`
+
+Real writes require `dry_run:false`, `confirm:true`, `reason` and `requestedBy`/`requested_by`. High-impact targets such as production/release/main/master/hml/homolog branches require the extra `confirm_high_impact` value returned by the dry-run mutation plan.
 
 ### Premium workflows produce structured output
 The 5 premium workflows ship with formal `outputSchema` so MCP clients can validate the `structuredContent` payload, while still returning the human-readable text for simpler clients.
