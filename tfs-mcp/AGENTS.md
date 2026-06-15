@@ -5,7 +5,7 @@ This MCP can read and mutate TFS / Azure DevOps Server state. Treat all calls as
 ## Tool Safety Classification
 
 ### READ
-`tfs_analyze_work_item`, `tfs_work_item_context`, `tfs_prepare_refinement`, `tfs_work_item`, `tfs_generate_activity_template`, `tfs_generate_activity_template_from_items`, `tfs_query_work_items`, `tfs_list_prs`, `tfs_prepare_pr_review`, `tfs_release_readiness`, `tfs_team_focus_report`, `tfs_work_item_handoff`, `tfs_delivery_risk_report`, `tfs_get_pr`, `tfs_review_pr`, `tfs_pipeline_status`, `tfs_wiki`, `tfs_sprint_info`, `tfs_list_repos`.
+`tfs_analyze_work_item`, `tfs_work_item_context`, `tfs_specialist_review`, `tfs_prepare_refinement`, `tfs_work_item`, `tfs_generate_activity_template`, `tfs_generate_activity_template_from_items`, `tfs_query_work_items`, `tfs_list_prs`, `tfs_prepare_pr_review`, `tfs_release_readiness`, `tfs_team_focus_report`, `tfs_work_item_handoff`, `tfs_delivery_risk_report`, `tfs_get_pr`, `tfs_review_pr`, `tfs_pipeline_status`, `tfs_wiki`, `tfs_sprint_info`, `tfs_list_repos`.
 
 READ tools may be used without extra confirmation, but summarize sensitive results instead of pasting large private payloads.
 
@@ -18,6 +18,8 @@ For high-impact targets (production/release/main/master/hml/homolog patterns), t
 
 ## Defaults
 
+- For activity writing, technical criteria, refinement, PR review, pipeline/release readiness or delivery-risk requests, use the specialist layer by default. Prefer the tools that already embed it (`tfs_generate_activity_template`, `tfs_generate_activity_template_from_items`, `tfs_prepare_refinement`, `tfs_prepare_pr_review`, `tfs_work_item_handoff`) or call `tfs_specialist_review` explicitly when the user asks for specialist analysis.
+- Treat `specialistReview.specialistsUsed` as the source of truth for which expert lenses were applied. Do not invent extra specialists outside the returned rubrics unless the user asks for a human-level brainstorming answer outside the MCP.
 - Prefer `tfs_comment_review_findings` with `dry_run:true` first.
 - Avoid posting duplicate PR comments; use the server deduplication flow where available.
 - Use `auth_alias` when the user names a specific PAT identity.

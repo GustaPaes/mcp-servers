@@ -17,6 +17,7 @@ Collection docs: [English](../README.en.md) | [Portugues](../README.pt-BR.md)
 A wrapper around TFS REST APIs is easy. **The hard part is making an LLM useful in a TFS-driven team.** This server packages that work:
 
 - **Premium workflows** — `tfs_prepare_pr_review`, `tfs_release_readiness`, `tfs_team_focus_report`, `tfs_work_item_handoff`, `tfs_delivery_risk_report` return both a human-readable text and a typed `structuredContent` (formal `outputSchema`).
+- **Specialist routing** — activity writing, refinement, handoff, PR review, release readiness, delivery risk and pipeline status apply explicit specialist rubrics (Business Analyst/PO, Tech Lead, QA, DevOps, Security, Backend, Frontend, Database, Architecture and Observability) so the MCP explains which expert lenses were used and why.
 - **Standardized writing template** — `tfs_generate_activity_template` and its bulk sibling `tfs_generate_activity_template_from_items` produce business + technical descriptions in a fixed bold-block format with `**Deve**` acceptance criteria. The MCP self-summarizes the technical block when the change estimate exceeds 50 lines.
 - **Multi-PAT auth** — `TFS_PAT_<ALIAS>` lets you keep a build PAT and a personal PAT side by side; pass `auth_alias` per call.
 - **Multi-repo PR search** — when `repo` is omitted, the server iterates `TFS_REPOS` until it finds the PR.
@@ -143,6 +144,7 @@ See the [root README](../README.md#%EF%B8%8F-install-in-your-mcp-client) for rea
 - `tfs_work_item` — full details of a work item
 - `tfs_analyze_work_item` — quality score, US format, gaps, refinement checklist
 - `tfs_work_item_context` — work item + related items + PRs + wiki pages
+- `tfs_specialist_review` — reusable specialist-only analysis block. Normal writing/refinement/PR/release/pipeline workflows already run specialists automatically.
 - `tfs_prepare_refinement` — refinement package (DOR, questions, dependencies)
 - `tfs_generate_activity_template` — generate the standardized business + technical description
 - `tfs_generate_activity_template_from_items` — bulk version starting from existing items
@@ -173,6 +175,38 @@ Real writes require `dry_run:false`, `confirm:true`, `reason` and `requestedBy`/
 
 ### Premium workflows produce structured output
 The 5 premium workflows ship with formal `outputSchema` so MCP clients can validate the `structuredContent` payload, while still returning the human-readable text for simpler clients.
+
+---
+
+## Specialist routing
+
+Português: veja [`docs/specialist-routing.pt-BR.md`](./docs/specialist-routing.pt-BR.md).
+
+The MCP uses a deterministic specialist layer whenever the task involves activity writing, technical criteria, refinement, handoff, PR review, release readiness, delivery risk or pipeline status. This is not an external AI call and it does not rely on vague personas. The server detects signals from work item fields, tags, area path, affected locations, PR branches and changed files, then applies explicit rubrics.
+
+Agents do not need the user to mention `tfs_specialist_review` or "specialists". If the user asks to use `tfs-mcp` for one of these workflows, choose the normal domain tool and read its `specialistReview` block.
+
+Specialists currently modeled:
+
+- **Business Analyst / Product Owner** — persona, business value, scope and acceptance language.
+- **Tech Lead** — implementation approach, technical risks, dependencies and rollout.
+- **QA / Test Specialist** — test scenarios, regression, evidence and acceptance criteria.
+- **Azure DevOps / Pipeline Specialist** — build/release gates, variables, secrets, artifacts, rollback and deployment.
+- **Security Specialist** — auth, permissions, tokens, TLS, secrets and sensitive data.
+- **Backend Specialist** — APIs, services, queues, workers, error handling and contracts.
+- **Frontend / UX Specialist** — UI states, accessibility, responsiveness and visual behavior.
+- **Database / Persistence Specialist** — migrations, queries, indexes, cache, transactions and data rollback.
+- **Architecture / Integration Specialist** — contracts, compatibility, dependencies and system boundaries.
+- **Observability / Support Specialist** — logs, metrics, traces, alerts, runbooks and post-release diagnosis.
+
+Automatic usage:
+
+- `tfs_generate_activity_template` enriches business and technical acceptance criteria with `specialistReview`.
+- `tfs_generate_activity_template_from_items` applies specialist guidance per item.
+- `tfs_prepare_refinement` and `tfs_work_item_handoff` include specialist checklists and risks.
+- `tfs_prepare_pr_review` and `tfs_review_pr` use changed files to choose specialist lenses.
+- `tfs_release_readiness`, `tfs_delivery_risk_report` and `tfs_pipeline_status` include pipeline/release specialist recommendations.
+- `tfs_specialist_review` can be called directly only when you want a standalone specialist analysis.
 
 ---
 
@@ -257,6 +291,8 @@ tfs-mcp/
     ├── creation-patterns.md
     ├── separation-patterns.md
     ├── pipeline-release-patterns.md
+    ├── specialist-routing.md
+    ├── specialist-routing.pt-BR.md
     ├── work-items-map.md
     └── writing-patterns.md
 ```
@@ -289,6 +325,7 @@ MIT — see [LICENSE](../LICENSE).
 Um wrapper das APIs TFS é fácil. **O difícil é deixar um LLM realmente útil dentro de um time TFS.** Este servidor entrega esse trabalho:
 
 - **Workflows premium** — `tfs_prepare_pr_review`, `tfs_release_readiness`, `tfs_team_focus_report`, `tfs_work_item_handoff`, `tfs_delivery_risk_report` retornam texto legível **e** `structuredContent` tipado (com `outputSchema` formal).
+- **Roteamento por especialistas** — escrita de atividade, refinamento, handoff, revisão de PR, release readiness, delivery risk e pipeline status aplicam rubricas explícitas de Business Analyst/PO, Tech Lead, QA, DevOps, Segurança, Backend, Frontend, Banco, Arquitetura e Observabilidade.
 - **Template padronizado de escrita** — `tfs_generate_activity_template` (e a versão em massa) gera descrições de negócio + técnicas em formato de blocos em negrito com critérios `**Deve**`. O MCP resume o bloco técnico se a estimativa de alteração passar de 50 linhas.
 - **Multi-PAT** — `TFS_PAT_<ALIAS>` permite manter um PAT de build e um pessoal lado a lado; passe `auth_alias` por chamada.
 - **Busca de PR multi-repo** — quando `repo` é omitido, o servidor itera `TFS_REPOS` até achar.

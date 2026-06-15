@@ -4,6 +4,7 @@
 import { z } from "zod";
 import { tfsGet } from "../tfs-client.js";
 import { formatWorkItem, normalizeWorkItemId } from "../formatters.js";
+import { buildSpecialistReview } from "../specialists.js";
 import {
   calculateDescriptionQuality,
   isUserStoryFormat,
@@ -167,6 +168,15 @@ export async function toolWorkItemHandoff(args) {
     type: formatted.type,
     acceptanceCriteria,
   });
+  const specialistReview = buildSpecialistReview({
+    title: formatted.title,
+    workItemType: formatted.type,
+    description,
+    acceptanceCriteria,
+    tags: formatted.tags,
+    areaPath: formatted.area,
+    affectedLocations: wikiMatches.map((match) => match.url).filter(Boolean),
+  });
 
   return {
     workItem: formatted,
@@ -189,6 +199,7 @@ export async function toolWorkItemHandoff(args) {
     risks,
     openQuestions: [],
     checklistByRole: allRoleChecklists,
+    specialistReview,
     suggestedComment,
   };
 }
@@ -226,6 +237,14 @@ export async function toolPrepareRefinement(args) {
   const questions = buildRefinementQuestions(workItem, relatedItems);
   const dor = buildDefinitionOfReady();
   const recommendation = buildRefinementRecommendation(readiness, missingElements, questions);
+  const specialistReview = buildSpecialistReview({
+    title,
+    workItemType: type,
+    description,
+    acceptanceCriteria,
+    tags: f["System.Tags"] ?? "",
+    areaPath: f["System.AreaPath"] ?? "",
+  });
 
   return {
     workItem: formatWorkItem(workItem),
@@ -234,6 +253,7 @@ export async function toolPrepareRefinement(args) {
     questions,
     definitionOfReady: dor,
     recommendation,
+    specialistReview,
     wikiReferences: wikiMatches,
     relatedItems: classifyRelatedItems(relatedItems),
   };

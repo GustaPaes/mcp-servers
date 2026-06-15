@@ -12,6 +12,7 @@ import {
 import { formatPR, resolveRepository, normalizePullRequestRef } from "../formatters.js";
 import { runPatternChecks, scoreReview } from "../rules.js";
 import { getRequestContext } from "../request-context.js";
+import { buildSpecialistReview } from "../specialists.js";
 import {
   buildMutationPlan,
   detectHighImpact,
@@ -534,6 +535,13 @@ export async function toolReviewPR(args) {
   allFindings.push(...metadataFindings);
   const openComments = threads.filter((t) => t.status === "active").length;
   const reviewScore = scoreReview(allFindings, changedFiles.length);
+  const specialistReview = buildSpecialistReview({
+    title: formatPR(pr).title,
+    description: formatPR(pr).description,
+    changedFiles,
+    repo: repository,
+    workItems: linkedWorkItems,
+  });
 
   return {
     pr: formatPR(pr),
@@ -543,6 +551,7 @@ export async function toolReviewPR(args) {
     reviewFindings: allFindings,
     fileSummary,
     criticalAreas,
+    specialistReview,
     workItems: linkedWorkItems,
   };
 }
@@ -814,8 +823,16 @@ export async function toolPreparePRReview(args) {
 
   const fileSummary = summarizeFileChanges(changedFiles);
   const criticalAreas = detectCriticalFileAreas(changedFiles);
+  const formattedPr = formatPR(pr);
+  const specialistReview = buildSpecialistReview({
+    title: formattedPr.title,
+    description: formattedPr.description,
+    changedFiles,
+    repo: repository,
+    workItems: formattedWorkItems,
+  });
   const checklist = buildPRReviewChecklist({
-    pr: formatPR(pr),
+    pr: formattedPr,
     workItems: formattedWorkItems,
     changedFiles,
     fileSummary,
@@ -826,7 +843,7 @@ export async function toolPreparePRReview(args) {
   const openThreads = threads.filter((t) => t.status === "active");
   const reviewerCount = (pr.reviewers ?? []).length;
   const metadataFindings = buildMetadataFindings({
-    pr: formatPR(pr),
+    pr: formattedPr,
     changedFiles,
     threads,
     workItems: formattedWorkItems,
@@ -854,9 +871,9 @@ export async function toolPreparePRReview(args) {
     "Verificar lógica de negócio e edge cases",
     "Confirmar tratamento de erros e logging",
     "Garantir que não há segredos hardcoded",
+    ...specialistReview.recommendedNextActions.slice(0, 3),
     ...(criticalAreas.areas.length > 0 ? [`Revisão extra: ${criticalAreas.areas.slice(0, 2).join(", ")}`] : []),
   ];
-  const formattedPr = formatPR(pr);
   const pipeline = include_pipeline
     ? await import("./infra.js")
         .then(({ toolPipelineStatus }) =>
@@ -875,6 +892,7 @@ export async function toolPreparePRReview(args) {
     risks,
     checklist,
     suggestedFocus,
+    specialistReview,
     codeReview: include_code_review ? { openComments: openThreads.length, totalThreads: threads.length } : null,
     pipeline,
   };

@@ -6,6 +6,7 @@ import { z } from "zod";
 import { tfsGet, tfsPost, tfsJsonPatch } from "../tfs-client.js";
 import { TFS_PROJECT, TFS_URL, TFS_COLLECTION, TFS_DEFAULT_QUARTER } from "../config.js";
 import { buildActivityTemplate, parseBusinessDescription } from "../activity-template.js";
+import { enrichActivityInputWithSpecialists } from "../specialists.js";
 import { getRequestContext } from "../request-context.js";
 import {
   buildMutationPlan,
@@ -543,20 +544,33 @@ export async function toolUpdateWorkItem(args) {
 
 export async function toolGenerateActivityTemplate(args) {
   const parsed = TemplateArgs.parse(args ?? {});
-  return buildActivityTemplate({
+  const specialist = enrichActivityInputWithSpecialists({
+    title: parsed.title,
+    workItemType: parsed.work_item_type,
+    businessAcceptanceCriteria: parsed.business_acceptance_criteria,
+    technicalDependencies: parsed.technical_dependencies,
+    technicalAcceptanceCriteria: parsed.technical_acceptance_criteria,
+    affectedLocations: parsed.affected_locations,
+    estimatedChangedLines: parsed.estimated_changed_lines,
+  });
+  const template = buildActivityTemplate({
     title: parsed.title,
     workItemType: parsed.work_item_type,
     actor: parsed.actor,
     intent: parsed.intent,
     outcome: parsed.outcome,
-    businessAcceptanceCriteria: parsed.business_acceptance_criteria,
+    businessAcceptanceCriteria: specialist.businessAcceptanceCriteria,
     visualDefinitions: parsed.visual_definitions,
     technicalDependencies: parsed.technical_dependencies,
-    technicalAcceptanceCriteria: parsed.technical_acceptance_criteria,
+    technicalAcceptanceCriteria: specialist.technicalAcceptanceCriteria,
     affectedLocations: parsed.affected_locations,
     estimatedChangedLines: parsed.estimated_changed_lines,
     detailLevel: parsed.detail_level,
   });
+  return {
+    ...template,
+    specialistReview: specialist.review,
+  };
 }
 
 export async function toolGenerateActivityTemplateFromItems(args) {
@@ -580,7 +594,7 @@ export async function toolGenerateActivityTemplateFromItems(args) {
         wikiUsVariants.some((variant) => page.path?.toLowerCase().includes(variant.toLowerCase()))
       );
 
-      const technicalCriteria = [
+      const baseTechnicalCriteria = [
         ...(parsed.technical_acceptance_criteria ?? []),
         ...(wikiMatches.length
           ? [`Deve considerar como apoio técnico os artefatos/documentações relacionados encontrados na wiki para detalhar a implementação.`]
@@ -595,6 +609,18 @@ export async function toolGenerateActivityTemplateFromItems(args) {
         ...wikiMatches.map((match) => match.url).slice(0, 3),
         ...matchedWikiChildren.map((page) => page.url).slice(0, 2),
       ];
+      const specialist = enrichActivityInputWithSpecialists({
+        title,
+        workItemType: item.fields?.["System.WorkItemType"] ?? "",
+        description: businessSource,
+        businessAcceptanceCriteria: business.businessAcceptanceCriteria,
+        technicalDependencies: parsed.technical_dependencies,
+        technicalAcceptanceCriteria: baseTechnicalCriteria,
+        affectedLocations,
+        estimatedChangedLines: parsed.estimated_changed_lines,
+        tags: item.fields?.["System.Tags"] ?? "",
+        areaPath: item.fields?.["System.AreaPath"] ?? "",
+      });
 
       return {
         id: item.id,
@@ -606,14 +632,15 @@ export async function toolGenerateActivityTemplateFromItems(args) {
           actor: business.actor,
           intent: business.intent,
           outcome: business.outcome,
-          businessAcceptanceCriteria: business.businessAcceptanceCriteria,
+          businessAcceptanceCriteria: specialist.businessAcceptanceCriteria,
           visualDefinitions: business.visualDefinitions,
           technicalDependencies: parsed.technical_dependencies,
-          technicalAcceptanceCriteria: technicalCriteria,
+          technicalAcceptanceCriteria: specialist.technicalAcceptanceCriteria,
           affectedLocations,
           estimatedChangedLines: parsed.estimated_changed_lines,
           detailLevel: parsed.detail_level,
         }),
+        specialistReview: specialist.review,
         wikiMatches,
         wikiChildren: matchedWikiChildren,
       };

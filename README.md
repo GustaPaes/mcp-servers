@@ -15,7 +15,7 @@
 
 - [`azure-mcp`](./azure-mcp) - Azure Cloud operations through the official Microsoft Azure MCP server.
 - [`meta-ads-mcp`](./meta-ads-mcp) - Multi-account Facebook / Instagram Ads MCP with dry-run, audit and budget caps.
-- [`tfs-mcp`](./tfs-mcp) - TFS / Azure DevOps Server work items, PRs, review and delivery workflows.
+- [`tfs-mcp`](./tfs-mcp) - TFS / Azure DevOps Server work items, PRs, review, delivery workflows and automatic specialist-routed writing/review/release guidance.
 - [`oci-mcp`](./oci-mcp) - Oracle Cloud Infrastructure toolkit plus custom OKE/Vault/Functions tools.
 - [`playwright-mcp`](./playwright-mcp) - Multi-session Playwright MCP with HAR, video, tracing and network tools.
 - [`career-development-mcp`](./career-development-mcp) - PDI, goals, competencies, evidence and career review MCP.

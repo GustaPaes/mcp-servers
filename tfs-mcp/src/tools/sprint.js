@@ -5,6 +5,7 @@ import { z } from "zod";
 import { tfsGet, tfsPost } from "../tfs-client.js";
 import { TFS_PROJECT } from "../config.js";
 import { formatWorkItem } from "../formatters.js";
+import { buildSpecialistReview } from "../specialists.js";
 import {
   buildReleaseSignals,
   isCompletedState,
@@ -130,11 +131,24 @@ export async function toolReleaseReadiness(args) {
   // pipeline as nullable object or null
   const pipelineArr = toPipelineArray(pipelines);
   const pipelineResult = pipelineArr.length > 0 ? pipelineArr : null;
+  const specialistReview = buildSpecialistReview({
+    title: `Release readiness ${branch}`,
+    description: `Análise de release readiness para branch ${branch}${pipeline_name ? ` e pipeline ${pipeline_name}` : ""}`,
+    affectedLocations: [
+      branch,
+      pipeline_name,
+      ...pipelineArr.map((pipeline) => pipeline.name).filter(Boolean),
+      ...openPRs.map((pr) => pr.targetBranch).filter(Boolean),
+    ].filter(Boolean),
+    focus: ["pipeline", "release"],
+  });
 
   // recommended actions from risks
   const recommendedActions = risks.length > 0
     ? risks.map((r) => typeof r === "string" ? r : r.description ?? String(r))
     : ["Sprint está dentro do esperado. Continue monitorando o progresso diário."];
+  recommendedActions.push(...specialistReview.recommendedNextActions.slice(0, 3));
+  recommendedActions.push(...specialistReview.pipelineRecommendations.slice(0, 2));
 
   return {
     iteration,
@@ -143,6 +157,7 @@ export async function toolReleaseReadiness(args) {
     blockers,
     linkedPullRequests: openPRs,
     pipeline: pipelineResult,
+    specialistReview,
     recommendedActions,
   };
 }
@@ -245,6 +260,16 @@ export async function toolDeliveryRiskReport(args) {
   // Build the signals object expected by scoreDeliveryRisk AND by DELIVERY_RISK_OUTPUT_SCHEMA
   const completedCount = sprintItems.filter((i) => isCompletedState(i.state)).length;
   const pipelineArr = toPipelineArray(pipelines);
+  const specialistReview = buildSpecialistReview({
+    title: `Delivery risk ${branch}`,
+    description: `Análise executiva de risco de entrega para branch ${branch}`,
+    affectedLocations: [
+      branch,
+      ...pipelineArr.map((pipeline) => pipeline.name).filter(Boolean),
+      ...openPRs.map((pr) => pr.targetBranch).filter(Boolean),
+    ].filter(Boolean),
+    focus: ["pipeline", "release", "architecture"],
+  });
   const signals = {
     totalItems: sprintItems.length,
     completionPct: sprintItems.length > 0 ? Math.round((completedCount / sprintItems.length) * 100) : 0,
@@ -278,6 +303,8 @@ export async function toolDeliveryRiskReport(args) {
   if (recommendedActions.length === 0) {
     recommendedActions.push("Sprint está dentro do esperado. Continue monitorando o progresso.");
   }
+  recommendedActions.push(...specialistReview.recommendedNextActions.slice(0, 3));
+  recommendedActions.push(...specialistReview.pipelineRecommendations.slice(0, 2));
 
   // Build release readiness and team focus inline (lightweight)
   const releaseReadiness = {
@@ -308,6 +335,7 @@ export async function toolDeliveryRiskReport(args) {
     signals,
     risks: risks.map((r) => typeof r === "string" ? r : r.description ?? String(r)),
     recommendedActions,
+    specialistReview,
     supportingData,
   };
 }

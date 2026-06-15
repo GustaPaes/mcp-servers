@@ -4,6 +4,7 @@
 import { z } from "zod";
 import { tfsGet } from "../tfs-client.js";
 import { TFS_COLLECTION, TFS_PROJECT, TFS_URL } from "../config.js";
+import { buildSpecialistReview } from "../specialists.js";
 
 // ─── Wiki ──────────────────────────────────────────────────────────────────
 
@@ -173,9 +174,10 @@ export async function toolPipelineStatus(args) {
             (history.filter((b) => b.result === "succeeded").length / history.length) * 100
           )
         : null;
+    const pipelineName = latest.definition?.name ?? "unknown";
     return {
       id: latest.definition?.id,
-      name: latest.definition?.name ?? "unknown",
+      name: pipelineName,
       branch: latest.sourceBranch?.replace("refs/heads/", "") ?? branch,
       status: latest.status,
       result: latest.result,
@@ -184,6 +186,12 @@ export async function toolPipelineStatus(args) {
       requestedBy: latest.requestedBy?.displayName,
       url: latest._links?.web?.href,
       successRate,
+      specialistReview: buildSpecialistReview({
+        title: pipelineName,
+        description: `Pipeline ${pipelineName} branch ${branch}`,
+        affectedLocations: [pipelineName, branch, latest.sourceBranch].filter(Boolean),
+        focus: ["pipeline", "release"],
+      }),
     };
   });
 }

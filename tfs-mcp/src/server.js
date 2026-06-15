@@ -54,6 +54,7 @@ import {
   toolPipelineStatus,
   toolListRepos,
 } from "./tools/infra.js";
+import { toolSpecialistReview } from "./tools/specialist.js";
 import { runWithRequestContext } from "./request-context.js";
 import { MutationControlsSchema } from "./safety.js";
 
@@ -142,10 +143,40 @@ const TOOL_DEFS = [
     },
   },
   {
+    name: "tfs_specialist_review",
+    title: "Specialist Review",
+    description:
+      "Seleciona especialistas por contexto (negócio, técnico, QA, DevOps, segurança, frontend, backend, banco, arquitetura e observabilidade) e gera recomendações para escrita, refinamento, PR, pipeline e critérios de aceite.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        work_item_id: { type: ["number", "string"], description: "ID ou URL do work item para usar como contexto" },
+        pr_id: { type: ["number", "string"], description: "ID ou URL do PR para usar diff/branch como contexto" },
+        repo: { type: "string" },
+        title: { type: "string" },
+        work_item_type: { type: "string" },
+        description: { type: "string" },
+        acceptance_criteria: { type: "string" },
+        technical_dependencies: { type: "string" },
+        technical_acceptance_criteria: { type: "array", items: { type: "string" } },
+        affected_locations: { type: "array", items: { type: "string" } },
+        tags: { type: "string" },
+        area_path: { type: "string" },
+        focus: {
+          type: "array",
+          items: {
+            type: "string",
+            enum: ["business_writing", "technical_writing", "qa", "pipeline", "security", "architecture", "release"],
+          },
+        },
+      },
+    },
+  },
+  {
     name: "tfs_prepare_refinement",
     title: "Prepare Refinement",
     description:
-      "Prepara um refinamento de alta qualidade: readiness score, gaps, perguntas para PO/time, definition of ready, dependencias, PRs relacionados e proximas acoes.",
+      "Prepara um refinamento de alta qualidade com roteamento automatico de especialistas por area: readiness score, gaps, perguntas para PO/time, definition of ready, dependencias, PRs relacionados e proximas acoes.",
     inputSchema: {
       type: "object",
       properties: {
@@ -207,7 +238,7 @@ const TOOL_DEFS = [
     name: "tfs_generate_activity_template",
     title: "Generate Activity Template",
     description:
-      "Gera a escrita padronizada de negócio e técnica para US, ST, PBI e afins, seguindo o template com blocos em negrito e critérios iniciados por Deve.",
+      "Gera a escrita padronizada de negócio e técnica para US, ST, PBI e afins, aplicando automaticamente especialistas de negocio, tecnico, QA, pipeline, seguranca e areas afetadas. Segue o template com blocos em negrito e critérios iniciados por Deve.",
     inputSchema: {
       type: "object",
       properties: {
@@ -230,7 +261,7 @@ const TOOL_DEFS = [
     name: "tfs_generate_activity_template_from_items",
     title: "Generate Activity Template From Items",
     description:
-      "Gera descrições padronizadas em massa a partir de um ou mais work items do TFS, reutilizando o texto de negócio existente e aceitando apoio opcional da wiki.",
+      "Gera descrições padronizadas em massa a partir de um ou mais work items do TFS, reutilizando o texto de negócio existente, aceitando apoio opcional da wiki e aplicando automaticamente especialistas por area de atuação.",
     inputSchema: {
       type: "object",
       properties: {
@@ -289,7 +320,7 @@ const TOOL_DEFS = [
     name: "tfs_prepare_pr_review",
     title: "Prepare Pull Request Review",
     description:
-      "Prepara uma revisao de PR: work items vinculados, riscos, checklist, sinais de qualidade e review automatico.",
+      "Prepara uma revisao de PR com especialistas automaticos por arquivos alterados e area afetada: work items vinculados, riscos, checklist, sinais de qualidade e review automatico.",
     outputSchema: PREPARE_PR_REVIEW_OUTPUT_SCHEMA,
     inputSchema: {
       type: "object",
@@ -306,7 +337,7 @@ const TOOL_DEFS = [
     name: "tfs_release_readiness",
     title: "Release Readiness",
     description:
-      "Consolida prontidao de entrega por sprint/iteracao: sinais, riscos, blockers, PRs vinculados, pipeline e acoes recomendadas.",
+      "Consolida prontidao de entrega por sprint/iteracao com especialistas automaticos de pipeline, release, QA, seguranca e arquitetura: sinais, riscos, blockers, PRs vinculados, pipeline e acoes recomendadas.",
     outputSchema: RELEASE_READINESS_OUTPUT_SCHEMA,
     inputSchema: {
       type: "object",
@@ -331,7 +362,7 @@ const TOOL_DEFS = [
     name: "tfs_work_item_handoff",
     title: "Work Item Handoff",
     description:
-      "Prepara um handoff operacional do work item entre PO, dev, QA e suporte com resumo, dependencias, riscos, checklist por papel e comentario sugerido.",
+      "Prepara um handoff operacional do work item entre PO, dev, QA e suporte com roteamento automatico de especialistas, resumo, dependencias, riscos, checklist por papel e comentario sugerido.",
     outputSchema: WORK_ITEM_HANDOFF_OUTPUT_SCHEMA,
     inputSchema: {
       type: "object",
@@ -354,7 +385,7 @@ const TOOL_DEFS = [
     name: "tfs_delivery_risk_report",
     title: "Delivery Risk Report",
     description:
-      "Consolida risco executivo da entrega cruzando release readiness, foco do time, PRs e pipelines em um score de risco com acoes recomendadas.",
+      "Consolida risco executivo da entrega com especialistas automaticos de pipeline, release, arquitetura, QA e seguranca, cruzando release readiness, foco do time, PRs e pipelines em um score de risco com acoes recomendadas.",
     outputSchema: DELIVERY_RISK_OUTPUT_SCHEMA,
     inputSchema: {
       type: "object",
@@ -383,7 +414,7 @@ const TOOL_DEFS = [
     name: "tfs_review_pr",
     title: "Review Pull Request",
     description:
-      "Code review automatico de um PR seguindo padroes ExampleProject e boas praticas modernas. Avalia metadata do PR, tamanho, rastreabilidade, frontend/backend, seguranca, async, sync-over-async, Redis sem TTL, TLS bypass, testes e maintainability. Retorna score 0-10.",
+      "Code review automatico de um PR com especialistas por arquivos alterados, seguindo padroes ExampleProject e boas praticas modernas. Avalia metadata do PR, tamanho, rastreabilidade, frontend/backend, seguranca, async, sync-over-async, Redis sem TTL, TLS bypass, testes e maintainability. Retorna score 0-10.",
     inputSchema: {
       type: "object",
       properties: {
@@ -399,7 +430,7 @@ const TOOL_DEFS = [
   {
     name: "tfs_pipeline_status",
     title: "Pipeline Status",
-    description: "Verifica status das ultimas execucoes de pipelines Azure DevOps.",
+    description: "Verifica status das ultimas execucoes de pipelines Azure DevOps e inclui recomendações automaticas de especialista de pipeline/release.",
     inputSchema: {
       type: "object",
       properties: {
@@ -523,6 +554,7 @@ export function getToolCount() {
 const TOOL_HANDLERS = {
   tfs_analyze_work_item: (args) => toolAnalyzeWorkItem(args),
   tfs_work_item_context: (args) => toolWorkItemContext(args),
+  tfs_specialist_review: (args) => toolSpecialistReview(args),
   tfs_prepare_refinement: (args) => toolPrepareRefinement(args),
   tfs_work_item: (args) => toolWorkItem(args),
   tfs_work_item_create: (args) => toolCreateWorkItem(args),

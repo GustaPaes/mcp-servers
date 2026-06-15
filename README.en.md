@@ -29,7 +29,7 @@ It helps with:
 |---|---|---|---|---|
 | [`azure-mcp`](./azure-mcp) | MCP wrapper | Operates Azure resources through Microsoft's official `@azure/mcp` server and adds local scripts plus an LLM safety policy. | `npx`, Azure CLI, PowerShell | Stable |
 | [`meta-ads-mcp`](./meta-ads-mcp) | MCP server | Multi-account Meta Marketing API server (Facebook Ads / Instagram Ads) with strict recommend ↔ execute separation, dry-run, mutation gate, triple budget caps, audit log and protected-attribute targeting block. | TypeScript, Node 20, MCP SDK, undici, Zod | Beta |
-| [`tfs-mcp`](./tfs-mcp) | MCP server | TFS / Azure DevOps Server work items, PRs, code review, refinement, release readiness, delivery risk and activity-writing templates. | Node 20, ESM, MCP SDK | Stable |
+| [`tfs-mcp`](./tfs-mcp) | MCP server | TFS / Azure DevOps Server work items, PRs, code review, refinement, release readiness, delivery risk, activity-writing templates and automatic specialist routing. | Node 20, ESM, MCP SDK | Stable |
 | [`oci-mcp`](./oci-mcp) | MCP toolkit | Combines official Oracle MCP servers with a custom `oci-extras-mcp` for OKE, Vault/Secrets, Kubernetes, Functions and streaming logs. | Node 20, OCI SDK, `uvx` | Stable |
 | [`playwright-mcp`](./playwright-mcp) | MCP server | Multi-session browser automation with Chromium/Firefox/WebKit, native Chrome/Edge, HAR, video, traces, PDF, request routing and light stealth. | TypeScript, Node 20, Playwright | Stable |
 | [`career-development-mcp`](./career-development-mcp) | MCP server | PDIs, SMART goals, competencies, evidence, career readiness, 1:1 preparation and optional TFS evidence import. | Node 20, ESM, local JSON storage | Beta |
@@ -286,7 +286,7 @@ A from-scratch TypeScript MCP for the Meta Marketing API. Multi-account by desig
 
 ### tfs-mcp
 
-This is the most domain-specific server in the repo. It targets TFS / Azure DevOps Server workflows: work items, PRs, review, release readiness, wiki and delivery risk. Replace ExampleOrg-specific defaults in `.env.example` when adapting it to another company.
+This is the most domain-specific server in the repo. It targets TFS / Azure DevOps Server workflows: work items, PRs, review, release readiness, wiki, delivery risk and automatic specialist routing for business writing, technical writing, QA, pipelines, security and architecture. The normal domain tools return specialist guidance automatically, so users do not need to request a specialist tool by name. Replace ExampleOrg-specific defaults in `.env.example` when adapting it to another company.
 
 ### oci-mcp
 

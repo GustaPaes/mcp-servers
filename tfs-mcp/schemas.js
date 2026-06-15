@@ -100,6 +100,56 @@ export const CRITICAL_AREAS_SCHEMA = {
   required: ["areas", "criticalFiles"],
 };
 
+export const SPECIALIST_REVIEW_SCHEMA = {
+  type: "object",
+  properties: {
+    detectedAreas: { type: "array", items: { type: "string" } },
+    specialistsUsed: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          name: { type: "string" },
+          area: { type: "string" },
+          purpose: { type: "string" },
+          reason: { type: "string" },
+        },
+        required: ["id", "name", "area", "purpose", "reason"],
+      },
+    },
+    signals: {
+      type: "object",
+      properties: {
+        fileSummary: FILE_SUMMARY_SCHEMA,
+        criticalAreas: CRITICAL_AREAS_SCHEMA,
+      },
+      required: ["fileSummary", "criticalAreas"],
+    },
+    businessWriting: { type: "array", items: { type: "string" } },
+    technicalWriting: { type: "array", items: { type: "string" } },
+    qaChecklist: { type: "array", items: { type: "string" } },
+    pipelineRecommendations: { type: "array", items: { type: "string" } },
+    risks: { type: "array", items: { type: "string" } },
+    suggestedBusinessCriteria: { type: "array", items: { type: "string" } },
+    suggestedTechnicalCriteria: { type: "array", items: { type: "string" } },
+    recommendedNextActions: { type: "array", items: { type: "string" } },
+  },
+  required: [
+    "detectedAreas",
+    "specialistsUsed",
+    "signals",
+    "businessWriting",
+    "technicalWriting",
+    "qaChecklist",
+    "pipelineRecommendations",
+    "risks",
+    "suggestedBusinessCriteria",
+    "suggestedTechnicalCriteria",
+    "recommendedNextActions",
+  ],
+};
+
 export const ITERATION_SUMMARY_SCHEMA = {
   type: "object",
   properties: {
@@ -134,10 +184,11 @@ export const PREPARE_PR_REVIEW_OUTPUT_SCHEMA = {
     risks: { type: "array", items: { type: "string" } },
     checklist: { type: "array", items: { type: "string" } },
     suggestedFocus: { type: "array", items: { type: "string" } },
+    specialistReview: SPECIALIST_REVIEW_SCHEMA,
     codeReview: NULLABLE_OBJECT_SCHEMA,
     pipeline: NULLABLE_OBJECT_OR_ARRAY_SCHEMA,
   },
-  required: ["pullRequest", "linkedWorkItems", "signals", "risks", "checklist", "suggestedFocus", "codeReview", "pipeline"],
+  required: ["pullRequest", "linkedWorkItems", "signals", "risks", "checklist", "suggestedFocus", "specialistReview", "codeReview", "pipeline"],
 };
 
 export const RELEASE_READINESS_OUTPUT_SCHEMA = {
@@ -168,9 +219,10 @@ export const RELEASE_READINESS_OUTPUT_SCHEMA = {
       items: PR_SUMMARY_SCHEMA,
     },
     pipeline: NULLABLE_OBJECT_OR_ARRAY_SCHEMA,
+    specialistReview: SPECIALIST_REVIEW_SCHEMA,
     recommendedActions: { type: "array", items: { type: "string" } },
   },
-  required: ["iteration", "signals", "risks", "blockers", "linkedPullRequests", "pipeline", "recommendedActions"],
+  required: ["iteration", "signals", "risks", "blockers", "linkedPullRequests", "pipeline", "specialistReview", "recommendedActions"],
 };
 
 export const OWNER_LOAD_SCHEMA = {
@@ -271,9 +323,10 @@ export const WORK_ITEM_HANDOFF_OUTPUT_SCHEMA = {
     risks: { type: "array", items: { type: "string" } },
     openQuestions: { type: "array", items: { type: "string" } },
     checklistByRole: ROLE_CHECKLIST_SCHEMA,
+    specialistReview: SPECIALIST_REVIEW_SCHEMA,
     suggestedComment: { type: "string" },
   },
-  required: ["workItem", "handoff", "summary", "dependencies", "risks", "openQuestions", "checklistByRole", "suggestedComment"],
+  required: ["workItem", "handoff", "summary", "dependencies", "risks", "openQuestions", "checklistByRole", "specialistReview", "suggestedComment"],
 };
 
 export const DELIVERY_RISK_OUTPUT_SCHEMA = {
@@ -307,6 +360,7 @@ export const DELIVERY_RISK_OUTPUT_SCHEMA = {
     },
     risks: { type: "array", items: { type: "string" } },
     recommendedActions: { type: "array", items: { type: "string" } },
+    specialistReview: SPECIALIST_REVIEW_SCHEMA,
     supportingData: {
       type: "object",
       properties: {
@@ -317,5 +371,5 @@ export const DELIVERY_RISK_OUTPUT_SCHEMA = {
       required: ["releaseReadiness", "teamFocus", "pipelines"],
     },
   },
-  required: ["iteration", "executive", "signals", "risks", "recommendedActions", "supportingData"],
+  required: ["iteration", "executive", "signals", "risks", "recommendedActions", "specialistReview", "supportingData"],
 };

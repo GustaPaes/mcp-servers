@@ -29,7 +29,7 @@ Ele ajuda a:
 |---|---|---|---|---|
 | [`azure-mcp`](./azure-mcp) | Wrapper MCP | Opera recursos Azure usando o servidor oficial `@azure/mcp` da Microsoft e adiciona scripts locais + politica de seguranca para LLM. | `npx`, Azure CLI, PowerShell | Estavel |
 | [`meta-ads-mcp`](./meta-ads-mcp) | MCP server | Servidor multi-conta para Meta Marketing API (Facebook Ads / Instagram Ads) com separacao estrita recomendar ↔ executar, dry-run, gate de mutacao, teto triplo de orcamento, auditoria e bloqueio de targeting por atributos protegidos. | TypeScript, Node 20, MCP SDK, undici, Zod | Beta |
-| [`tfs-mcp`](./tfs-mcp) | MCP server | Work items, PRs, code review, refinamento, release readiness, delivery risk e templates de escrita para TFS / Azure DevOps Server. | Node 20, ESM, MCP SDK | Estavel |
+| [`tfs-mcp`](./tfs-mcp) | MCP server | Work items, PRs, code review, refinamento, release readiness, delivery risk, templates de escrita e roteamento automatico por especialistas para TFS / Azure DevOps Server. | Node 20, ESM, MCP SDK | Estavel |
 | [`oci-mcp`](./oci-mcp) | Toolkit MCP | Combina servidores oficiais da Oracle com `oci-extras-mcp` para OKE, Vault/Secrets, Kubernetes, Functions e streaming de logs. | Node 20, OCI SDK, `uvx` | Estavel |
 | [`playwright-mcp`](./playwright-mcp) | MCP server | Automacao de browser multi-sessao com Chromium/Firefox/WebKit, Chrome/Edge nativos, HAR, video, traces, PDF, rotas e stealth leve. | TypeScript, Node 20, Playwright | Estavel |
 | [`career-development-mcp`](./career-development-mcp) | MCP server | PDIs, metas SMART, competencias, evidencias, prontidao de carreira, preparo de 1:1 e importacao opcional de evidencias do TFS. | Node 20, ESM, JSON local | Beta |
@@ -286,7 +286,7 @@ MCP em TypeScript escrito do zero para a Meta Marketing API. Multi-conta por des
 
 ### tfs-mcp
 
-Este e o server mais especifico do repositorio. Ele cobre fluxos de TFS / Azure DevOps Server: work items, PRs, review, release readiness, wiki e delivery risk. Troque os defaults especificos da ExampleOrg no `.env.example` ao adaptar para outra empresa.
+Este e o server mais especifico do repositorio. Ele cobre fluxos de TFS / Azure DevOps Server: work items, PRs, review, release readiness, wiki, delivery risk e roteamento automatico por especialistas para escrita de negocio, tecnica, QA, pipeline, seguranca e arquitetura. As tools normais ja retornam a orientacao dos especialistas automaticamente, entao o usuario nao precisa pedir uma tool de especialistas pelo nome. Troque os defaults especificos da ExampleOrg no `.env.example` ao adaptar para outra empresa.
 
 ### oci-mcp
 
