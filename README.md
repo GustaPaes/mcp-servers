@@ -1,6 +1,6 @@
 # MCP Servers by GustaPaes
 
-> Curated collection of Model Context Protocol servers I use in my daily engineering workflow.
+> Curated collection of Model Context Protocol servers I use in my daily engineering workflow. Public docs and examples are generalized where environment-specific details would not make sense to publish.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![MCP](https://img.shields.io/badge/Model%20Context%20Protocol-1.x-6f42c1)](https://modelcontextprotocol.io)

@@ -222,8 +222,8 @@ npx -y @azure/mcp@3.0.0-beta.18 tools list
 - run: azmcp <comando>
 ```
 
-### Azure DevOps (TFS hospedado pela ExampleOrg)
-> Para o **TFS on-prem** (`tfs.example.com`) use o `tfs-mcp` MCP separado. Para pipelines no Azure DevOps **Services** que precisam falar com o Azure Cloud, use service connection com Workload Identity.
+### Azure DevOps (TFS hospedado internamente)
+> Para o **TFS on-prem** (`tfs.example.com`) use um MCP separado para TFS/Azure DevOps Server. Para pipelines no Azure DevOps **Services** que precisam falar com o Azure Cloud, use service connection com Workload Identity.
 
 ### Docker (CI sem Node)
 ```bash

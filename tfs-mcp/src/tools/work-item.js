@@ -672,10 +672,11 @@ export async function toolCreateWorkItem(args) {
     tags,
   } = CreateArgs.parse(args);
 
-  // Tipos do ExampleProject que usam os campos customizados example.DefinicoesDeNegocio / example.DefinicoesTecnicas
+  // Tipos da instalacao original que usam os campos customizados
+  // example.DefinicoesDeNegocio / example.DefinicoesTecnicas
   // ao inves de System.Description / Microsoft.VSTS.Common.AcceptanceCriteria.
   // User Story, Sprint Task, Product Backlog Item e Product Backlog Item Desenvolvimento
-  // seguem o template ExampleProject. Bug e Feature usam os campos padrao do TFS.
+  // seguem esse template. Bug e Feature usam os campos padrao do TFS.
   const usesExampleTemplate = /user story|sprint task|product backlog item/i.test(work_item_type);
   const businessField = usesExampleTemplate ? "example.DefinicoesDeNegocio" : "System.Description";
   const technicalField = usesExampleTemplate
@@ -706,7 +707,7 @@ export async function toolCreateWorkItem(args) {
     ops.push({ op: "add", path: "/fields/Microsoft.VSTS.Common.Priority", value: priority });
   if (tags) ops.push({ op: "add", path: "/fields/System.Tags", value: tags });
 
-  // Defaults obrigatorios do template ExampleProject para User Story / Sprint Task.
+  // Defaults obrigatorios do template legado para User Story / Sprint Task.
   // O TFS rejeita criacao sem esses campos. Sao adicionados apenas se nao foram
   // setados acima (verificacao por path) para nao sobrescrever overrides explicitos.
   const isUserStoryLike = /user story|sprint task/i.test(work_item_type);

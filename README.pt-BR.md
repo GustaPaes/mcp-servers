@@ -14,6 +14,8 @@ Idioma: [English](./README.en.md) | [Portugues](./README.pt-BR.md)
 
 A maioria das listas publicas de MCP e um catalogo de servidores de proposito unico mantidos por vendors. Este repositorio e diferente: e uma caixa de ferramentas pessoal, testada em uso real, para resolver problemas de engenharia diretamente a partir de um cliente de IA.
 
+Alguns servers nasceram de fluxos reais de uso interno e depois foram generalizados para uso publico. Quando necessario, a documentacao e os exemplos usam placeholders em vez de valores especificos de ambiente.
+
 Ele ajuda a:
 
 - Operar **Azure Cloud** com seguranca a partir do chat.
@@ -286,7 +288,7 @@ MCP em TypeScript escrito do zero para a Meta Marketing API. Multi-conta por des
 
 ### tfs-mcp
 
-Este e o server mais especifico do repositorio. Ele cobre fluxos de TFS / Azure DevOps Server: work items, PRs, review, release readiness, wiki, delivery risk e roteamento automatico por especialistas para escrita de negocio, tecnica, QA, pipeline, seguranca e arquitetura. As tools normais ja retornam a orientacao dos especialistas automaticamente, entao o usuario nao precisa pedir uma tool de especialistas pelo nome. Troque os defaults especificos da ExampleOrg no `.env.example` ao adaptar para outra empresa.
+Este e o server mais especifico do repositorio. Ele cobre fluxos de TFS / Azure DevOps Server: work items, PRs, review, release readiness, wiki, delivery risk e roteamento automatico por especialistas para escrita de negocio, tecnica, QA, pipeline, seguranca e arquitetura. As tools normais ja retornam a orientacao dos especialistas automaticamente, entao o usuario nao precisa pedir uma tool de especialistas pelo nome. Troque os defaults placeholder do `.env.example` ao adaptar para outra empresa.
 
 ### oci-mcp
 

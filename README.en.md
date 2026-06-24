@@ -14,6 +14,8 @@ Language: [English](./README.en.md) | [Portugues](./README.pt-BR.md)
 
 Most public MCP server lists are catalogs of single-purpose servers maintained by vendors. This repository is different: it is a personal, field-tested toolbox designed to solve day-to-day engineering problems from inside an AI client.
 
+Some servers started from real internal workflows and were later generalized for public use. Where needed, docs and examples use placeholders instead of environment-specific values.
+
 It helps with:
 
 - Operating **Azure Cloud** safely from chat.
@@ -286,7 +288,7 @@ A from-scratch TypeScript MCP for the Meta Marketing API. Multi-account by desig
 
 ### tfs-mcp
 
-This is the most domain-specific server in the repo. It targets TFS / Azure DevOps Server workflows: work items, PRs, review, release readiness, wiki, delivery risk and automatic specialist routing for business writing, technical writing, QA, pipelines, security and architecture. The normal domain tools return specialist guidance automatically, so users do not need to request a specialist tool by name. Replace ExampleOrg-specific defaults in `.env.example` when adapting it to another company.
+This is the most domain-specific server in the repo. It targets TFS / Azure DevOps Server workflows: work items, PRs, review, release readiness, wiki, delivery risk and automatic specialist routing for business writing, technical writing, QA, pipelines, security and architecture. The normal domain tools return specialist guidance automatically, so users do not need to request a specialist tool by name. Replace the placeholder defaults in `.env.example` when adapting it to another company.
 
 ### oci-mcp
 

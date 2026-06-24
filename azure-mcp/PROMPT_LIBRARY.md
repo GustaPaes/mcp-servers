@@ -62,7 +62,7 @@ Mostre todos os recursos do resource group "rg-example-app-dev" agrupados por ti
 ```
 
 ```text
-Crie um novo resource group "rg-example-poc-mcp" em "brazilsouth" com tags owner=gustavo, env=poc.
+Crie um novo resource group "rg-example-poc-mcp" em "brazilsouth" com tags owner=platform, env=poc.
 ```
 
 ---
@@ -74,11 +74,11 @@ Liste todas as storage accounts da subscription "example-dev" e mostre o tier de
 ```
 
 ```text
-Liste os containers da storage account "stexample-productlog" e seu nivel de acesso publico.
+Liste os containers da storage account "stexamplelogs" e seu nivel de acesso publico.
 ```
 
 ```text
-Liste os ultimos 50 blobs do container "uploads" da storage account "stexample-product".
+Liste os ultimos 50 blobs do container "uploads" da storage account "stexampleapp".
 ```
 
 ```text
@@ -86,11 +86,11 @@ Verifique se alguma storage account tem "Allow public blob access" habilitado e 
 ```
 
 ```text
-Liste os nomes das connection strings da storage account "stexample-productdev" e mostre valores mascarados. Se eu pedir o valor real depois, exija justificativa e confirme o contexto Azure antes.
+Liste os nomes das connection strings da storage account "stexampleappdev" e mostre valores mascarados. Se eu pedir o valor real depois, exija justificativa e confirme o contexto Azure antes.
 ```
 
 ```text
-Habilite soft-delete em blobs com retention de 7 dias na storage account "stexample-productdev".
+Habilite soft-delete em blobs com retention de 7 dias na storage account "stexampleappdev".
 ```
 
 ---
@@ -166,19 +166,19 @@ Liste todos os web apps da subscription com status, runtime e plan.
 ```
 
 ```text
-Mostre as application settings do web app "app-example-app-api-dev" (mascarando secrets).
+Mostre as application settings do web app "app-example-api-dev" (mascarando secrets).
 ```
 
 ```text
-Adicione a app setting "LogLevel=DEBUG" no web app "app-example-app-api-dev".
+Adicione a app setting "LogLevel=DEBUG" no web app "app-example-api-dev".
 ```
 
 ```text
-Liste os ultimos 10 deployments do web app "app-example-app-api-dev".
+Liste os ultimos 10 deployments do web app "app-example-api-dev".
 ```
 
 ```text
-Reinicie o web app "app-example-app-api-dev" depois de me confirmar o impacto.
+Reinicie o web app "app-example-api-dev" depois de me confirmar o impacto.
 ```
 
 ---
@@ -198,11 +198,11 @@ Liste meus container registries (ACR) e os repositorios de cada um.
 ```
 
 ```text
-Mostre as tags da imagem "example-app-api" no ACR "acrexample-product".
+Mostre as tags da imagem "example-api" no ACR "acrexampleapp".
 ```
 
 ```text
-Quais imagens no ACR "acrexample-product" nao foram puxadas nos ultimos 90 dias?
+Quais imagens no ACR "acrexampleapp" nao foram puxadas nos ultimos 90 dias?
 ```
 
 ---
@@ -214,7 +214,7 @@ Liste minhas Function Apps e o estado de cada uma.
 ```
 
 ```text
-Mostre as funcoes da Function App "func-example-app-jobs" e o gatilho de cada uma.
+Mostre as funcoes da Function App "func-example-jobs" e o gatilho de cada uma.
 ```
 
 ---
@@ -226,11 +226,11 @@ Liste todas as VMs da subscription com size, OS, power state.
 ```
 
 ```text
-Para a VM "BuildPullRequest01", mostre tenant, subscription, resource group e power state atual. Se eu confirmar, use o padrao do workspace para ligar ou desligar com deallocate.
+Para a VM "build-agent-01", mostre tenant, subscription, resource group e power state atual. Se eu confirmar, use o padrao do workspace para ligar ou desligar com deallocate.
 ```
 
 ```text
-Quero agendar a VM "BuildPullRequest01" para ligar as 08:00 no horario local e desligar com menor custo as 18:00. Use o padrao do workspace: Scheduled Task local para start e Azure auto-shutdown para stop, e me mostre o plano antes de aplicar.
+Quero agendar a VM "build-agent-01" para ligar as 08:00 no horario local e desligar com menor custo as 18:00. Use o padrao do workspace: Scheduled Task local para start e Azure auto-shutdown para stop, e me mostre o plano antes de aplicar.
 ```
 
 ```text
@@ -258,7 +258,7 @@ Execute esta query KQL no workspace "law-example-app": AzureActivity | where Tim
 ```
 
 ```text
-Quais erros 5xx aconteceram no Application Insights "appi-example-app-api" nas ultimas 6h?
+Quais erros 5xx aconteceram no Application Insights "appi-example-api" nas ultimas 6h?
 ```
 
 ```text
@@ -346,7 +346,7 @@ Quais recursos da subscription "example-prod" estao SEM backup?
 ```
 
 ```text
-Mostre os recovery points do item de backup "vm-example-app-api" no vault "rsv-example-app".
+Mostre os recovery points do item de backup "vm-example-api" no vault "rsv-example-app".
 ```
 
 ```text
@@ -414,7 +414,7 @@ Liste meus Public IPs e a quais recursos estao associados.
 ## Diagnóstico e troubleshooting
 
 ```text
-Use o Azure App Lens para diagnosticar problemas no web app "app-example-app-api-prod".
+Use o Azure App Lens para diagnosticar problemas no web app "app-example-api-prod".
 ```
 
 ```text
@@ -431,18 +431,19 @@ Gere o comando az CLI equivalente para criar um App Service Plan B2 em "brazilso
 
 ---
 
-## Combos com exampleCargoTfs
+## Combos com tfs-mcp
 
 Como os dois MCPs convivem, dá para fazer fluxos cruzados:
 
 ```text
-1) No TFS, busque o PBI 12345 (use exampleCargoTfs).
+1) No TFS, busque o PBI 12345 (use tfs-mcp).
 2) Liste no Azure os recursos relacionados ao servico mencionado no PBI.
 3) Verifique se ha alertas ativos no Application Insights desse servico.
 4) Resuma o estado e proponha proximos passos.
 ```
 
 ```text
-Pegue o ultimo PR mergeado do repo X (exampleCargoTfs) e verifique se o deploy correspondente
+Pegue o ultimo PR mergeado do repo X (tfs-mcp) e verifique se o deploy correspondente
 no Azure (app service / container app) esta com a mesma versao em produçao.
 ```
+

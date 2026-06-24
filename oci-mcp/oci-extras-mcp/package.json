@@ -10,7 +10,7 @@
   "scripts": {
     "start": "node index.js",
     "start:http": "node index.js --http",
-    "test": "node tests/smoke-stdio.mjs",
+    "test": "node tests/auth-resolver.test.mjs && node tests/smoke-http.mjs",
     "test:http": "node tests/smoke-http.mjs",
     "test:auth": "node tests/auth-resolver.test.mjs",
     "lint": "node -e \"console.log('lint placeholder — add eslint when desired')\""

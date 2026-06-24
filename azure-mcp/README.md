@@ -59,7 +59,7 @@ For Cursor / Cline / Codex CLI / Continue snippets, see the [root README](../REA
 
 ## Português (escopo do MCP)
 
-> **Escopo:** este MCP Server expõe ferramentas para operar recursos do **Azure Portal** (`https://portal.azure.com`) — Storage, AKS, Key Vault, Cosmos DB, App Service, Monitor/Log Analytics, RBAC, Foundry, etc. **Não** é o mesmo que o TFS on-prem da empresa.
+> **Escopo:** este MCP Server expõe ferramentas para operar recursos do **Azure Portal** (`https://portal.azure.com`) — Storage, AKS, Key Vault, Cosmos DB, App Service, Monitor/Log Analytics, RBAC, Foundry, etc. **Não** é o mesmo que um MCP voltado para TFS / Azure DevOps Server on-prem.
 
 | Item | Valor |
 |---|---|
@@ -96,10 +96,10 @@ Os dois MCP Servers vivem juntos no workspace e **se complementam**:
 
 | MCP Server | URL alvo | Domínio | Uso típico |
 |---|---|---|---|
-| `exampleCargoTfs` | `https://tfs.example.com` | TFS on-prem da ExampleOrg | Work items (PBI/US/Bug), PRs, sprints, wiki, pipelines on-prem |
+| `tfs-mcp` | `https://tfs.example.com` | TFS / Azure DevOps Server on-prem | Work items (PBI/US/Bug), PRs, sprints, wiki, pipelines on-prem |
 | `azure-mcp` | `https://portal.azure.com` | Azure Cloud (público) | Recursos cloud: Storage, AKS, Key Vault, App Service, Monitor, etc. |
 
-> Use o `exampleCargoTfs` para **planejamento e código** (work items, revisão de PR, refinamento). Use o `azure-mcp` para **infraestrutura e runtime cloud** (deploy, diagnóstico, custo, segurança).
+> Use o MCP de TFS para **planejamento e código** (work items, revisão de PR, refinamento). Use o `azure-mcp` para **infraestrutura e runtime cloud** (deploy, diagnóstico, custo, segurança).
 
 ---
 

@@ -23,7 +23,7 @@ A wrapper around TFS REST APIs is easy. **The hard part is making an LLM useful 
 - **Multi-repo PR search** — when `repo` is omitted, the server iterates `TFS_REPOS` until it finds the PR.
 - **Both transports** — `stdio` (default) and Streamable HTTP (`--http`).
 
-Originally built for the [`ExampleProject`](https://www.example.com.br/) project at ExampleOrg; the abstractions are generic and work against any on-prem TFS / Azure DevOps Server instance.
+Originally built against a real enterprise TFS installation. The public docs in this repository are intentionally sanitized so the engineering patterns stay visible without exposing internal project details.
 
 ---
 
@@ -133,7 +133,7 @@ See the [root README](../README.md#%EF%B8%8F-install-in-your-mcp-client) for rea
 | `MCP_HTTP_HOST` | `127.0.0.1` | Host for HTTP mode; non-loopback requires `MCP_HTTP_TOKEN` |
 | `MCP_HTTP_TOKEN` | _(empty)_ | Bearer token for HTTP mode |
 | `TFS_AUDIT_LOG_PATH` | `./data/audit.log` | Append-only JSONL audit log for mutation attempts |
-| `TFS_DEFAULT_QUARTER` | _(current quarter)_ | Default value for ExampleOrg quarter fields during creation |
+| `TFS_DEFAULT_QUARTER` | _(current quarter)_ | Default value for legacy quarter fields during creation |
 | `LOG_LEVEL` | `info` | `trace`/`debug`/`info`/`warn`/`error` |
 
 ---
@@ -153,7 +153,7 @@ See the [root README](../README.md#%EF%B8%8F-install-in-your-mcp-client) for rea
 
 ### Pull requests & review
 - `tfs_list_prs`, `tfs_get_pr`
-- `tfs_review_pr` — automated code review with ExampleProject rules + modern frontend/backend best practices
+- `tfs_review_pr` — automated code review with project-specific rules + modern frontend/backend best practices
 - `tfs_comment_review_findings` — turn findings into PR comments with suggested fixes
 - `tfs_prepare_pr_review` — **premium** review-prep workflow (work items, threads, risks, areas, automated review, pipeline)
 - `tfs_add_pr_comment`
@@ -331,7 +331,7 @@ Um wrapper das APIs TFS é fácil. **O difícil é deixar um LLM realmente útil
 - **Busca de PR multi-repo** — quando `repo` é omitido, o servidor itera `TFS_REPOS` até achar.
 - **Dois transportes** — `stdio` (padrão) e Streamable HTTP (`--http`).
 
-Originalmente construído para o projeto [`ExampleProject`](https://www.example.com.br/) na ExampleOrg; as abstrações são genéricas e funcionam contra qualquer instância on-prem.
+Originalmente construído contra uma instalação enterprise real de TFS. A documentação pública deste repositório foi sanitizada para preservar os padrões de engenharia sem expor detalhes internos de projeto.
 
 ### Pré-requisitos
 

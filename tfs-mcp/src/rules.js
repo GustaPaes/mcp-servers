@@ -1,5 +1,5 @@
 /**
- * rules.js — Regras de code review específicas do ExampleProject.
+ * rules.js — Regras de code review específicas da instalação original.
  * Funções puras. Recebem conteúdo de arquivo como string, retornam findings.
  */
 

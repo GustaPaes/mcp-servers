@@ -85,9 +85,9 @@ export const TFS_REPOS = unique([
   ...parseCsv(process.env.TFS_REPOS),
   firstNonEmpty(process.env.TFS_REPO, process.env.TFS_REPOSITORY),
   DETECTED_REPOSITORY,
-  "ExampleProject",
+  "example-repo",
 ]);
-export const TFS_REPO = TFS_REPOS[0] ?? "ExampleProject";
+export const TFS_REPO = TFS_REPOS[0] ?? "example-repo";
 export const TFS_PAT = firstNonEmpty(process.env.TFS_PAT);
 export const TFS_AUDIT_LOG_PATH = firstNonEmpty(
   process.env.TFS_AUDIT_LOG_PATH,
@@ -131,7 +131,7 @@ export function getRepositoryCandidates() {
 }
 
 export function getDefaultRepository() {
-  return getRepositoryCandidates()[0] ?? "ExampleProject";
+  return getRepositoryCandidates()[0] ?? "example-repo";
 }
 
 export function getAvailableAuthAliases() {

@@ -206,7 +206,7 @@ const TOOL_DEFS = [
     description:
       "Cria um novo work item no TFS/Azure DevOps. Suporta User Story, Bug, Sprint Task, Product Backlog Item, Feature e qualquer tipo configurado. Permite vincular a um item pai. " +
       "Os campos description e acceptance_criteria aceitam HTML rico - o servidor decodifica entidades automaticamente caso o cliente MCP envie HTML-encoded. " +
-      "Padrao recomendado para Azure DevOps Server da ExampleOrg: cada bloco em <div>...</div>, listas em <div><ul><li>...</li></ul></div>, linhas em branco como <div><br></div>.",
+      "Padrao recomendado para Azure DevOps Server com campos ricos customizados: cada bloco em <div>...</div>, listas em <div><ul><li>...</li></ul></div>, linhas em branco como <div><br></div>.",
     inputSchema: {
       type: "object",
       properties: {
@@ -414,7 +414,7 @@ const TOOL_DEFS = [
     name: "tfs_review_pr",
     title: "Review Pull Request",
     description:
-      "Code review automatico de um PR com especialistas por arquivos alterados, seguindo padroes ExampleProject e boas praticas modernas. Avalia metadata do PR, tamanho, rastreabilidade, frontend/backend, seguranca, async, sync-over-async, Redis sem TTL, TLS bypass, testes e maintainability. Retorna score 0-10.",
+      "Code review automatico de um PR com especialistas por arquivos alterados, seguindo padroes do projeto e boas praticas modernas. Avalia metadata do PR, tamanho, rastreabilidade, frontend/backend, seguranca, async, sync-over-async, Redis sem TTL, TLS bypass, testes e maintainability. Retorna score 0-10.",
     inputSchema: {
       type: "object",
       properties: {
@@ -444,7 +444,7 @@ const TOOL_DEFS = [
     name: "tfs_wiki",
     title: "Wiki Explorer",
     description:
-      "Acessa wikis do projeto ExampleProject. Busca paginas por palavra-chave.",
+      "Acessa wikis do projeto configurado. Busca paginas por palavra-chave.",
     inputSchema: {
       type: "object",
       properties: {
@@ -460,7 +460,7 @@ const TOOL_DEFS = [
     description:
       "Atualiza um work item: muda estado, reatribui, adiciona comentario/historico, altera titulo, story points, descricao ou criterios de aceite. " +
       "Os campos description e acceptance_criteria aceitam HTML rico - o servidor decodifica entidades automaticamente caso o cliente MCP envie a string HTML-encoded (&lt;b&gt;...). " +
-      "Padrao recomendado para o Azure DevOps Server da ExampleOrg (campos example.DefinicoesDeNegocio / example.DefinicoesTecnicas): cada bloco em <div>...</div>, listas em <div><ul><li>...</li></ul></div>, linhas em branco como <div><br></div>, espacos apos <b> usar &nbsp;. Tags <br> soltas sao colapsadas pelo renderer.",
+      "Padrao recomendado para templates com campos ricos customizados (como example.DefinicoesDeNegocio / example.DefinicoesTecnicas): cada bloco em <div>...</div>, listas em <div><ul><li>...</li></ul></div>, linhas em branco como <div><br></div>, espacos apos <b> usar &nbsp;. Tags <br> soltas sao colapsadas pelo renderer.",
     inputSchema: {
       type: "object",
       properties: {
@@ -540,7 +540,7 @@ const TOOL_DEFS = [
   {
     name: "tfs_list_repos",
     title: "List Repositories",
-    description: "Lista todos os repositorios do projeto ExampleProject com branch default e URL.",
+    description: "Lista todos os repositorios do projeto configurado com branch default e URL.",
     inputSchema: { type: "object", properties: {} },
   },
 ];

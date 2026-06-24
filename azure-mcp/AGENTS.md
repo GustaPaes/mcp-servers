@@ -167,7 +167,7 @@ Em todos os casos: explique a regra desta política e ofereça uma alternativa s
 Esta política não substitui:
 - RBAC/ABAC do próprio Azure.
 - Azure Policy / Blueprints / Locks.
-- Processos internos de change management da ExampleOrg.
+- Processos internos de change management da sua organizacao.
 
 Ela é uma **camada adicional** de defesa, executada pelo agente.
 

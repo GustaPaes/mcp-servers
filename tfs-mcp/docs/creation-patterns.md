@@ -1,226 +1,81 @@
-# Padrões de Criação de Work Items no TFS — ExampleProject
+# Work Item Creation Patterns for On-Prem TFS
 
-Este documento define os padrões técnicos para criação e manipulação de Work Items
-no TFS do ExampleProject via API, incluindo campos obrigatórios e convenções.
+This document describes the creation conventions that worked well in the
+original installation behind this MCP. Public examples are sanitized and use
+placeholder names.
 
----
+## Goal
 
-## 1. Autenticação
+Keep item creation predictable for humans and safe for agents:
 
-- Usar sempre o alias `gusta` para o PAT do TFS.
-- O alias é passado via `runWithRequestContext({ authAlias: "gusta" }, fn)`.
+- Use explicit area and iteration paths.
+- Prefer dry-run generation before any real write.
+- Preserve a stable writing template for business and technical acceptance.
+- Make custom-field usage obvious when a TFS template differs from stock fields.
 
----
+## Recommended field map
 
-## 2. Scripts de execução
+| Field | Example value | Notes |
+|---|---|---|
+| `System.Title` | `Add audit trail to approval flow` | Keep it outcome-oriented. |
+| `System.WorkItemType` | `User Story` | The MCP also supports Bug, Feature and Sprint Task. |
+| `System.AreaPath` | `ExampleProject\\Core Platform` | Use the team's real area tree. |
+| `System.IterationPath` | `ExampleProject\\2026-Q3` | Always target a real iteration. |
+| `System.Description` | Business description | Use when the template is stock TFS. |
+| `Microsoft.VSTS.Common.AcceptanceCriteria` | Technical acceptance criteria | Use when the template is stock TFS. |
 
-- Scripts de execução em `.mjs` na raiz do MCP server (`C:\Workspace\MCP Servers\tfs-mcp\`).
-- Usar imports ESM: `import { ... } from "./src/tfs-client.js"`.
-- Convenção de nome: `create-*.mjs`, `update-*.mjs`, `fix-*.mjs`, `read-*.mjs`, `check-*.mjs`.
+If your TFS template has custom rich-text fields, map them explicitly. The
+original installation used custom business and technical fields, and the MCP
+still supports that compatibility path.
 
----
+## Safe creation flow
 
-## 3. Criação de User Story
+1. Generate the activity template first.
+2. Review the business and technical blocks.
+3. Resolve area path, iteration path and owner before writing.
+4. Run `tfs_work_item_create` with `dry_run:true`.
+5. Only then execute the real mutation with `dry_run:false`, `confirm:true`,
+   `reason` and `requestedBy`.
 
-### Endpoint
+## Example payload
 
-```js
-tfsJsonPatch("POST", "/wit/workitems/$User%20Story", ops)
-```
-
-### Campos obrigatórios
-
-| Campo | Valor |
-|-------|-------|
-| `System.Title` | `"US-{NN}: {Repo} — {Descrição}"` |
-| `System.AssignedTo` | `"ExampleOrgIGITAL\\example.owner"` |
-| `System.AreaPath` | `"ExampleProject\\House Of Cargo"` |
-| `System.IterationPath` | `"ExampleProject\\Produtos\\2026-Q2"` |
-| `example.TipoDemanda` | `"Planejada no plano de produto"` |
-| `Example.Quarter` | `"2026 Q2"` |
-| `Example.Bloqueio` | `"Não está bloqueado"` |
-| `Microsoft.VSTS.Common.Priority` | `1` |
-| `example.DefinicoesDeNegocio` | HTML gerado por `buildBusinessTemplate()` |
-| `example.DefinicoesTecnicas` | HTML gerado por `buildTechnicalTemplate()` |
-
-### Link ao PBI pai
-
-Após criar a US, vincular ao PBI:
-
-```js
-tfsJsonPatch("PATCH", `/wit/workitems/${usId}`, [{
-  op: "add",
-  path: "/relations/-",
-  value: {
-    rel: "System.LinkTypes.Hierarchy-Reverse",
-    url: `https://tfs.example.com/ExampleCollection/_apis/wit/workitems/${PBI_ID}`
-  },
-}]);
-```
-
----
-
-## 4. Criação de PBI (Product Backlog Item Desenvolvimento)
-
-### Endpoint
-
-```js
-tfsJsonPatch("POST", "/wit/workitems/$Product%20Backlog%20Item%20Desenvolvimento", ops)
-```
-
-### Campos extras obrigatórios
-
-| Campo | Valor (exemplo) |
-|-------|-----------------|
-| `ExampleOrg.ClassificacaoIniciativaPBI` | `"Backlog na CAPTAÇÃO"` (campo required com allowed values limitados por estado) |
-| `System.AssignedTo` | `"ExampleOrgIGITAL\\example.reviewer"` (PBI owner, diferente do dev das USs) |
-| `ExampleOrg.Discovery*`, `ExampleOrg.Sorting*` | Campos obrigatórios — preencher com valores genéricos regulatórios |
-
----
-
-## 4.1. tfs_work_item_create — defaults aplicados automaticamente
-
-A partir de 2026-04, a tool `tfs_work_item_create` aplica defaults automaticamente
-para reduzir erros de validação do TFS:
-
-### Para todos os tipos `User Story`, `Sprint Task`, `Product Backlog Item` e `Product Backlog Item Desenvolvimento`:
-- Negócio é gravado em `example.DefinicoesDeNegocio` (não em `System.Description`)
-- Técnica é gravada em `example.DefinicoesTecnicas` (não em `Microsoft.VSTS.Common.AcceptanceCriteria`)
-
-### Para `User Story` e `Sprint Task` (defaults se não passados):
-- `example.TipoDemanda` = `"Planejada no plano de produto"`
-- `Example.Quarter` = `"2026 Q2"`
-- `Example.Bloqueio` = `"Não está bloqueado"`
-
-### Para `Product Backlog Item` e `Product Backlog Item Desenvolvimento` (defaults se não passados):
-- `ExampleOrg.RequestClassification` = `"Melhoria"`
-- `ExampleOrg.ClassificacaoIniciativaPBI` = `"Backlog na CAPTAÇÃO"`
-
-Para `Bug` e `Feature` continuam usando `System.Description` / `Microsoft.VSTS.Common.AcceptanceCriteria` (campos padrão TFS).
-
----
-
-## 5. Atualização de Work Items
-
-### Atualizar definição de negócio
-
-```js
-tfsJsonPatch("PATCH", `/wit/workitems/${wiId}`, [
-  { op: "replace", path: "/fields/example.DefinicoesDeNegocio", value: biz.html },
-]);
-```
-
-### Atualizar título
-
-```js
-tfsJsonPatch("PATCH", `/wit/workitems/${wiId}`, [
-  { op: "replace", path: "/fields/System.Title", value: "Novo título" },
-]);
-```
-
-### Adicionar histórico/comentário
-
-```js
-tfsJsonPatch("PATCH", `/wit/workitems/${wiId}`, [
-  { op: "add", path: "/fields/System.History", value: "Texto do comentário" },
-]);
-```
-
----
-
-## 6. Remoção de Work Items
-
-O TFS ExampleProject **não suporta** o estado "Removed" para User Story. Para remover:
-
-1. Mudar estado para `"Closed"`.
-2. Prefixar título com `"[REMOVIDA]"`.
-3. Adicionar comentário no `System.History` explicando a razão.
-
-```js
-await tfsJsonPatch("PATCH", `/wit/workitems/${wiId}`, [
-  { op: "add", path: "/fields/System.State", value: "Closed" },
-  { op: "add", path: "/fields/System.Title", value: "[REMOVIDA] US-09: ..." },
-  { op: "add", path: "/fields/System.History", value: "Fechada e substituída por..." },
-]);
-```
-
-### Estados válidos para User Story
-
-```
-Active, Analysis, Awaiting Analysis, Awaiting Code Review, Awaiting Review,
-Awaiting Test, Closed, Code Review, In Development, In Test, New, 
-Ready for Dev, Released, Resolved, Review
-```
-
----
-
-## 7. Leitura de Work Items com relações
-
-```js
-const wi = await tfsGet("/wit/workitems/{id}", { "$expand": "relations" });
-const children = (wi.relations || [])
-  .filter(r => r.rel === "System.LinkTypes.Hierarchy-Forward");
-```
-
-Nota: O `$expand` deve ser passado como query param object, não inline na URL
-(o `$` é tratado incorretamente se inline).
-
----
-
-## 8. Convenções de código nos scripts
-
-```js
-// Padrão: COMMON_FIELDS como constante
-const COMMON_FIELDS = [
-  { op: "add", path: "/fields/System.AssignedTo", value: "ExampleOrgIGITAL\\example.owner" },
-  // ...
-];
-
-// Padrão: helper createUS para consistência
-async function createUS(title, bizInput, techInput) {
-  const biz = buildBusinessTemplate(bizInput);
-  const tech = buildTechnicalTemplate({ ...techInput, detailLevel: "specific" });
-  // ...
-}
-
-// Padrão: helper updateBizDef para atualização parcial
-async function updateBizDef(wiId, usLabel, bizInput) {
-  const biz = buildBusinessTemplate(bizInput);
-  await tfsJsonPatch("PATCH", `/wit/workitems/${wiId}`, [
-    { op: "replace", path: "/fields/example.DefinicoesDeNegocio", value: biz.html },
-  ]);
+```json
+{
+  "title": "Add audit trail to approval flow",
+  "work_item_type": "User Story",
+  "actor": "operations analyst",
+  "intent": "record who approved each release gate",
+  "outcome": "audits can reconstruct the release path",
+  "business_acceptance_criteria": [
+    "Deve registrar aprovador, data e decisao",
+    "Deve permitir consulta do historico sem acesso ao banco"
+  ],
+  "technical_dependencies": "Depends on the release orchestration service",
+  "technical_acceptance_criteria": [
+    "Deve persistir eventos de aprovacao",
+    "Deve expor a trilha em endpoint autenticado"
+  ],
+  "affected_locations": [
+    "services/release-orchestrator",
+    "api/release-history"
+  ],
+  "dry_run": true
 }
 ```
 
----
+## Creation checklist
 
-## 9. Tabelas SQL afetadas (referência)
+- Title describes business intent, not implementation trivia.
+- Area path matches the owning team.
+- Iteration path is real and active.
+- Business criteria are testable and written for a reviewer.
+- Technical criteria point to behavior, evidence and affected locations.
+- Dependencies are explicit when rollout or integration is involved.
 
-| Tabela | Coluna(s) | Tipo atual |
-|--------|-----------|------------|
-| tbPessoaFisicaJuridica | cpf, cnpj | bigint NULL |
-| tbPessoaJuridicaResponsavel | cpf | bigint NULL |
-| tbCredencialViaFacil | cnpj | bigint NOT NULL |
-| tbContaBancaria | cpfCnpjFavorecido | bigint |
-| TBPEDAGIOPAGO | CpfPortador | bigint |
-| tbPedagioPago | cnpjPontoCredenciado | bigint NOT NULL |
-| TBCARTAOFAVORECIDO | cpfCnpj | VARCHAR(14) ← já string |
-| cnpjPosto | - | varchar(14) ← já string |
+## Update and removal guidance
 
----
-
-## 10. Repositórios e contagem de arquivos impactados
-
-| Repositório | Arquivos | Escaneado localmente? |
-|-------------|----------|----------------------|
-| ExampleProject/server | ~317 (Domain 42, Infra.Data 26, Infra 5, Application ~197, API 10, DCI 3, Mobile 34) | Sim |
-| ExampleProject/ms | ~58 (24 projetos) | Sim |
-| ExampleProject/client | ~313 (43 features + shared) | Sim |
-| exampleCargoMobile | ~59 (models 20, screens 17, services 11, components 5) | Sim |
-| exampleCargoPortal | 1 detectado | Sim |
-| exampleCargo_Utils | ? | Não (NuGet) |
-| exampleCargoCore | ? | Não |
-| exampleCargoAgente | ? | Não |
-| exampleCargoFleet | ? | Não |
-| exampleCargoLandingPage | ? | Não |
-| exampleCargoIntegration | ? | Não |
+- Prefer state transitions over deletion when the process requires traceability.
+- If your process has no `Removed` state for a given type, move the item to the
+  documented terminal state and explain the reason in a comment.
+- Never batch-create or batch-update items without first generating the dry-run
+  plan for each entry.

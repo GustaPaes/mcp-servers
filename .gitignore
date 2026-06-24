@@ -68,3 +68,11 @@ tfs-mcp/scripts/sprint-archive/
 
 # Legacy files
 **/*.legacy
+
+# Scripts
+scripts/**
+
+# Local agent/client state
+**/.opencode/
+**/.claude/
+**/.codex/
