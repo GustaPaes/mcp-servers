@@ -199,6 +199,30 @@ export async function tfsFetchRaw(url, opts = {}, { authAlias } = {}) {
   });
 }
 
+export async function tfsGetAbsoluteJson(url, { cacheKey, cacheTtlMs = 0, authAlias } = {}) {
+  const scopedCacheKey = buildScopedCacheKey(cacheKey, authAlias);
+  const hit = tryCacheHit(scopedCacheKey);
+  if (hit !== null) {
+    logger.debug({ cacheKey: scopedCacheKey }, "TFS absolute cache hit");
+    return hit;
+  }
+
+  const data = await withRetry(async () => {
+    logger.debug({ method: "GET", url }, "TFS absolute →");
+    const res = await fetch(url, { headers: buildHeaders({}, { authAlias }) });
+    if (!res.ok) {
+      const txt = await res.text();
+      const err = new Error(`TFS ${res.status} GET ${url}: ${txt.slice(0, 400)}`);
+      err.status = res.status;
+      throw err;
+    }
+    return res.json();
+  });
+
+  if (scopedCacheKey && cacheTtlMs > 0) cacheStore(scopedCacheKey, data, cacheTtlMs);
+  return data;
+}
+
 // ─── Health check ──────────────────────────────────────────────────────────
 
 /**

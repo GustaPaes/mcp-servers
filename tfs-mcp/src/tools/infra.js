@@ -2,7 +2,7 @@
  * tools/infra.js — Ferramentas de infraestrutura: wikis, pipelines, repositórios.
  */
 import { z } from "zod";
-import { tfsGet } from "../tfs-client.js";
+import { tfsGet, tfsGetAbsoluteJson } from "../tfs-client.js";
 import { TFS_COLLECTION, TFS_PROJECT, TFS_URL } from "../config.js";
 import { buildSpecialistReview } from "../specialists.js";
 
@@ -194,6 +194,157 @@ export async function toolPipelineStatus(args) {
       }),
     };
   });
+}
+
+function parseContainerResource(resource) {
+  const data = String(resource?.data ?? "");
+  const match = data.match(/^#\/(\d+)\/(.+)$/);
+  if (!match) return null;
+  return {
+    containerId: match[1],
+    rootPath: decodeURIComponent(match[2]),
+  };
+}
+
+async function getBuildArtifacts(buildId, authAlias) {
+  return tfsGet(`/build/builds/${buildId}/artifacts`, {}, {
+    cacheKey: `build:${buildId}:artifacts`,
+    cacheTtlMs: 60_000,
+    authAlias,
+  });
+}
+
+async function listContainerItems(containerId, rootPath, authAlias) {
+  const baseUrl = `${TFS_URL}/${TFS_COLLECTION}/_apis/resources/Containers/${containerId}`;
+  const url = new URL(baseUrl);
+  url.searchParams.set("itemPath", rootPath);
+  url.searchParams.set("isShallow", "false");
+  url.searchParams.set("includeDownloadTickets", "false");
+  url.searchParams.set("api-version", "7.0-preview.4");
+
+  const data = await tfsGetAbsoluteJson(url.toString(), {
+    cacheKey: `container:${containerId}:${rootPath}`,
+    cacheTtlMs: 60_000,
+    authAlias,
+  });
+
+  return (data?.value ?? data?.items ?? [])
+    .filter((item) => item?.itemType !== "folder")
+    .map((item) => ({
+      path: String(item.path ?? item.itemPath ?? ""),
+      contentLength: Number(item.contentLength ?? item.fileLength ?? 0),
+      lastModified: item.dateLastModified ?? item.lastModified ?? null,
+    }))
+    .sort((a, b) => a.path.localeCompare(b.path));
+}
+
+function normalizeArtifactPath(path, rootPath) {
+  const normalized = String(path ?? "").replace(/\\/g, "/");
+  const root = `/${String(rootPath ?? "").replace(/\\/g, "/").replace(/^\/+/, "")}`;
+  return normalized.startsWith(root) ? normalized.slice(root.length).replace(/^\//, "") : normalized.replace(/^\//, "");
+}
+
+function summarizeInventory(files, rootPath) {
+  const normalizedFiles = files.map((file) => ({
+    ...file,
+    relativePath: normalizeArtifactPath(file.path, rootPath),
+  }));
+  return {
+    totalFiles: normalizedFiles.length,
+    totalBytes: normalizedFiles.reduce((sum, file) => sum + (file.contentLength || 0), 0),
+    files: normalizedFiles,
+  };
+}
+
+export async function toolBuildArtifactInventory(args) {
+  const { build_id, artifact_name } = z
+    .object({
+      build_id: z.union([z.number(), z.string()]),
+      artifact_name: z.string().optional(),
+    })
+    .parse(args);
+
+  const authAlias = args?.auth_alias;
+  const buildId = Number(build_id);
+  const artifactsData = await getBuildArtifacts(buildId, authAlias);
+  const artifacts = artifactsData.value ?? [];
+  const selected = artifact_name
+    ? artifacts.filter((artifact) => artifact.name?.toLowerCase() === artifact_name.toLowerCase())
+    : artifacts;
+
+  const inventories = [];
+  for (const artifact of selected) {
+    const parsed = parseContainerResource(artifact.resource);
+    if (!parsed) {
+      inventories.push({
+        name: artifact.name,
+        type: artifact.resource?.type ?? null,
+        inventorySupported: false,
+      });
+      continue;
+    }
+    const files = await listContainerItems(parsed.containerId, parsed.rootPath, authAlias);
+    inventories.push({
+      name: artifact.name,
+      type: artifact.resource?.type ?? null,
+      containerId: parsed.containerId,
+      rootPath: parsed.rootPath,
+      downloadUrl: artifact.resource?.downloadUrl ?? null,
+      inventorySupported: true,
+      ...summarizeInventory(files, parsed.rootPath),
+    });
+  }
+
+  return {
+    buildId,
+    artifactCount: artifacts.length,
+    artifacts: inventories,
+  };
+}
+
+export async function toolCompareBuildArtifacts(args) {
+  const { old_build_id, new_build_id, artifact_name } = z
+    .object({
+      old_build_id: z.union([z.number(), z.string()]),
+      new_build_id: z.union([z.number(), z.string()]),
+      artifact_name: z.string().optional(),
+    })
+    .parse(args);
+
+  const authAlias = args?.auth_alias;
+  const [oldInv, newInv] = await Promise.all([
+    toolBuildArtifactInventory({ build_id: old_build_id, artifact_name, auth_alias: authAlias }),
+    toolBuildArtifactInventory({ build_id: new_build_id, artifact_name, auth_alias: authAlias }),
+  ]);
+
+  const oldArtifacts = new Map((oldInv.artifacts ?? []).map((artifact) => [artifact.name, artifact]));
+  const newArtifacts = new Map((newInv.artifacts ?? []).map((artifact) => [artifact.name, artifact]));
+  const artifactNames = [...new Set([...oldArtifacts.keys(), ...newArtifacts.keys()])].sort();
+
+  const artifacts = artifactNames.map((name) => {
+    const before = oldArtifacts.get(name) ?? null;
+    const after = newArtifacts.get(name) ?? null;
+    const beforeFiles = new Set((before?.files ?? []).map((file) => file.relativePath));
+    const afterFiles = new Set((after?.files ?? []).map((file) => file.relativePath));
+    const addedFiles = [...afterFiles].filter((file) => !beforeFiles.has(file)).sort();
+    const removedFiles = [...beforeFiles].filter((file) => !afterFiles.has(file)).sort();
+    return {
+      name,
+      oldTotalFiles: before?.totalFiles ?? 0,
+      newTotalFiles: after?.totalFiles ?? 0,
+      oldTotalBytes: before?.totalBytes ?? 0,
+      newTotalBytes: after?.totalBytes ?? 0,
+      addedFiles,
+      removedFiles,
+    };
+  });
+
+  return {
+    oldBuildId: Number(old_build_id),
+    newBuildId: Number(new_build_id),
+    artifactName: artifact_name ?? null,
+    artifacts,
+  };
 }
 
 // ─── Repos ─────────────────────────────────────────────────────────────────

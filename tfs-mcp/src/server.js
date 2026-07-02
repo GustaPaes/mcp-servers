@@ -53,6 +53,8 @@ import {
   toolWiki,
   toolPipelineStatus,
   toolListRepos,
+  toolBuildArtifactInventory,
+  toolCompareBuildArtifacts,
 } from "./tools/infra.js";
 import { toolSpecialistReview } from "./tools/specialist.js";
 import { runWithRequestContext } from "./request-context.js";
@@ -543,6 +545,33 @@ const TOOL_DEFS = [
     description: "Lista todos os repositorios do projeto configurado com branch default e URL.",
     inputSchema: { type: "object", properties: {} },
   },
+  {
+    name: "tfs_build_artifact_inventory",
+    title: "Build Artifact Inventory",
+    description: "Lista os artefatos de um build e, para artefatos do tipo Container, retorna o inventário de arquivos para comparação estrutural.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        build_id: { type: ["number", "string"] },
+        artifact_name: { type: "string", description: "Opcional: nome exato do artefato para filtrar" },
+      },
+      required: ["build_id"],
+    },
+  },
+  {
+    name: "tfs_compare_build_artifacts",
+    title: "Compare Build Artifacts",
+    description: "Compara inventário de artefatos entre dois builds para identificar arquivos adicionados/removidos e diferenças de volume.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        old_build_id: { type: ["number", "string"] },
+        new_build_id: { type: ["number", "string"] },
+        artifact_name: { type: "string", description: "Opcional: nome exato do artefato para comparar" },
+      },
+      required: ["old_build_id", "new_build_id"],
+    },
+  },
 ];
 
 export function getToolCount() {
@@ -576,6 +605,8 @@ const TOOL_HANDLERS = {
   tfs_comment_review_findings: (args) => toolCommentReviewFindings(args),
   tfs_sprint_info: (args) => toolSprintInfo(args),
   tfs_list_repos: (args) => toolListRepos(args),
+  tfs_build_artifact_inventory: (args) => toolBuildArtifactInventory(args),
+  tfs_compare_build_artifacts: (args) => toolCompareBuildArtifacts(args),
 };
 
 // ─── Server factory ────────────────────────────────────────────────────────
