@@ -97,6 +97,10 @@ export const TFS_DEFAULT_QUARTER = firstNonEmpty(
   process.env.TFS_DEFAULT_QUARTER,
   `${new Date().getFullYear()} Q${Math.floor(new Date().getMonth() / 3) + 1}`
 );
+export const TFS_ISSUE_ANALYSIS_FIELD = firstNonEmpty(process.env.TFS_ISSUE_ANALYSIS_FIELD);
+export const TFS_ISSUE_CORRECTION_AND_IMPACTS_FIELD = firstNonEmpty(
+  process.env.TFS_ISSUE_CORRECTION_AND_IMPACTS_FIELD
+);
 export const TFS_PAT_ALIASES = Object.freeze(
   Object.fromEntries(
     Object.entries(process.env)

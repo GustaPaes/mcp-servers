@@ -4,7 +4,14 @@
  */
 import { z } from "zod";
 import { tfsGet, tfsPost, tfsJsonPatch } from "../tfs-client.js";
-import { TFS_PROJECT, TFS_URL, TFS_COLLECTION, TFS_DEFAULT_QUARTER } from "../config.js";
+import {
+  TFS_PROJECT,
+  TFS_URL,
+  TFS_COLLECTION,
+  TFS_DEFAULT_QUARTER,
+  TFS_ISSUE_ANALYSIS_FIELD,
+  TFS_ISSUE_CORRECTION_AND_IMPACTS_FIELD,
+} from "../config.js";
 import { buildActivityTemplate, parseBusinessDescription } from "../activity-template.js";
 import { enrichActivityInputWithSpecialists } from "../specialists.js";
 import { getRequestContext } from "../request-context.js";
@@ -64,6 +71,55 @@ const UpdateArgs = z.object({
   requested_by: z.string().optional(),
   confirm_high_impact: z.string().optional(),
 });
+
+const IssueAnalysisArgs = z.object({
+  id: z.number().int().positive(),
+  development_analysis: z.string().trim().min(1),
+  correction_and_impacts: z.string().optional(),
+  dry_run: z.boolean().default(true),
+  confirm: z.boolean().optional(),
+  reason: z.string().optional(),
+  requestedBy: z.string().optional(),
+  requested_by: z.string().optional(),
+  confirm_high_impact: z.string().optional(),
+});
+
+export const ISSUE_ANALYSIS_FIELDS = Object.freeze({
+  developmentAnalysis: TFS_ISSUE_ANALYSIS_FIELD,
+  correctionAndImpacts: TFS_ISSUE_CORRECTION_AND_IMPACTS_FIELD,
+});
+
+export function buildIssueAnalysisPatch(
+  { developmentAnalysis, correctionAndImpacts },
+  fields = ISSUE_ANALYSIS_FIELDS
+) {
+  const analysis = String(developmentAnalysis ?? "").trim();
+  if (!analysis) throw new Error("development_analysis é obrigatório para registrar a análise da issue.");
+  if (!fields.developmentAnalysis)
+    throw new Error("Configure TFS_ISSUE_ANALYSIS_FIELD para usar a atualização de análise de Issue.");
+
+  const ops = [
+    {
+      op: "add",
+      path: `/fields/${fields.developmentAnalysis}`,
+      value: autoDecodeRichText(analysis),
+    },
+  ];
+
+  if (correctionAndImpacts !== undefined) {
+    if (!fields.correctionAndImpacts)
+      throw new Error(
+        "Configure TFS_ISSUE_CORRECTION_AND_IMPACTS_FIELD para preencher correction_and_impacts."
+      );
+    ops.push({
+      op: "add",
+      path: `/fields/${fields.correctionAndImpacts}`,
+      value: autoDecodeRichText(correctionAndImpacts),
+    });
+  }
+
+  return ops;
+}
 
 const CreateArgs = z.object({
   work_item_type: z.string().min(1),
@@ -536,6 +592,64 @@ export async function toolUpdateWorkItem(args) {
         state: f["System.State"],
         assignedTo: f["System.AssignedTo"]?.displayName,
         updated: ops.map((o) => o.path.replace("/fields/", "")),
+        url: wi._links?.html?.href,
+      };
+    },
+  });
+}
+
+export async function toolUpdateIssueAnalysis(args) {
+  const parsed = IssueAnalysisArgs.parse(args);
+  const { id, development_analysis, correction_and_impacts } = parsed;
+  const { workItem } = await fetchWorkItemFieldMap(id);
+  const workItemType = String(workItem.fields?.["System.WorkItemType"] ?? "").trim();
+
+  if (workItemType.toLowerCase() !== "issue")
+    throw new Error(`O item ${id} é do tipo '${workItemType || "desconhecido"}'. Esta tool aceita somente Issue.`);
+
+  const ops = buildIssueAnalysisPatch({
+    developmentAnalysis: development_analysis,
+    correctionAndImpacts: correction_and_impacts,
+  });
+  const formatted = formatWorkItem(workItem);
+  const controls = normalizeMutationControls(parsed);
+  const impact = detectHighImpact(
+    formatted.title,
+    formatted.area,
+    formatted.iteration,
+    formatted.tags,
+    ops.map((op) => op.value)
+  );
+  const context = getRequestContext();
+  const plan = buildMutationPlan({
+    tool: "tfs_update_issue_analysis",
+    target: {
+      id,
+      title: formatted.title,
+      state: formatted.state,
+      area: formatted.area,
+      iteration: formatted.iteration,
+      url: formatted.url,
+    },
+    operation: "update issue development analysis",
+    changes: summarizePatchOps(ops),
+    controls,
+    highImpact: impact.highImpact,
+    highImpactMatch: impact.match,
+    highImpactConfirmation: String(id),
+    authAlias: context.authAlias,
+  });
+
+  return executeGuardedMutation({
+    plan,
+    controls,
+    apply: async () => {
+      const wi = await tfsJsonPatch("PATCH", `/wit/workitems/${id}`, ops);
+      return {
+        id: wi.id,
+        title: wi.fields?.["System.Title"],
+        state: wi.fields?.["System.State"],
+        updated: ops.map((op) => op.path.replace("/fields/", "")),
         url: wi._links?.html?.href,
       };
     },

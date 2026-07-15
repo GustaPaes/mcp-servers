@@ -23,6 +23,7 @@ import {
   toolWorkItemContext,
   toolQueryWorkItems,
   toolUpdateWorkItem,
+  toolUpdateIssueAnalysis,
   toolCreateWorkItem,
   toolGenerateActivityTemplate,
   toolGenerateActivityTemplateFromItems,
@@ -64,6 +65,7 @@ import { MutationControlsSchema } from "./safety.js";
 
 const MUTATING_TOOLS = new Set([
   "tfs_update_work_item",
+  "tfs_update_issue_analysis",
   "tfs_add_pr_comment",
   "tfs_comment_review_findings",
   "tfs_work_item_create",
@@ -488,6 +490,30 @@ const TOOL_DEFS = [
     },
   },
   {
+    name: "tfs_update_issue_analysis",
+    title: "Update Issue Analysis",
+    description:
+      "Registra a análise de desenvolvimento de uma Issue no campo configurado por TFS_ISSUE_ANALYSIS_FIELD, com padrão de linguagem voltado ao negócio. O campo de análise é obrigatório; correction_and_impacts é opcional e exige TFS_ISSUE_CORRECTION_AND_IMPACTS_FIELD. A tool só aceita work items do tipo Issue.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "number", description: "ID da Issue" },
+        development_analysis: {
+          type: "string",
+          description:
+            "Obrigatório. Texto/HTML rico com contexto, motivo confirmado, impacto para o usuário/negócio e limitações da evidência. Evite detalhes de implementação desnecessários.",
+        },
+        correction_and_impacts: {
+          type: "string",
+          description:
+            "Opcional. Texto/HTML rico com correção técnica proposta ou aplicada, impactos, validação e pendências. Requer TFS_ISSUE_CORRECTION_AND_IMPACTS_FIELD; quando omitido, o campo existente não é alterado.",
+        },
+        ...MutationControlsSchema,
+      },
+      required: ["id", "development_analysis"],
+    },
+  },
+  {
     name: "tfs_add_pr_comment",
     title: "Add Pull Request Comment",
     description:
@@ -601,6 +627,7 @@ const TOOL_HANDLERS = {
   tfs_pipeline_status: (args) => toolPipelineStatus(args),
   tfs_wiki: (args) => toolWiki(args),
   tfs_update_work_item: (args) => toolUpdateWorkItem(args),
+  tfs_update_issue_analysis: (args) => toolUpdateIssueAnalysis(args),
   tfs_add_pr_comment: (args) => toolAddPRComment(args),
   tfs_comment_review_findings: (args) => toolCommentReviewFindings(args),
   tfs_sprint_info: (args) => toolSprintInfo(args),

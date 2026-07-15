@@ -10,7 +10,7 @@ This MCP can read and mutate TFS / Azure DevOps Server state. Treat all calls as
 READ tools may be used without extra confirmation, but summarize sensitive results instead of pasting large private payloads.
 
 ### WRITE
-`tfs_work_item_create`, `tfs_update_work_item`, `tfs_add_pr_comment`, `tfs_comment_review_findings`.
+`tfs_work_item_create`, `tfs_update_work_item`, `tfs_update_issue_analysis`, `tfs_add_pr_comment`, `tfs_comment_review_findings`.
 
 WRITE tools are server-gated. They default to `dry_run:true` and return a mutation plan instead of changing TFS. To execute a real mutation, the call must include `dry_run:false`, `confirm:true`, `reason`, and `requestedBy`/`requested_by`.
 
@@ -24,4 +24,5 @@ For high-impact targets (production/release/main/master/hml/homolog patterns), t
 - Avoid posting duplicate PR comments; use the server deduplication flow where available.
 - Use `auth_alias` when the user names a specific PAT identity.
 - Do not change work item state, assignee, story points or acceptance criteria without explicit confirmation in the same turn.
+- For development analysis of an `Issue`, use `tfs_update_issue_analysis`. It requires `development_analysis`, accepts optional `correction_and_impacts`, and follows [`docs/issue-analysis.md`](./docs/issue-analysis.md).
 - Treat production/release branches as high impact and ask for confirmation before posting or changing related items.

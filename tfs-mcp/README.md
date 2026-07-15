@@ -169,6 +169,7 @@ See the [root README](../README.md#%EF%B8%8F-install-in-your-mcp-client) for rea
 ### Controlled mutation
 - `tfs_work_item_create` — create a work item; defaults to `dry_run:true`
 - `tfs_update_work_item` — change state, owner, comment, title, story points or rich text; defaults to `dry_run:true`
+- `tfs_update_issue_analysis` — write the required development analysis and optional correction/impact fields for an Issue; defaults to `dry_run:true`. See [`docs/issue-analysis.md`](./docs/issue-analysis.md).
 - `tfs_add_pr_comment` — add a PR comment; defaults to `dry_run:true`
 
 Real writes require `dry_run:false`, `confirm:true`, `reason` and `requestedBy`/`requested_by`. High-impact targets such as production/release/main/master/hml/homolog branches require the extra `confirm_high_impact` value returned by the dry-run mutation plan.
@@ -294,7 +295,8 @@ tfs-mcp/
     ├── specialist-routing.md
     ├── specialist-routing.pt-BR.md
     ├── work-items-map.md
-    └── writing-patterns.md
+    ├── writing-patterns.md
+    └── issue-analysis.md
 ```
 
 `scripts/sprint-archive/` holds historical ad-hoc scripts used during sprint cleanups (creation/update batches, wiki readers, etc.). The folder is gitignored — it lives on disk for personal reference but is not published.
@@ -305,7 +307,7 @@ tfs-mcp/
 
 - The `.env` file is gitignored. Use `.env.example` as the template.
 - PATs are sent over HTTPS to your TFS endpoint and never logged.
-- Mutating tools (`tfs_update_work_item`, `tfs_add_pr_comment`, `tfs_comment_review_findings`) require explicit input — there is no implicit batch-write.
+- Mutating tools (`tfs_update_work_item`, `tfs_update_issue_analysis`, `tfs_add_pr_comment`, `tfs_comment_review_findings`) require explicit input — there is no implicit batch-write.
 - `tfs_review_pr` and `tfs_comment_review_findings` default to `dry_run=true`.
 
 ---
