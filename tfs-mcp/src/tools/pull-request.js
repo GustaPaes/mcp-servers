@@ -2,7 +2,7 @@
  * tools/pull-request.js — PR tools: list, get, review, add comment, prepare PR review.
  */
 import { z } from "zod";
-import { tfsGet, tfsPost, buildHeaders } from "../tfs-client.js";
+import { tfsGet, tfsPost, tfsPatch, buildHeaders } from "../tfs-client.js";
 import {
   buildProjectUrl,
   getConfiguredRepositories,
@@ -403,6 +403,145 @@ export async function findWorkItemsLinkedToPR(prId, repo) {
 }
 
 // ─── PR tools ──────────────────────────────────────────────────────────────
+
+const ENGLISH_PR_TERMS_PATTERN = /\b(add|added|adding|change|changes|changing|create|created|creating|fix|fixed|fixing|improve|improved|improving|update|updated|updating|remove|removed|removing|refactor|refactored|chore|feature|bugfix|the|and|with|without|for|from|into|this|that|summary|validation|validations)\b/i;
+
+function assertPortugueseText(value, field) {
+  if (ENGLISH_PR_TERMS_PATTERN.test(value)) {
+    throw new Error(`O campo ${field} do Pull Request deve ser informado em portugues.`);
+  }
+}
+
+function formatPortugueseList(items, fallback) {
+  const normalized = (items ?? []).map((item) => String(item).trim()).filter(Boolean);
+  if (!normalized.length) return `- ${fallback}`;
+  return normalized.map((item) => `- ${item}`).join("\n");
+}
+
+function buildPortuguesePRDescription({ resumo, alteracoes, validacoes, work_item_ids }) {
+  const workItems = (work_item_ids ?? []).map((id) => String(id).trim()).filter(Boolean);
+  return [
+    "## Resumo",
+    resumo.trim(),
+    "",
+    "## Alteracoes realizadas",
+    formatPortugueseList(alteracoes, "Alteracoes descritas no resumo acima."),
+    "",
+    "## Validacoes realizadas",
+    formatPortugueseList(validacoes, "Validacoes nao informadas."),
+    "",
+    "## Itens relacionados",
+    workItems.length ? workItems.map((id) => `- #${id}`).join("\n") : "- Nenhum item informado.",
+  ].join("\n");
+}
+
+function parsePortuguesePRInput(args, { includeBranches }) {
+  const schema = z.object({
+    ...(includeBranches
+      ? {
+          source_branch: z.string().min(1),
+          target_branch: z.string().min(1),
+        }
+      : { id: z.union([z.number(), z.string()]) }),
+    repo: z.string().optional(),
+    titulo: z.string().min(8),
+    resumo: z.string().min(20),
+    alteracoes: z.array(z.string().min(1)).max(20).optional(),
+    validacoes: z.array(z.string().min(1)).max(20).optional(),
+    work_item_ids: z.array(z.union([z.number(), z.string()])).max(20).optional(),
+    dry_run: z.boolean().default(true),
+    confirm: z.boolean().optional(),
+    reason: z.string().optional(),
+    requestedBy: z.string().optional(),
+    requested_by: z.string().optional(),
+    confirm_high_impact: z.string().optional(),
+  });
+  const input = schema.parse(args);
+  assertPortugueseText(input.titulo, "titulo");
+  assertPortugueseText(input.resumo, "resumo");
+  for (const item of [...(input.alteracoes ?? []), ...(input.validacoes ?? [])]) {
+    assertPortugueseText(item, "conteudo");
+  }
+  return input;
+}
+
+export async function toolCreatePR(args) {
+  const input = parsePortuguesePRInput(args, { includeBranches: true });
+  const repository = resolveRepo(input.repo);
+  const sourceBranch = input.source_branch.replace(/^refs\/heads\//, "");
+  const targetBranch = input.target_branch.replace(/^refs\/heads\//, "");
+  const description = buildPortuguesePRDescription(input);
+  const controls = normalizeMutationControls(input);
+  const context = getRequestContext();
+  const impact = detectHighImpact(repository, sourceBranch, targetBranch);
+  const plan = buildMutationPlan({
+    tool: "tfs_create_pr",
+    target: { repository, sourceBranch, targetBranch },
+    operation: "create pull request",
+    changes: { title: input.titulo, description, workItemIds: input.work_item_ids ?? [] },
+    controls,
+    highImpact: impact.highImpact,
+    highImpactMatch: impact.match,
+    highImpactConfirmation: targetBranch,
+    authAlias: context.authAlias,
+    repo: repository,
+  });
+
+  return executeGuardedMutation({
+    plan,
+    controls,
+    apply: async () => {
+      const result = await tfsPost(`/git/repositories/${repository}/pullrequests`, {
+        sourceRefName: `refs/heads/${sourceBranch}`,
+        targetRefName: `refs/heads/${targetBranch}`,
+        title: input.titulo,
+        description,
+      });
+      return {
+        pullRequestId: result.pullRequestId,
+        title: result.title,
+        repository,
+        sourceBranch,
+        targetBranch,
+        url: `${buildProjectUrl(`/_git/${repository}/pullrequest/${result.pullRequestId}`)}`,
+      };
+    },
+  });
+}
+
+export async function toolUpdatePR(args) {
+  const input = parsePortuguesePRInput(args, { includeBranches: false });
+  const { repository, pr, parsedRef } = await resolvePullRequestTarget(input.id, input.repo);
+  const formattedPr = formatPR(pr);
+  const description = buildPortuguesePRDescription(input);
+  const controls = normalizeMutationControls(input);
+  const context = getRequestContext();
+  const impact = detectHighImpact(repository, formattedPr.sourceBranch, formattedPr.targetBranch);
+  const plan = buildMutationPlan({
+    tool: "tfs_update_pr",
+    target: { pullRequestId: parsedRef.id, repository, sourceBranch: formattedPr.sourceBranch, targetBranch: formattedPr.targetBranch },
+    operation: "update pull request metadata",
+    changes: { title: input.titulo, description, workItemIds: input.work_item_ids ?? [] },
+    controls,
+    highImpact: impact.highImpact,
+    highImpactMatch: impact.match,
+    highImpactConfirmation: String(parsedRef.id),
+    authAlias: context.authAlias,
+    repo: repository,
+  });
+
+  return executeGuardedMutation({
+    plan,
+    controls,
+    apply: async () => {
+      const result = await tfsPatch(`/git/repositories/${repository}/pullrequests/${parsedRef.id}`, {
+        title: input.titulo,
+        description,
+      });
+      return { pullRequestId: result.pullRequestId, title: result.title, description, url: `${buildProjectUrl(`/_git/${repository}/pullrequest/${result.pullRequestId}`)}` };
+    },
+  });
+}
 
 export async function toolListPRs(args) {
   const {

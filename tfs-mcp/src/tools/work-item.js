@@ -64,6 +64,7 @@ const UpdateArgs = z.object({
   story_points: z.number().positive().optional(),
   description: z.string().optional(),
   acceptance_criteria: z.string().optional(),
+  business_acceptance_criteria: z.string().optional(),
   dry_run: z.boolean().default(true),
   confirm: z.boolean().optional(),
   reason: z.string().optional(),
@@ -126,6 +127,7 @@ const CreateArgs = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
   acceptance_criteria: z.string().optional(),
+  business_acceptance_criteria: z.string().optional(),
   assigned_to: z.string().optional(),
   area_path: z.string().optional(),
   iteration_path: z.string().optional(),
@@ -133,6 +135,7 @@ const CreateArgs = z.object({
   priority: z.number().int().min(1).max(4).optional(),
   parent_id: z.number().int().positive().optional(),
   tags: z.string().optional(),
+  sprint_task_category: z.string().min(1).optional(),
   dry_run: z.boolean().default(true),
   confirm: z.boolean().optional(),
   reason: z.string().optional(),
@@ -196,6 +199,16 @@ function getTechnicalFieldName(fields = {}, preferredField) {
   if (preferredField === "example.DefinicoesTecnicas") return "example.DefinicoesTecnicas";
   if (fields["example.DefinicoesTecnicas"] !== undefined) return "example.DefinicoesTecnicas";
   return "Microsoft.VSTS.Common.AcceptanceCriteria";
+}
+
+function extractBusinessAcceptanceCriteria(description = "") {
+  const content = autoDecodeRichText(description);
+  const match = content.match(
+    /<b>\s*Critérios de Aceite de Negócio\s*:<\/b>\s*(?:<br\s*\/?\s*>)?\s*(<ul>[\s\S]*?<\/ul>)/i
+  );
+  return match
+    ? `<div><b>Critérios de Aceite de Negócio:</b></div><div>${match[1]}</div>`
+    : "";
 }
 
 function extractUsNumber(title = "") {
@@ -522,18 +535,39 @@ export async function toolQueryWorkItems(args) {
 
 export async function toolUpdateWorkItem(args) {
   const parsed = UpdateArgs.parse(args);
-  const { id, state, assigned_to, comment, title, story_points, description, acceptance_criteria } = parsed;
+  const {
+    id,
+    state,
+    assigned_to,
+    comment,
+    title,
+    story_points,
+    description,
+    acceptance_criteria,
+    business_acceptance_criteria,
+  } = parsed;
   const { workItem, businessField, technicalField } = await fetchWorkItemFieldMap(id);
   const ops = [];
   if (state) ops.push({ op: "add", path: "/fields/System.State", value: state });
   if (assigned_to) ops.push({ op: "add", path: "/fields/System.AssignedTo", value: assigned_to });
   if (title) ops.push({ op: "add", path: "/fields/System.Title", value: title });
-  if (description) ops.push({ op: "add", path: `/fields/${businessField}`, value: autoDecodeRichText(description) });
+  if (description) {
+    const value = autoDecodeRichText(description);
+    ops.push({ op: "add", path: "/fields/System.Description", value });
+    if (businessField !== "System.Description")
+      ops.push({ op: "add", path: `/fields/${businessField}`, value });
+  }
   if (acceptance_criteria)
     ops.push({
       op: "add",
       path: `/fields/${technicalField}`,
       value: autoDecodeRichText(acceptance_criteria),
+    });
+  if (business_acceptance_criteria)
+    ops.push({
+      op: "add",
+      path: "/fields/Microsoft.VSTS.Common.AcceptanceCriteria",
+      value: autoDecodeRichText(business_acceptance_criteria),
     });
   if (story_points)
     ops.push({
@@ -545,7 +579,7 @@ export async function toolUpdateWorkItem(args) {
 
   if (!ops.length)
     throw new Error(
-      "Nenhum campo para atualizar. Forneça state, assigned_to, comment, title, description, acceptance_criteria ou story_points."
+      "Nenhum campo para atualizar. Forneça state, assigned_to, comment, title, description, acceptance_criteria, business_acceptance_criteria ou story_points."
     );
 
   const formatted = formatWorkItem(workItem);
@@ -777,6 +811,7 @@ export async function toolCreateWorkItem(args) {
     title,
     description,
     acceptance_criteria,
+    business_acceptance_criteria,
     assigned_to,
     area_path,
     iteration_path,
@@ -784,6 +819,7 @@ export async function toolCreateWorkItem(args) {
     priority,
     parent_id,
     tags,
+    sprint_task_category,
   } = CreateArgs.parse(args);
 
   // Tipos da instalacao original que usam os campos customizados
@@ -798,13 +834,26 @@ export async function toolCreateWorkItem(args) {
     : "Microsoft.VSTS.Common.AcceptanceCriteria";
 
   const ops = [{ op: "add", path: "/fields/System.Title", value: title }];
-  if (description)
-    ops.push({ op: "add", path: `/fields/${businessField}`, value: autoDecodeRichText(description) });
+  if (description) {
+    const value = autoDecodeRichText(description);
+    ops.push({ op: "add", path: "/fields/System.Description", value });
+    if (businessField !== "System.Description")
+      ops.push({ op: "add", path: `/fields/${businessField}`, value });
+  }
   if (acceptance_criteria)
     ops.push({
       op: "add",
       path: `/fields/${technicalField}`,
       value: autoDecodeRichText(acceptance_criteria),
+    });
+  const businessAcceptance = business_acceptance_criteria
+    ? autoDecodeRichText(business_acceptance_criteria)
+    : extractBusinessAcceptanceCriteria(description);
+  if (businessAcceptance)
+    ops.push({
+      op: "add",
+      path: "/fields/Microsoft.VSTS.Common.AcceptanceCriteria",
+      value: businessAcceptance,
     });
   if (assigned_to)
     ops.push({ op: "add", path: "/fields/System.AssignedTo", value: assigned_to });
@@ -820,6 +869,14 @@ export async function toolCreateWorkItem(args) {
   if (priority)
     ops.push({ op: "add", path: "/fields/Microsoft.VSTS.Common.Priority", value: priority });
   if (tags) ops.push({ op: "add", path: "/fields/System.Tags", value: tags });
+
+  if (/sprint task/i.test(work_item_type)) {
+    ops.push({
+      op: "add",
+      path: "/fields/ExampleOrgigital.SprintTaskCategory",
+      value: sprint_task_category ?? "Montar Ambientes",
+    });
+  }
 
   // Defaults obrigatorios do template legado para User Story / Sprint Task.
   // O TFS rejeita criacao sem esses campos. Sao adicionados apenas se nao foram

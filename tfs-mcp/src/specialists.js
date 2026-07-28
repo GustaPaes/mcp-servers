@@ -147,6 +147,18 @@ function selectSpecialists(areas) {
 
 function buildRecommendations({ specialists, context, critical, fileSummary }) {
   const ids = new Set(specialists.map((s) => s.id));
+  const contextBlob = textBlob(
+    context.title,
+    context.workItemType,
+    context.description,
+    context.acceptanceCriteria,
+    context.technicalDependencies,
+    context.technicalAcceptanceCriteria,
+    context.affectedLocations,
+    context.tags
+  );
+  const isInfrastructureMigration =
+    /(azure|virtual machine|\bvm\b|aks|kubernetes|storage|infraestrutura|migra[cç][aã]o)/i.test(contextBlob);
   const businessWriting = [
     "Explicitar persona, necessidade, resultado esperado e limite de escopo.",
     "Separar valor de negócio de detalhes técnicos; detalhes técnicos ficam nos critérios técnicos.",
@@ -197,6 +209,11 @@ function buildRecommendations({ specialists, context, critical, fileSummary }) {
   }
   if (ids.has("observability")) {
     suggestedTechnicalCriteria.push("Deve definir logs, métricas, alertas ou consulta de diagnóstico para operação pós-release.");
+  }
+  if (isInfrastructureMigration) {
+    suggestedTechnicalCriteria.push(
+      "Deve preservar integralmente dados, discos, volumes, configurações, rede, identidades, permissões, extensões e integrações existentes; deve comprovar após a migração que todos os componentes permanecem operacionais e documentar rollback para qualquer divergência."
+    );
   }
 
   if (fileSummary.total >= 30) risks.push(`Alteração ampla (${fileSummary.total} arquivo(s)); considerar fatiamento ou revisão por áreas.`);

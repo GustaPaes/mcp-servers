@@ -33,6 +33,8 @@ import {
   toolListPRs,
   toolGetPR,
   toolReviewPR,
+  toolCreatePR,
+  toolUpdatePR,
   toolAddPRComment,
   toolCommentReviewFindings,
   toolPreparePRReview,
@@ -69,11 +71,14 @@ const MUTATING_TOOLS = new Set([
   "tfs_add_pr_comment",
   "tfs_comment_review_findings",
   "tfs_work_item_create",
+  "tfs_create_pr",
+  "tfs_update_pr",
 ]);
 const NON_IDEMPOTENT_TOOLS = new Set([
   "tfs_add_pr_comment",
   "tfs_comment_review_findings",
   "tfs_work_item_create",
+  "tfs_create_pr",
 ]);
 
 function withToolMetadata(tool) {
@@ -226,6 +231,11 @@ const TOOL_DEFS = [
           description:
             "HTML rico para criterios de aceite/tecnica. Mesmo padrao de description.",
         },
+        business_acceptance_criteria: {
+          type: "string",
+          description:
+            "HTML rico para criterios de aceite de negocio exibidos no campo padrao Acceptance Criteria. Se omitido, extrai o bloco de criterios de negocio da description.",
+        },
         assigned_to: { type: "string", description: "Nome ou email do responsavel" },
         area_path: { type: "string", description: "Area path (default: area do projeto)" },
         iteration_path: { type: "string", description: "Iteration path (default: iteracao atual)" },
@@ -233,6 +243,10 @@ const TOOL_DEFS = [
         priority: { type: "number", enum: [1, 2, 3, 4], description: "Prioridade: 1 (alta) a 4 (baixa)" },
         parent_id: { type: "number", description: "ID do work item pai para criar hierarquia" },
         tags: { type: "string", description: "Tags separadas por ponto-e-virgula" },
+        sprint_task_category: {
+          type: "string",
+          description: "Categoria obrigatoria para Sprint Task; padrao: Montar Ambientes",
+        },
         ...MutationControlsSchema,
       },
       required: ["work_item_type", "title"],
@@ -303,6 +317,47 @@ const TOOL_DEFS = [
         iteration_path: { type: "string" },
         top: { type: "number", default: 30 },
       },
+    },
+  },
+  {
+    name: "tfs_create_pr",
+    title: "Create Pull Request",
+    description:
+      "Cria Pull Request com titulo e descricao padronizados em portugues. A descricao e gerada com resumo, alteracoes, validacoes e itens relacionados.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        source_branch: { type: "string", description: "Branch de origem, sem refs/heads/." },
+        target_branch: { type: "string", description: "Branch de destino, sem refs/heads/." },
+        repo: { type: "string" },
+        titulo: { type: "string", description: "Titulo obrigatoriamente em portugues." },
+        resumo: { type: "string", description: "Resumo em portugues do objetivo e impacto da mudanca." },
+        alteracoes: { type: "array", items: { type: "string" } },
+        validacoes: { type: "array", items: { type: "string" } },
+        work_item_ids: { type: "array", items: { type: ["number", "string"] } },
+        ...MutationControlsSchema,
+      },
+      required: ["source_branch", "target_branch", "titulo", "resumo"],
+    },
+  },
+  {
+    name: "tfs_update_pr",
+    title: "Update Pull Request",
+    description:
+      "Atualiza titulo e descricao de um Pull Request ativo usando o padrao em portugues: resumo, alteracoes, validacoes e itens relacionados.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: ["number", "string"] },
+        repo: { type: "string" },
+        titulo: { type: "string", description: "Titulo obrigatoriamente em portugues." },
+        resumo: { type: "string", description: "Resumo em portugues do objetivo e impacto da mudanca." },
+        alteracoes: { type: "array", items: { type: "string" } },
+        validacoes: { type: "array", items: { type: "string" } },
+        work_item_ids: { type: "array", items: { type: ["number", "string"] } },
+        ...MutationControlsSchema,
+      },
+      required: ["id", "titulo", "resumo"],
     },
   },
   {
@@ -483,6 +538,11 @@ const TOOL_DEFS = [
           description:
             "HTML rico para o campo tecnico. Mesmo padrao de description.",
         },
+        business_acceptance_criteria: {
+          type: "string",
+          description:
+            "HTML rico para criterios de negocio exibidos no campo padrao Acceptance Criteria.",
+        },
         story_points: { type: "number" },
         ...MutationControlsSchema,
       },
@@ -616,6 +676,8 @@ const TOOL_HANDLERS = {
   tfs_generate_activity_template: (args) => toolGenerateActivityTemplate(args),
   tfs_generate_activity_template_from_items: (args) => toolGenerateActivityTemplateFromItems(args),
   tfs_query_work_items: (args) => toolQueryWorkItems(args),
+  tfs_create_pr: (args) => toolCreatePR(args),
+  tfs_update_pr: (args) => toolUpdatePR(args),
   tfs_list_prs: (args) => toolListPRs(args),
   tfs_prepare_pr_review: (args) => toolPreparePRReview(args),
   tfs_release_readiness: (args) => toolReleaseReadiness(args),
