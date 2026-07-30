@@ -44,7 +44,9 @@ jobs:
           cache-dependency-path: ${{ matrix.dir }}/package-lock.json
       - name: Install dependencies
         working-directory: ${{ matrix.dir }}
-        run: npm ci
+        # Each MCP is intentionally independently installable. Disabling the
+        # parent workspace makes npm honor that project's cross-platform lock.
+        run: npm ci --workspaces=false
       - name: Install Playwright browser
         if: matrix.install-browsers
         working-directory: ${{ matrix.dir }}
