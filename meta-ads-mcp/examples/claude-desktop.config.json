@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "meta-ads": {
+    "meta-ads-mcp": {
       "command": "node",
       "args": ["C:/Workspace/MCP Servers/meta-ads-mcp/dist/server.js"],
       "env": {

@@ -3,7 +3,7 @@
 
   "claude-desktop": {
     "mcpServers": {
-      "meta-ads": {
+      "meta-ads-mcp": {
         "command": "node",
         "args": ["C:/Workspace/MCP Servers/meta-ads-mcp/dist/server.js"],
         "env": {
@@ -24,7 +24,7 @@
   "opencode": {
     "$schema": "https://opencode.ai/config.json",
     "mcp": {
-      "meta-ads": {
+      "meta-ads-mcp": {
         "type": "local",
         "command": ["node", "C:/Workspace/MCP Servers/meta-ads-mcp/dist/server.js"],
         "enabled": true,
@@ -41,7 +41,7 @@
 
   "cline": {
     "mcpServers": {
-      "meta-ads": {
+      "meta-ads-mcp": {
         "type": "stdio",
         "command": "node",
         "args": ["C:/Workspace/MCP Servers/meta-ads-mcp/dist/server.js"],

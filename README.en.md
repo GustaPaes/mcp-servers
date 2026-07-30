@@ -54,6 +54,12 @@ mcp-servers/
 ├── README.pt-BR.md
 ├── LICENSE
 ├── .gitignore
+├── package.json
+├── packages/
+│   ├── config-kit/
+│   └── mcp-runtime/
+├── scripts/
+│   └── portfolio-doctor.mjs
 ├── config/
 │   └── opencode.example.json
 ├── azure-mcp/
@@ -88,15 +94,16 @@ git clone https://github.com/GustaPaes/mcp-servers.git
 cd mcp-servers
 ```
 
-Install only what you need:
+Install the collection from the root workspace:
 
 ```bash
-cd tfs-mcp && npm install && cd ..
-cd career-development-mcp && npm install && cd ..
-cd playwright-mcp && npm install && npm run build && cd ..
+npm install
+npm run validate
 ```
 
-For `azure-mcp`, there is no local install step because it uses `npx -y @azure/mcp@3.0.0-beta.30 server start`.
+You can still install and validate a single project from its own directory. For
+`azure-mcp`, there are no local dependencies: `scripts/start-server.ps1` reads
+the pinned release from `server-version.json` and starts the official package.
 
 For `oci-mcp`, follow [`oci-mcp/docs/01-installation.md`](./oci-mcp/docs/01-installation.md) because it combines Node, OCI CLI and Oracle's Python-based MCP servers.
 
@@ -112,6 +119,14 @@ cp oci-mcp/.env.example oci-mcp/.env
 
 Never commit real `.env` files. The root `.gitignore` and project `.gitignore` files ignore them.
 
+Use a project's `local-private/` directory for organization-specific adapters,
+runbooks, profiles, exports and configuration. Git ignores this directory.
+Committed examples must remain neutral and reproducible.
+
+Before publishing, run `npm run doctor`. The doctor inspects tracked and new
+non-ignored files and fails on secrets, personal paths or known internal
+identifiers.
+
 ## Install in OpenCode
 
 OpenCode reads MCP servers from `~/.config/opencode/opencode.json` on Linux/macOS and `%USERPROFILE%\.config\opencode\opencode.json` on Windows.
@@ -122,14 +137,14 @@ Use [`config/opencode.example.json`](./config/opencode.example.json) as a comple
 {
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
-    "playwright": {
+    "playwright-mcp": {
       "type": "local",
       "command": ["node", "C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"],
       "enabled": true
     },
-    "azure": {
+    "azure-mcp": {
       "type": "local",
-      "command": ["npx", "-y", "@azure/mcp@3.0.0-beta.30", "server", "start"],
+      "command": ["powershell", "-NoProfile", "-File", "C:/Workspace/MCP Servers/azure-mcp/scripts/start-server.ps1"],
       "enabled": true
     }
   }
@@ -143,8 +158,8 @@ Restart OpenCode after editing the config. It does not hot-reload MCP configurat
 Use `claude mcp add`:
 
 ```bash
-claude mcp add playwright node "C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"
-claude mcp add azure -- npx -y @azure/mcp@3.0.0-beta.30 server start
+claude mcp add playwright-mcp node "C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"
+claude mcp add azure-mcp -- powershell -NoProfile -File "C:/Workspace/MCP Servers/azure-mcp/scripts/start-server.ps1"
 claude mcp list
 ```
 
@@ -163,13 +178,13 @@ Edit `%APPDATA%\Claude\claude_desktop_config.json` on Windows or `~/Library/Appl
 ```json
 {
   "mcpServers": {
-    "playwright": {
+    "playwright-mcp": {
       "command": "node",
       "args": ["C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"]
     },
-    "azure": {
-      "command": "npx",
-      "args": ["-y", "@azure/mcp@3.0.0-beta.30", "server", "start"]
+    "azure-mcp": {
+      "command": "powershell",
+      "args": ["-NoProfile", "-File", "C:/Workspace/MCP Servers/azure-mcp/scripts/start-server.ps1"]
     }
   }
 }
@@ -184,7 +199,7 @@ Cursor and Cline use a shape similar to Claude Desktop. Example:
 ```json
 {
   "mcpServers": {
-    "playwright": {
+    "playwright-mcp": {
       "command": "node",
       "args": ["C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"]
     }
@@ -199,13 +214,13 @@ For Cline, add `"type": "stdio"`, `"disabled": false` and optionally `"timeout":
 Edit `~/.codex/config.toml`:
 
 ```toml
-[mcp_servers.playwright]
+[mcp_servers.playwright-mcp]
 command = "node"
 args = ["C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"]
 
-[mcp_servers.azure]
-command = "npx"
-args = ["-y", "@azure/mcp@3.0.0-beta.30", "server", "start"]
+[mcp_servers.azure-mcp]
+command = "powershell"
+args = ["-NoProfile", "-File", "C:/Workspace/MCP Servers/azure-mcp/scripts/start-server.ps1"]
 ```
 
 ## Install in Continue
@@ -214,7 +229,7 @@ Edit `~/.continue/config.yaml`:
 
 ```yaml
 mcpServers:
-  - name: playwright
+  - name: playwright-mcp
     command: node
     args:
       - "C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"
@@ -227,7 +242,7 @@ Add `.vscode/mcp.json` to your workspace:
 ```json
 {
   "servers": {
-    "playwright": {
+    "playwright-mcp": {
       "type": "stdio",
       "command": "node",
       "args": ["C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"]
@@ -275,6 +290,7 @@ Do not commit:
 - `dist` unless a project explicitly documents that it must be committed.
 - Runtime output (`output`, `logs`, HAR, videos, traces, screenshots, browser storage state).
 - Local-only sprint archives.
+- Anything under `local-private/`.
 
 ## Project Notes
 
@@ -288,7 +304,7 @@ A from-scratch TypeScript MCP for the Meta Marketing API. Multi-account by desig
 
 ### tfs-mcp
 
-This generic server targets TFS / Azure DevOps Server workflows: standard and custom work items, PRs, review, release readiness, wiki, delivery risk and automatic specialist routing. Required fields and rich-text mappings for organization-specific processes are configured with `TFS_WORK_ITEM_PROFILES_JSON` in the local `.env`; the committed source and examples remain neutral.
+This generic server targets TFS / Azure DevOps Server workflows: standard and custom work items, PRs, review, release readiness, wiki, delivery risk and automatic specialist routing. Organization-specific fields and rich-text mappings live in `local-private/config/tfs.json`, or environment variables; committed source and examples remain neutral.
 
 ### oci-mcp
 

@@ -9,12 +9,7 @@
       ],
       "enabled": false,
       "env": {
-        "TFS_URL": "https://tfs.example.com",
-        "TFS_COLLECTION": "YourCollection",
-        "TFS_PROJECT": "YourProject",
-        "TFS_REPOS": "repo-one,repo-two",
-        "TFS_WORK_ITEM_PROFILES_JSON": "{\"Continuous Improvement\":{\"businessField\":\"Custom.BusinessContext\",\"technicalField\":\"Custom.TechnicalDetails\",\"defaults\":{\"Custom.Portfolio\":\"Platform\",\"Custom.Quarter\":\"{{currentQuarter}}\"}}}",
-        "TFS_PAT": "replace-with-your-pat"
+        "TFS_MCP_CONFIG_FILE": "C:/Workspace/MCP Servers/tfs-mcp/local-private/config/tfs.json"
       }
     },
     "career-development-mcp": {
@@ -29,7 +24,7 @@
         "TFS_MCP_SERVER_DIR": "C:/Workspace/MCP Servers/tfs-mcp"
       }
     },
-    "playwright": {
+    "playwright-mcp": {
       "type": "local",
       "command": [
         "node",
@@ -40,21 +35,21 @@
         "PWMCP_DEFAULT_HEADLESS": "false",
         "PWMCP_DEFAULT_BROWSER": "chromium",
         "PWMCP_DEFAULT_CHANNEL": "chrome",
-        "PWMCP_STRICT": "true"
+        "PWMCP_STRICT": "true",
+        "PWMCP_ALLOWED_PROFILE_ROOTS": "C:/Workspace/MCP Servers/playwright-mcp/local-private/profiles"
       }
     },
-    "azure": {
+    "azure-mcp": {
       "type": "local",
       "command": [
-        "npx",
-        "-y",
-        "@azure/mcp@3.0.0-beta.30",
-        "server",
-        "start"
+        "powershell",
+        "-NoProfile",
+        "-File",
+        "C:/Workspace/MCP Servers/azure-mcp/scripts/start-server.ps1"
       ],
       "enabled": true
     },
-    "oci-extras": {
+    "oci-extras-mcp": {
       "type": "local",
       "command": [
         "node",
@@ -70,7 +65,7 @@
         "OCI_MCP_ALLOW_THIRD_PARTY_MUTATION": "false"
       }
     },
-    "meta-ads": {
+    "meta-ads-mcp": {
       "type": "local",
       "command": [
         "node",

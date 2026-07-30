@@ -20,8 +20,10 @@
   "scripts": {
     "start": "node index.js",
     "start:http": "node index.js --http",
+    "validate:contract": "node --test tests/server-contract.test.mjs",
     "validate:premium": "node validate-premium.mjs",
     "validate:live": "node validate-premium.mjs",
+    "validate:workflows:live": "node validate-premium.mjs",
     "test:unit": "node --test tests",
     "test:smoke": "node -e \"import('./src/server.js').then(() => console.log('server module ok'))\"",
     "test:http": "node smoke-http.mjs",
@@ -29,6 +31,8 @@
     "test": "node --test tests"
   },
   "dependencies": {
+    "@gustapaes/mcp-config-kit": "file:../packages/config-kit",
+    "@gustapaes/mcp-runtime": "file:../packages/mcp-runtime",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "dotenv": "^16.4.7",
     "pino": "^9.6.0",

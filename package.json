@@ -1,0 +1,28 @@
+{
+  "name": "mcp-servers-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Workspace for the reusable MCP servers in this repository.",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "packages/*",
+    "career-development-mcp",
+    "meta-ads-mcp",
+    "meta-ads-mcp/web-panel",
+    "oci-mcp/oci-extras-mcp",
+    "playwright-mcp",
+    "tfs-mcp"
+  ],
+  "scripts": {
+    "doctor": "node scripts/portfolio-doctor.mjs",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "audit:production": "npm audit --omit=dev --workspaces",
+    "validate": "npm run doctor && npm run lint && npm test && npm run typecheck && npm run build"
+  }
+}

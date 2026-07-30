@@ -1,7 +1,8 @@
 import { z } from "zod";
-import { pdiSchema } from "../models/pdi.js";
+import { checkpointSchema, developmentAreaSchema, pdiSchema } from "../models/pdi.js";
 import { profileSchema } from "../models/profile.js";
-import { loadProfile, listPdis, savePdi, listGoals, loadEvidenceLog } from "../storage.js";
+import { safeIdSchema } from "../models/common.js";
+import { getPdi, loadProfile, listPdis, savePdi, listGoals, loadEvidenceLog, withStorageMutation } from "../storage.js";
 import { computePdiProgress } from "../analytics/progress-tracker.js";
 import { scorePdiQuality } from "../analytics/pdi-scoring.js";
 
@@ -34,7 +35,7 @@ export async function toolPdiList() {
 }
 
 export async function toolPdiGet(args) {
-  const { id } = z.object({ id: z.string().min(1) }).parse(args);
+  const { id } = z.object({ id: safeIdSchema }).parse(args);
   const [pdis, goals, evidenceLog] = await Promise.all([listPdis(), listGoals(), loadEvidenceLog()]);
   const pdi = pdis.find((item) => item.id === id);
   if (!pdi) throw new Error(`PDI nao encontrado: ${id}`);
@@ -62,7 +63,7 @@ export async function toolPdiGet(args) {
 }
 
 export async function toolPdiAnalyze(args) {
-  const { id } = z.object({ id: z.string().min(1) }).parse(args);
+  const { id } = z.object({ id: safeIdSchema }).parse(args);
   const [pdis, goals, evidenceLog] = await Promise.all([listPdis(), listGoals(), loadEvidenceLog()]);
   const pdi = pdis.find((item) => item.id === id);
   if (!pdi) throw new Error(`PDI nao encontrado: ${id}`);
@@ -79,60 +80,65 @@ export async function toolPdiCreate(args) {
     end: z.string(),
     strengths: z.array(z.string()).default([]),
     tags: z.array(z.string()).default([]),
-    developmentAreas: z.array(z.any()).default([]),
+    developmentAreas: z.array(developmentAreaSchema).default([]),
   }).parse(args);
 
-  const profile = profileSchema.parse(await loadProfile());
-  const id = `pdi-${slugify(input.title)}-${input.start}`;
-  const timestamp = nowIso();
-  const pdi = pdiSchema.parse({
-    id,
-    title: input.title,
-    status: "draft",
-    currentRole: input.currentRole ?? profile.currentRole,
-    targetRole: input.targetRole ?? profile.targetRole,
-    vision: input.vision,
-    strengths: input.strengths,
-    tags: input.tags,
-    goals: [],
-    period: { start: input.start, end: input.end },
-    developmentAreas: input.developmentAreas,
-    checkpoints: [],
-    createdAt: timestamp,
-    updatedAt: timestamp,
+  return withStorageMutation(async () => {
+    const profile = profileSchema.parse(await loadProfile());
+    const baseId = `pdi-${slugify(input.title)}-${input.start}`;
+    const id = (await getPdi(baseId)) ? `${baseId}-${Date.now()}` : baseId;
+    const timestamp = nowIso();
+    const pdi = pdiSchema.parse({
+      id,
+      title: input.title,
+      status: "draft",
+      currentRole: input.currentRole ?? profile.currentRole,
+      targetRole: input.targetRole ?? profile.targetRole,
+      vision: input.vision,
+      strengths: input.strengths,
+      tags: input.tags,
+      goals: [],
+      period: { start: input.start, end: input.end },
+      developmentAreas: input.developmentAreas,
+      checkpoints: [],
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
+    await savePdi(pdi);
+    return pdi;
   });
-  await savePdi(pdi);
-  return pdi;
 }
 
 export async function toolPdiUpdate(args) {
   const input = z.object({
-    id: z.string().min(1),
+    id: safeIdSchema,
     status: z.enum(["draft", "active", "review", "completed", "archived"]).optional(),
     vision: z.string().optional(),
     tags: z.array(z.string()).optional(),
     strengths: z.array(z.string()).optional(),
-    developmentAreas: z.array(z.any()).optional(),
-    checkpoints: z.array(z.any()).optional(),
+    developmentAreas: z.array(developmentAreaSchema).optional(),
+    checkpoints: z.array(checkpointSchema).optional(),
   }).parse(args);
 
-  const current = await toolPdiGet({ id: input.id });
-  const updated = pdiSchema.parse({
-    ...current.pdi,
-    ...(input.status ? { status: input.status } : {}),
-    ...(input.vision ? { vision: input.vision } : {}),
-    ...(input.tags ? { tags: input.tags } : {}),
-    ...(input.strengths ? { strengths: input.strengths } : {}),
-    ...(input.developmentAreas ? { developmentAreas: input.developmentAreas } : {}),
-    ...(input.checkpoints ? { checkpoints: input.checkpoints } : {}),
-    updatedAt: nowIso(),
+  return withStorageMutation(async () => {
+    const current = await toolPdiGet({ id: input.id });
+    const updated = pdiSchema.parse({
+      ...current.pdi,
+      ...(input.status ? { status: input.status } : {}),
+      ...(input.vision ? { vision: input.vision } : {}),
+      ...(input.tags ? { tags: input.tags } : {}),
+      ...(input.strengths ? { strengths: input.strengths } : {}),
+      ...(input.developmentAreas ? { developmentAreas: input.developmentAreas } : {}),
+      ...(input.checkpoints ? { checkpoints: input.checkpoints } : {}),
+      updatedAt: nowIso(),
+    });
+    await savePdi(updated);
+    return updated;
   });
-  await savePdi(updated);
-  return updated;
 }
 
 export async function toolPdiSnapshot(args) {
-  const { id, label = "manual" } = z.object({ id: z.string().min(1), label: z.string().default("manual") }).parse(args);
+  const { id, label = "manual" } = z.object({ id: safeIdSchema, label: z.string().default("manual") }).parse(args);
   const detail = await toolPdiGet({ id });
   return {
     id: `${id}-${new Date().toISOString().slice(0, 10)}-${slugify(label)}`,

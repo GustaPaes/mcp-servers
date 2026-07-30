@@ -5,6 +5,8 @@ import { sessionManager } from "../session-manager.js";
 import type { ToolModule } from "../types.js";
 import type { Route, Request as PWRequest } from "playwright";
 import { outputPath, timestamp } from "../output-dir.js";
+import { redactHeaders, redactTextPayload } from "@gustapaes/mcp-runtime";
+import { config } from "../config.js";
 
 interface ActiveRoute {
   pattern: string;
@@ -88,6 +90,13 @@ export const networkTools: ToolModule = {
           page_id: { type: "string" },
           url_pattern: { type: "string" },
           timeout_ms: { type: "number" },
+          reveal_sensitive: { type: "boolean", default: false },
+          post_data_max_bytes: {
+            type: "number",
+            minimum: 0,
+            maximum: config.maxNetworkBodyBytes,
+            default: 8192,
+          },
         },
       },
     },
@@ -104,7 +113,13 @@ export const networkTools: ToolModule = {
           url_pattern: { type: "string" },
           timeout_ms: { type: "number" },
           include_body: { type: "boolean", default: false },
-          body_max_bytes: { type: "number", default: 8192 },
+          body_max_bytes: {
+            type: "number",
+            minimum: 0,
+            maximum: config.maxNetworkBodyBytes,
+            default: 8192,
+          },
+          reveal_sensitive: { type: "boolean", default: false },
         },
       },
     },
@@ -221,12 +236,21 @@ export const networkTools: ToolModule = {
       const req = await rec.page.waitForRequest(matcher, {
         timeout: args.timeout_ms as number | undefined,
       });
+      const revealSensitive = args.reveal_sensitive === true;
+      if (revealSensitive && !config.allowSecretReveal) {
+        throw new Error("Sensitive network data reveal is disabled by PWMCP_ALLOW_SECRET_REVEAL.");
+      }
+      const rawPostData = req.postData();
+      const requestedMax = (args.post_data_max_bytes as number | undefined) ?? 8192;
+      const max = Math.min(Math.max(requestedMax, 0), config.maxNetworkBodyBytes);
+      const postData = rawPostData?.slice(0, max) ?? null;
       return {
         url: req.url(),
         method: req.method(),
         resource_type: req.resourceType(),
-        headers: req.headers(),
-        post_data: req.postData(),
+        headers: revealSensitive ? req.headers() : redactHeaders(req.headers()),
+        post_data: revealSensitive ? postData : redactTextPayload(postData),
+        post_data_truncated: Boolean(rawPostData && rawPostData.length > max),
       };
     },
     async page_wait_for_response(args) {
@@ -235,17 +259,23 @@ export const networkTools: ToolModule = {
       const resp = await rec.page.waitForResponse(matcher, {
         timeout: args.timeout_ms as number | undefined,
       });
+      const revealSensitive = args.reveal_sensitive === true;
+      if (revealSensitive && !config.allowSecretReveal) {
+        throw new Error("Sensitive network data reveal is disabled by PWMCP_ALLOW_SECRET_REVEAL.");
+      }
       const out: Record<string, unknown> = {
         url: resp.url(),
         status: resp.status(),
         ok: resp.ok(),
-        headers: resp.headers(),
+        headers: revealSensitive ? resp.headers() : redactHeaders(resp.headers()),
       };
       if (args.include_body) {
-        const max = (args.body_max_bytes as number | undefined) ?? 8192;
+        const requestedMax = (args.body_max_bytes as number | undefined) ?? 8192;
+        const max = Math.min(Math.max(requestedMax, 0), config.maxNetworkBodyBytes);
         try {
           const buf = await resp.body();
-          out.body = buf.subarray(0, max).toString("utf8");
+          const body = buf.subarray(0, max).toString("utf8");
+          out.body = revealSensitive ? body : redactTextPayload(body);
           out.body_truncated = buf.byteLength > max;
           out.body_total_bytes = buf.byteLength;
         } catch (err) {

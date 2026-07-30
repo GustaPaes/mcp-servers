@@ -68,7 +68,13 @@ PWMCP_DEFAULT_TIMEZONE=America/Sao_Paulo
 PWMCP_MAX_SESSIONS=5
 PWMCP_SESSION_TTL_MINUTES=30
 PWMCP_OUTPUT_DIR=                       # defaults to <repo>/output
-PWMCP_STRICT=false
+PWMCP_MAX_ARTIFACT_BYTES=2000000        # large screenshots stay on disk instead of inline base64
+PWMCP_MAX_NETWORK_BODY_BYTES=65536      # cap network bodies returned to the MCP client
+PWMCP_STRICT=true
+PWMCP_ALLOW_SECRET_REVEAL=false         # headers, cookies and bodies stay redacted
+PWMCP_ALLOW_BROWSER_INSTALL=false       # opt in before browser_install may change the host
+PWMCP_ALLOWED_FILE_ROOTS=               # path-delimited upload roots
+PWMCP_ALLOWED_PROFILE_ROOTS=            # defaults to ./local-private/profiles
 PWMCP_EVAL_TIMEOUT_MS=5000
 PWMCP_ACTION_TIMEOUT_MS=10000
 PWMCP_NAVIGATION_TIMEOUT_MS=30000
@@ -83,7 +89,7 @@ Minimal Claude Desktop snippet (`%APPDATA%\Claude\claude_desktop_config.json`):
 ```json
 {
   "mcpServers": {
-    "playwright": {
+    "playwright-mcp": {
       "command": "node",
       "args": ["C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"],
       "env": { "PWMCP_DEFAULT_CHANNEL": "chrome" }
@@ -98,7 +104,7 @@ OpenCode (`~/.config/opencode/opencode.json`):
 {
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
-    "playwright": {
+    "playwright-mcp": {
       "type": "local",
       "command": ["node", "C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"],
       "enabled": true
@@ -132,8 +138,9 @@ All tools follow `<domain>_<verb>_<resource>` naming. Most accept an optional `p
 | `browser_list` | List active sessions with idle time. |
 | `context_new` | Open a new isolated `BrowserContext` inside a session (parallel logged-in users). |
 | `context_close` | Close a single `BrowserContext`. |
-| `context_storage_state` | Save (`mode=save`) or load (`mode=load`) cookies + localStorage of a context. |
-| `browser_install` | Run `npx playwright install <browser>` and return the log. |
+| `context_storage_state` | Save (`mode=save`) or load (`mode=load`) cookies + localStorage inside allowed roots. |
+| `context_recording_status` | Report HAR/video settings and completed artifact paths for a context. |
+| `browser_install` | Run `npx playwright install <browser>` only after explicit host-level opt-in. |
 
 ### Pages / navigation
 
@@ -178,7 +185,7 @@ All tools follow `<domain>_<verb>_<resource>` naming. Most accept an optional `p
 
 | Tool | Purpose |
 |------|---------|
-| `page_screenshot` | PNG/JPEG, full-page or clipped, optional base64. Saved under `./output/screenshots/`. |
+| `page_screenshot` | PNG/JPEG, full-page or clipped, optional size-capped base64. Saved under `./output/screenshots/`. |
 | `page_pdf` | Chromium PDF rendering. Saved under `./output/pdf/`. |
 | `page_video_start` / `page_video_stop` | Video (must enable `record_video` on `context_new`). |
 | `tracing_start` / `tracing_stop` | Playwright `trace.zip` — open at https://trace.playwright.dev/. |
@@ -189,7 +196,7 @@ All tools follow `<domain>_<verb>_<resource>` naming. Most accept an optional `p
 |------|---------|
 | `page_route` | Intercept requests by glob or `/regex/`. Action: `abort` / `fulfill` / `continue` (with overrides). |
 | `page_unroute` | Remove one route or all of them. |
-| `page_wait_for_request` / `page_wait_for_response` | Wait for a specific call (optionally include body). |
+| `page_wait_for_request` / `page_wait_for_response` | Wait for a specific call; sensitive headers and bodies are redacted by default and size-capped. |
 | `network_log_start` / `network_log_stop` | HAR — enable via `record_har` on `context_new`; close the context to flush. |
 
 ### Advanced
@@ -211,7 +218,7 @@ All tools follow `<domain>_<verb>_<resource>` naming. Most accept an optional `p
 
 2. **Persisted login**
 
-   > Launch chromium with `user_data_dir=./.profiles/portal-x`, go to `https://portal.example.com/login`, fill the form (username `me@x.com`, password from this prompt), wait for `**/dashboard`, then save the storage state.
+   > Launch chromium with `user_data_dir=./local-private/profiles/portal-x`, go to `https://portal.example.com/login`, fill the form (username `user@example.com`, password from this prompt), wait for `**/dashboard`, then save the storage state.
 
 3. **Capture network of an SPA**
 
@@ -254,7 +261,8 @@ playwright-mcp/
 │       ├── network.ts       # route/unroute/wait_for_*/HAR
 │       └── advanced.ts      # eval_in_frame/handle_dialog/stealth/mcp_status
 ├── tests/
-│   └── smoke.test.ts
+│   ├── smoke.test.ts
+│   └── security.test.ts
 ├── output/                  # generated artifacts
 └── logs/
 ```
@@ -270,6 +278,8 @@ playwright-mcp/
 - **HAR / video are context-level features in Playwright.** You must enable them on `context_new`. The `network_log_start` / `page_video_start` tools just report status for an already-recording context.
 - **No remote CDP attach** in v1 (`--cdp-endpoint` of MS MCP). Backlog.
 - **Persistent sessions can't host extra contexts** (Playwright limitation): a `user_data_dir` launch returns a single persistent context which IS the only context for that session.
+- Persistent profiles are confined to `PWMCP_ALLOWED_PROFILE_ROOTS`; use the ignored `local-private/profiles/` directory for real logins.
+- Network headers, post data, response bodies and cookie values are redacted by default. Enable `PWMCP_ALLOW_SECRET_REVEAL` only temporarily for a trusted local client.
 
 ## Troubleshooting
 

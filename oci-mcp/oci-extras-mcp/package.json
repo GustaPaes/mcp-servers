@@ -12,12 +12,13 @@
   "scripts": {
     "start": "node index.js",
     "start:http": "node index.js --http",
-    "test": "node tests/auth-resolver.test.mjs && node tests/smoke-http.mjs",
+    "test": "node tests/auth-resolver.test.mjs && node tests/smoke-stdio.mjs && node tests/smoke-http.mjs",
     "test:http": "node tests/smoke-http.mjs",
     "test:auth": "node tests/auth-resolver.test.mjs",
-    "lint": "node --check index.js && node --check src/server.js && node --check src/http.js"
+    "lint": "node tests/check-syntax.mjs"
   },
   "dependencies": {
+    "@gustapaes/mcp-runtime": "file:../../packages/mcp-runtime",
     "@kubernetes/client-node": "^1.0.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "dotenv": "^16.4.7",

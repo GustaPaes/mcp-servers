@@ -7,6 +7,7 @@ import {
   CAREER_READINESS_OUTPUT_SCHEMA,
   REVIEW_PREPARE_OUTPUT_SCHEMA,
   GOAL_PROGRESS_OUTPUT_SCHEMA,
+  DEVELOPMENT_AREA_SCHEMA,
 } from "../schemas.js";
 import { SERVER_NAME, SERVER_VERSION } from "./config.js";
 import { ensureStorageReady, saveSnapshot } from "./storage.js";
@@ -17,6 +18,9 @@ import { toolEvidenceAdd, toolEvidenceFromTfs, toolEvidenceList, toolEvidenceRep
 import { toolCareerReadiness, toolCareerRoadmap } from "./tools/career.js";
 import { toolReviewPrepare, toolReviewSelfAssessment } from "./tools/review.js";
 import { toolOnlineReviewSuggestions, toolOnlineStateGet } from "./tools/online.js";
+import { toolSnapshotImport, toolSnapshotValidate } from "./tools/snapshots.js";
+import { toolDailyBrief } from "./tools/daily.js";
+import { toolCareerDoctor } from "./tools/doctor.js";
 
 const MUTATING_TOOLS = new Set([
   "guide_pdi_create",
@@ -27,6 +31,7 @@ const MUTATING_TOOLS = new Set([
   "guide_competency_assess",
   "guide_evidence_add",
   "guide_evidence_from_tfs",
+  "guide_snapshot_import",
 ]);
 
 function withToolMetadata(tool) {
@@ -54,7 +59,127 @@ function formatToolResult(result) {
   return payload;
 }
 
+const CHECKPOINT_INPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    date: { type: "string" },
+    status: { type: "string", enum: ["scheduled", "completed"] },
+    notes: { type: "string" },
+    adjustments: { type: "array", items: { type: "string" } },
+  },
+  required: ["date", "status"],
+};
+
+const MILESTONE_INPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    title: { type: "string" },
+    dueDate: { type: ["string", "null"] },
+    completed: { type: "boolean" },
+  },
+  required: ["title"],
+};
+
+const SMART_INPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    specific: { type: "string" },
+    measurable: { type: "string" },
+    achievable: { type: "string" },
+    relevant: { type: "string" },
+    timeBound: { type: "string" },
+  },
+};
+
+const EXTERNAL_SNAPSHOT_INPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    schemaVersion: { const: 1 },
+    capturedAt: { type: "string" },
+    url: { type: "string" },
+    pageTitle: { type: "string" },
+    visiblePlanCards: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          sourceId: { type: ["string", "number"] },
+          title: { type: "string" },
+          status: { type: "string" },
+          progressPct: { type: "number", minimum: 0, maximum: 100 },
+          period: { type: "string" },
+          summary: { type: "string" },
+        },
+        required: ["title"],
+      },
+    },
+    apiResponses: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          url: { type: "string" },
+          status: { type: "number" },
+          contentType: { type: "string" },
+          detectedKeys: { type: "array", items: { type: "string" } },
+        },
+        required: ["url", "status"],
+      },
+    },
+  },
+  required: ["schemaVersion", "capturedAt"],
+};
+
 const TOOL_DEFS = [
+  {
+    name: "guide_doctor",
+    title: "Career MCP Doctor",
+    description: "Valida armazenamento local, raízes de importação e disponibilidade da integração opcional com TFS sem expor caminhos privados.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "guide_daily_brief",
+    title: "Career Daily Brief",
+    description: "Consolida PDIs ativos, metas vencidas ou proximas, bloqueios, lacunas de evidencia e estado do ultimo snapshot externo.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        dueWithinDays: { type: "number", minimum: 1, maximum: 90, default: 14 },
+      },
+    },
+  },
+  {
+    name: "guide_snapshot_validate",
+    title: "Validate External Career Snapshot",
+    description: "Valida um snapshot neutro e sanitizado sem persistir dados. O arquivo deve estar dentro de CAREER_MCP_IMPORT_ROOTS.",
+    annotations: { openWorldHint: false },
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string" },
+        snapshot: EXTERNAL_SNAPSHOT_INPUT_SCHEMA,
+      },
+    },
+  },
+  {
+    name: "guide_snapshot_import",
+    title: "Import External Career Snapshot",
+    description: "Importa e persiste um snapshot sanitizado de uma plataforma externa usando o schema publico versionado.",
+    annotations: { openWorldHint: false },
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string" },
+        snapshot: EXTERNAL_SNAPSHOT_INPUT_SCHEMA,
+      },
+    },
+  },
   {
     name: "guide_online_state_get",
     title: "Get External Career State",
@@ -95,7 +220,7 @@ const TOOL_DEFS = [
         end: { type: "string" },
         strengths: { type: "array", items: { type: "string" } },
         tags: { type: "array", items: { type: "string" } },
-        developmentAreas: { type: "array", items: { type: "object" } },
+        developmentAreas: { type: "array", items: DEVELOPMENT_AREA_SCHEMA },
       },
       required: ["title", "vision", "start", "end"],
     },
@@ -112,8 +237,8 @@ const TOOL_DEFS = [
         vision: { type: "string" },
         tags: { type: "array", items: { type: "string" } },
         strengths: { type: "array", items: { type: "string" } },
-        developmentAreas: { type: "array", items: { type: "object" } },
-        checkpoints: { type: "array", items: { type: "object" } },
+        developmentAreas: { type: "array", items: DEVELOPMENT_AREA_SCHEMA },
+        checkpoints: { type: "array", items: CHECKPOINT_INPUT_SCHEMA },
       },
       required: ["id"],
     },
@@ -157,8 +282,8 @@ const TOOL_DEFS = [
         weight: { type: "number" },
         dueDate: { type: ["string", "null"] },
         linkedCompetencies: { type: "array", items: { type: "string" } },
-        smart: { type: "object" },
-        milestones: { type: "array", items: { type: "object" } },
+        smart: SMART_INPUT_SCHEMA,
+        milestones: { type: "array", items: MILESTONE_INPUT_SCHEMA },
         notes: { type: "array", items: { type: "string" } },
       },
       required: ["pdiId", "title", "category", "weight", "smart"],
@@ -176,9 +301,9 @@ const TOOL_DEFS = [
         progress: { type: "number" },
         status: { type: "string" },
         dueDate: { type: ["string", "null"] },
-        milestones: { type: "array", items: { type: "object" } },
+        milestones: { type: "array", items: MILESTONE_INPUT_SCHEMA },
         notes: { type: "array", items: { type: "string" } },
-        smart: { type: "object" },
+        smart: SMART_INPUT_SCHEMA,
       },
       required: ["id"],
     },
@@ -268,6 +393,11 @@ const TOOL_DEFS = [
         workItemId: { type: ["string", "number"] },
         linkedPdiIds: { type: "array", items: { type: "string" } },
         linkedGoalIds: { type: "array", items: { type: "string" } },
+        type: { type: "string" },
+        visibility: { type: "string" },
+        impact: { type: "string" },
+        tags: { type: "array", items: { type: "string" } },
+        dryRun: { type: "boolean", default: true },
       },
       required: ["workItemId"],
     },
@@ -301,6 +431,10 @@ const TOOL_DEFS = [
 ];
 
 const TOOL_HANDLERS = {
+  guide_doctor: () => toolCareerDoctor(),
+  guide_daily_brief: (args) => toolDailyBrief(args),
+  guide_snapshot_validate: (args) => toolSnapshotValidate(args),
+  guide_snapshot_import: (args) => toolSnapshotImport(args),
   guide_online_state_get: () => toolOnlineStateGet(),
   guide_online_review_suggestions: () => toolOnlineReviewSuggestions(),
   guide_pdi_list: () => toolPdiList(),

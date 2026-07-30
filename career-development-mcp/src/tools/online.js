@@ -73,7 +73,7 @@ export async function toolOnlineReviewSuggestions() {
       suggestions.push(`Revisar divergencia de progresso: online ${card.progressPct ?? 0}% vs base local ${progress.overall}%.`);
     }
     if (/seguranca/i.test(localPdi.title)) {
-      suggestions.push("Marcar como concluida a acao ligada ao gate de PR com base na US 12345, se ainda nao estiver refletido no sistema online.");
+      suggestions.push("Revisar se as evidencias ligadas a gates de qualidade e seguranca ja estao refletidas no sistema online.");
     }
     if (/hard skills/i.test(localPdi.title)) {
       suggestions.push("Detalhar acoes de hard skills em tarefas concluidas por entrega, evitando descricoes genericas.");

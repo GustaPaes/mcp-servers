@@ -30,7 +30,12 @@ npm run start:http           # HTTP Streamable on :3020
 Every write tool obeys:
 1. `dryRun` (default `true`)
 2. `confirm` (required for destructive)
-3. Ownership ledger (third-party resources need `humanAck` round-trip)
+3. Atomic ownership ledger (corruption fails closed; third-party resources need `humanAck` round-trip)
 4. Env flags: `OCI_MCP_ALLOW_DESTRUCTIVE`, `OCI_MCP_ALLOW_THIRD_PARTY_MUTATION`, `OCI_MCP_ALLOW_SECRET_REVEAL`
+
+The server declares MCP annotations from an explicit allowlist: the 51-tool
+contract marks every read-only operation as non-mutating and treats every other
+operation conservatively. `npm test` validates the complete tool catalog over
+both stdio and HTTP transports.
 
 See [../BEST_PRACTICES.md](../BEST_PRACTICES.md#3-safety-guards-built-into-oci-extras-mcp).

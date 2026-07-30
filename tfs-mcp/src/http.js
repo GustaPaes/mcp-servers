@@ -18,6 +18,16 @@ import { logger } from "./logger.js";
 
 // Session store: sessionId → { transport, expiresAt, timer }
 const sessions = new Map();
+let readinessCache = { expiresAt: 0, value: null };
+
+async function getReadiness() {
+  if (readinessCache.value && readinessCache.expiresAt > Date.now()) {
+    return readinessCache.value;
+  }
+  const value = await checkTfsConnectivity();
+  readinessCache = { value, expiresAt: Date.now() + 15_000 };
+  return value;
+}
 
 function isLoopback(host) {
   return ["127.0.0.1", "localhost", "::1"].includes(String(host ?? "").toLowerCase());
@@ -33,14 +43,21 @@ async function closeSession(sessionId) {
 }
 
 function registerSession(sessionId, transport, server) {
-  const timer = setTimeout(() => void closeSession(sessionId), MCP_HTTP_SESSION_TTL_MS);
-  timer.unref?.();
-  sessions.set(sessionId, {
+  const entry = {
     transport,
     server,
-    expiresAt: Date.now() + MCP_HTTP_SESSION_TTL_MS,
-    timer,
-  });
+    expiresAt: 0,
+    timer: undefined,
+  };
+  sessions.set(sessionId, entry);
+  touchSession(sessionId, entry);
+}
+
+function touchSession(sessionId, entry) {
+  clearTimeout(entry.timer);
+  entry.expiresAt = Date.now() + MCP_HTTP_SESSION_TTL_MS;
+  entry.timer = setTimeout(() => void closeSession(sessionId), MCP_HTTP_SESSION_TTL_MS);
+  entry.timer.unref?.();
 }
 
 export async function startHttpStreamable(port, host = MCP_HTTP_HOST) {
@@ -50,15 +67,15 @@ export async function startHttpStreamable(port, host = MCP_HTTP_HOST) {
 
   const httpServer = http.createServer(async (req, res) => {
     try {
-      // ── Health endpoint (unauthenticated) ───────────────────────────────
-      if ((req.url === "/health" || req.url === "/healthz") && req.method === "GET") {
-        const tfsHealth = await checkTfsConnectivity();
+      const urlPath = new URL(req.url ?? "/", `http://localhost:${port}`).pathname;
+
+      // ── Liveness endpoint (unauthenticated, no external I/O) ────────────
+      if ((urlPath === "/health" || urlPath === "/healthz") && req.method === "GET") {
         const body = JSON.stringify({
           status: "ok",
           transport: "streamable-http",
           endpoint: `http://${host}:${port}/mcp`,
           tools: getToolCount(),
-          tfs: { ok: tfsHealth.ok, latencyMs: tfsHealth.latencyMs },
           version: "2.1.0",
           activeSessions: sessions.size,
         });
@@ -78,8 +95,18 @@ export async function startHttpStreamable(port, host = MCP_HTTP_HOST) {
         }
       }
 
+      // ── Readiness endpoint (authenticated when a token is configured) ───
+      if (urlPath === "/readyz" && req.method === "GET") {
+        const tfsHealth = await getReadiness();
+        res.writeHead(tfsHealth.ok ? 200 : 503, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({
+          status: tfsHealth.ok ? "ready" : "not_ready",
+          tfs: { ok: tfsHealth.ok, latencyMs: tfsHealth.latencyMs },
+        }));
+        return;
+      }
+
       // ── MCP endpoint ────────────────────────────────────────────────────
-      const urlPath = new URL(req.url ?? "/", `http://localhost:${port}`).pathname;
       if (urlPath !== "/mcp") {
         res.writeHead(404, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "not_found" }));
@@ -130,6 +157,7 @@ export async function startHttpStreamable(port, host = MCP_HTTP_HOST) {
           res.end(JSON.stringify({ error: "session_expired" }));
           return;
         }
+        touchSession(sessionId, entry);
         transport = entry.transport;
       } else if (!sessionId && req.method === "POST" && parsedBody?.method === "initialize") {
         if (sessions.size >= MCP_HTTP_MAX_SESSIONS) {
@@ -178,7 +206,21 @@ export async function startHttpStreamable(port, host = MCP_HTTP_HOST) {
   });
 
   logger.info(
-    { host, port, endpoint: `http://${host}:${port}/mcp`, health: `http://${host}:${port}/healthz` },
+    {
+      host,
+      port,
+      endpoint: `http://${host}:${port}/mcp`,
+      health: `http://${host}:${port}/healthz`,
+      readiness: `http://${host}:${port}/readyz`,
+    },
     "MCP HTTP server started"
   );
+
+  const shutdown = async () => {
+    await Promise.allSettled([...sessions.keys()].map((sessionId) => closeSession(sessionId)));
+    await new Promise((resolve) => httpServer.close(() => resolve()));
+  };
+  process.once("SIGINT", () => void shutdown());
+  process.once("SIGTERM", () => void shutdown());
+  return httpServer;
 }

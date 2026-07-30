@@ -14,10 +14,14 @@
 
 [CmdletBinding()]
 param(
-    [string] $Version = "3.0.0-beta.30"
+    [string] $Version = ""
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot "azure-version.ps1")
+if ([string]::IsNullOrWhiteSpace($Version)) {
+    $Version = Get-AzureMcpVersion
+}
 
 function Write-Section($text) {
     Write-Host ""

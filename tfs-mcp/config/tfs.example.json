@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "connection": {
+    "url": "https://tfs.example.com",
+    "collection": "ExampleCollection",
+    "project": "ExampleProject",
+    "repositories": [
+      "example-repo"
+    ]
+  },
+  "defaults": {
+    "repository": "example-repo",
+    "authAlias": ""
+  },
+  "fields": {
+    "issueAnalysis": "Custom.DevelopmentAnalysis",
+    "issueCorrectionAndImpacts": "Custom.CorrectionAndImpacts"
+  },
+  "workItemProfiles": {
+    "User Story": {
+      "businessField": "System.Description",
+      "technicalField": "Microsoft.VSTS.Common.AcceptanceCriteria",
+      "defaults": {
+        "Custom.PlanningQuarter": "{{currentQuarter}}"
+      }
+    }
+  },
+  "savedQueries": {
+    "my_day": "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @Project AND [System.AssignedTo] = @Me AND [System.State] NOT IN ('Closed','Removed','Done') ORDER BY [Microsoft.VSTS.Common.Priority],[System.ChangedDate] DESC",
+    "my_sprint": "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @Project AND [System.IterationPath] = @CurrentIteration AND [System.AssignedTo] = @Me AND [System.State] <> 'Removed' ORDER BY [System.State],[Microsoft.VSTS.Common.Priority]"
+  }
+}

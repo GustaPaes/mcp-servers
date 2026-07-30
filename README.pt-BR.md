@@ -54,6 +54,12 @@ mcp-servers/
 ├── README.pt-BR.md
 ├── LICENSE
 ├── .gitignore
+├── package.json
+├── packages/
+│   ├── config-kit/
+│   └── mcp-runtime/
+├── scripts/
+│   └── portfolio-doctor.mjs
 ├── config/
 │   └── opencode.example.json
 ├── azure-mcp/
@@ -88,15 +94,16 @@ git clone https://github.com/GustaPaes/mcp-servers.git
 cd mcp-servers
 ```
 
-Instale apenas o que for usar:
+Instale a coleção pelo workspace raiz:
 
 ```bash
-cd tfs-mcp && npm install && cd ..
-cd career-development-mcp && npm install && cd ..
-cd playwright-mcp && npm install && npm run build && cd ..
+npm install
+npm run validate
 ```
 
-Para `azure-mcp`, nao ha instalacao local porque ele usa `npx -y @azure/mcp@3.0.0-beta.30 server start`.
+Também é possível instalar e validar apenas um projeto pela própria pasta. Para
+`azure-mcp`, não há dependências locais: `scripts/start-server.ps1` lê a versão
+fixada em `server-version.json` e inicia o pacote oficial.
 
 Para `oci-mcp`, siga [`oci-mcp/docs/01-installation.md`](./oci-mcp/docs/01-installation.md), pois ele combina Node, OCI CLI e servidores MCP Python da Oracle.
 
@@ -112,6 +119,14 @@ cp oci-mcp/.env.example oci-mcp/.env
 
 Nunca commite arquivos `.env` reais. O `.gitignore` raiz e os `.gitignore` dos projetos ignoram esses arquivos.
 
+Use `local-private/` dentro de cada projeto para adaptadores, runbooks, perfis,
+exports e configurações específicos da organização. Essa pasta é ignorada pelo
+Git. Exemplos públicos devem permanecer neutros e reproduzíveis.
+
+Antes de publicar, execute `npm run doctor`. O doctor inspeciona arquivos
+rastreados e novos não ignorados, e falha ao encontrar segredos, caminhos pessoais ou
+identificadores internos conhecidos.
+
 ## Instalar no OpenCode
 
 O OpenCode le MCP servers de `~/.config/opencode/opencode.json` no Linux/macOS e `%USERPROFILE%\.config\opencode\opencode.json` no Windows.
@@ -122,14 +137,14 @@ Use [`config/opencode.example.json`](./config/opencode.example.json) como ponto 
 {
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
-    "playwright": {
+    "playwright-mcp": {
       "type": "local",
       "command": ["node", "C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"],
       "enabled": true
     },
-    "azure": {
+    "azure-mcp": {
       "type": "local",
-      "command": ["npx", "-y", "@azure/mcp@3.0.0-beta.30", "server", "start"],
+      "command": ["powershell", "-NoProfile", "-File", "C:/Workspace/MCP Servers/azure-mcp/scripts/start-server.ps1"],
       "enabled": true
     }
   }
@@ -143,8 +158,8 @@ Reinicie o OpenCode depois de editar o arquivo. Ele nao recarrega configuracao M
 Use `claude mcp add`:
 
 ```bash
-claude mcp add playwright node "C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"
-claude mcp add azure -- npx -y @azure/mcp@3.0.0-beta.30 server start
+claude mcp add playwright-mcp node "C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"
+claude mcp add azure-mcp -- powershell -NoProfile -File "C:/Workspace/MCP Servers/azure-mcp/scripts/start-server.ps1"
 claude mcp list
 ```
 
@@ -163,13 +178,13 @@ Edite `%APPDATA%\Claude\claude_desktop_config.json` no Windows ou `~/Library/App
 ```json
 {
   "mcpServers": {
-    "playwright": {
+    "playwright-mcp": {
       "command": "node",
       "args": ["C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"]
     },
-    "azure": {
-      "command": "npx",
-      "args": ["-y", "@azure/mcp@3.0.0-beta.30", "server", "start"]
+    "azure-mcp": {
+      "command": "powershell",
+      "args": ["-NoProfile", "-File", "C:/Workspace/MCP Servers/azure-mcp/scripts/start-server.ps1"]
     }
   }
 }
@@ -184,7 +199,7 @@ Cursor e Cline usam formato parecido com Claude Desktop. Exemplo:
 ```json
 {
   "mcpServers": {
-    "playwright": {
+    "playwright-mcp": {
       "command": "node",
       "args": ["C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"]
     }
@@ -199,13 +214,13 @@ No Cline, adicione `"type": "stdio"`, `"disabled": false` e opcionalmente `"time
 Edite `~/.codex/config.toml`:
 
 ```toml
-[mcp_servers.playwright]
+[mcp_servers.playwright-mcp]
 command = "node"
 args = ["C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"]
 
-[mcp_servers.azure]
-command = "npx"
-args = ["-y", "@azure/mcp@3.0.0-beta.30", "server", "start"]
+[mcp_servers.azure-mcp]
+command = "powershell"
+args = ["-NoProfile", "-File", "C:/Workspace/MCP Servers/azure-mcp/scripts/start-server.ps1"]
 ```
 
 ## Instalar no Continue
@@ -214,7 +229,7 @@ Edite `~/.continue/config.yaml`:
 
 ```yaml
 mcpServers:
-  - name: playwright
+  - name: playwright-mcp
     command: node
     args:
       - "C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"
@@ -227,7 +242,7 @@ Adicione `.vscode/mcp.json` ao workspace:
 ```json
 {
   "servers": {
-    "playwright": {
+    "playwright-mcp": {
       "type": "stdio",
       "command": "node",
       "args": ["C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"]
@@ -275,6 +290,7 @@ Nao commite:
 - `dist`, exceto se algum projeto documentar explicitamente que precisa ser commitado.
 - Output de runtime (`output`, `logs`, HAR, videos, traces, screenshots, browser storage state).
 - Arquivos locais de sprint/ad-hoc.
+- Qualquer conteúdo dentro de `local-private/`.
 
 ## Notas por Projeto
 
@@ -288,7 +304,7 @@ MCP em TypeScript escrito do zero para a Meta Marketing API. Multi-conta por des
 
 ### tfs-mcp
 
-Este servidor genérico cobre fluxos de TFS / Azure DevOps Server: work items padrão e customizados, PRs, review, release readiness, wiki, delivery risk e roteamento automático por especialistas. Campos obrigatórios e mapeamentos de rich text de processos específicos de cada organização são configurados por `TFS_WORK_ITEM_PROFILES_JSON` no `.env` local; o código e os exemplos versionados permanecem neutros.
+Este servidor genérico cobre fluxos de TFS / Azure DevOps Server: work items padrão e customizados, PRs, review, release readiness, wiki, delivery risk e roteamento automático por especialistas. Campos obrigatórios e mapeamentos de rich text de processos específicos de cada organização ficam em `local-private/config/tfs.json`, ou em variáveis de ambiente; o código e os exemplos versionados permanecem neutros.
 
 ### oci-mcp
 

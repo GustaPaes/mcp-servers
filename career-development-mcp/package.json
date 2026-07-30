@@ -22,9 +22,11 @@
     "start:http": "node index.js --http",
     "validate:tools": "node validate-tools.mjs",
     "smoke:http": "node smoke-http.mjs",
-    "test": "node validate-tools.mjs"
+    "test:unit": "node --test tests",
+    "test": "node --test tests && node validate-tools.mjs"
   },
   "dependencies": {
+    "@gustapaes/mcp-runtime": "file:../packages/mcp-runtime",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "dotenv": "^16.4.7",
     "pino": "^9.6.0",

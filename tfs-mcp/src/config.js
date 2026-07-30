@@ -7,6 +7,12 @@ import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import path from "path";
 import { execFileSync } from "child_process";
+import {
+  firstConfigured,
+  isPlainObject,
+  readVersionedJsonConfigSync,
+  toStringArray,
+} from "@gustapaes/mcp-config-kit";
 import { getRequestContext } from "./request-context.js";
 import {
   getProfileFieldNames,
@@ -53,6 +59,34 @@ function normalizeAlias(value) {
     .replace(/^_+|_+$/g, "");
 }
 
+function positiveInteger(value, fallback, label, max = Number.MAX_SAFE_INTEGER) {
+  const parsed = Number(value ?? fallback);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0 || parsed > max) {
+    throw new Error(`${label} deve ser um inteiro positivo menor ou igual a ${max}.`);
+  }
+  return parsed;
+}
+
+const DEFAULT_LOCAL_CONFIG_FILE = path.join(__dirname, "../local-private/config/tfs.json");
+export const TFS_MCP_CONFIG_FILE = path.resolve(
+  firstNonEmpty(process.env.TFS_MCP_CONFIG_FILE, DEFAULT_LOCAL_CONFIG_FILE)
+);
+const LOCAL_CONFIG = readVersionedJsonConfigSync(TFS_MCP_CONFIG_FILE, {
+  optional: true,
+  expectedVersion: 1,
+  label: "TFS MCP configuration",
+});
+const CONNECTION_CONFIG = isPlainObject(LOCAL_CONFIG.connection) ? LOCAL_CONFIG.connection : {};
+const DEFAULTS_CONFIG = isPlainObject(LOCAL_CONFIG.defaults) ? LOCAL_CONFIG.defaults : {};
+const FIELDS_CONFIG = isPlainObject(LOCAL_CONFIG.fields) ? LOCAL_CONFIG.fields : {};
+
+const WORK_ITEM_PROFILE_FILE = firstNonEmpty(process.env.TFS_WORK_ITEM_PROFILES_FILE);
+const WORK_ITEM_PROFILE_FILE_CONFIG = readVersionedJsonConfigSync(WORK_ITEM_PROFILE_FILE, {
+  optional: true,
+  expectedVersion: 1,
+  label: "TFS work-item profiles",
+});
+
 /** Tenta detectar o repositório git pelo remote origin da workspace. Sync-safe: executado 1x ao startup. */
 function detectRepositoryFromGit() {
   const candidates = [
@@ -80,18 +114,34 @@ function detectRepositoryFromGit() {
 
 // ─── Exports ────────────────────────────────────────────────────────────────
 
-export const TFS_URL = firstNonEmpty(process.env.TFS_URL, "https://tfs.example.com").replace(/\/+$/, "");
-export const TFS_COLLECTION = stripSlashes(firstNonEmpty(process.env.TFS_COLLECTION, "ExampleCollection"));
-export const TFS_PROJECT = stripSlashes(firstNonEmpty(process.env.TFS_PROJECT, "ExampleProject"));
+export const TFS_URL = firstNonEmpty(
+  process.env.TFS_URL,
+  firstConfigured(CONNECTION_CONFIG.url),
+  "https://tfs.example.com"
+).replace(/\/+$/, "");
+export const TFS_COLLECTION = stripSlashes(firstNonEmpty(
+  process.env.TFS_COLLECTION,
+  firstConfigured(CONNECTION_CONFIG.collection),
+  "ExampleCollection"
+));
+export const TFS_PROJECT = stripSlashes(firstNonEmpty(
+  process.env.TFS_PROJECT,
+  firstConfigured(CONNECTION_CONFIG.project),
+  "ExampleProject"
+));
 export const PROJECT_BASE_URL = `${TFS_URL}/${TFS_COLLECTION}/${TFS_PROJECT}`;
 
 const DETECTED_REPOSITORY = detectRepositoryFromGit();
-export const TFS_REPOS = unique([
+const CONFIGURED_REPOSITORIES = unique([
   ...parseCsv(process.env.TFS_REPOS),
   firstNonEmpty(process.env.TFS_REPO, process.env.TFS_REPOSITORY),
+  ...toStringArray(CONNECTION_CONFIG.repositories),
+  firstConfigured(DEFAULTS_CONFIG.repository),
   DETECTED_REPOSITORY,
-  "example-repo",
 ]);
+export const TFS_REPOS = CONFIGURED_REPOSITORIES.length
+  ? CONFIGURED_REPOSITORIES
+  : ["example-repo"];
 export const TFS_REPO = TFS_REPOS[0] ?? "example-repo";
 export const TFS_PAT = firstNonEmpty(process.env.TFS_PAT);
 export const TFS_AUDIT_LOG_PATH = firstNonEmpty(
@@ -100,18 +150,34 @@ export const TFS_AUDIT_LOG_PATH = firstNonEmpty(
 );
 export const TFS_DEFAULT_QUARTER = firstNonEmpty(
   process.env.TFS_DEFAULT_QUARTER,
+  firstConfigured(DEFAULTS_CONFIG.quarter),
   `${new Date().getFullYear()} Q${Math.floor(new Date().getMonth() / 3) + 1}`
 );
 export const TFS_WORK_ITEM_PROFILES = parseWorkItemProfiles(
-  process.env.TFS_WORK_ITEM_PROFILES_JSON,
+  firstConfigured(
+    process.env.TFS_WORK_ITEM_PROFILES_JSON,
+    WORK_ITEM_PROFILE_FILE_CONFIG.profiles,
+    LOCAL_CONFIG.workItemProfiles,
+  ),
   { variables: { currentQuarter: TFS_DEFAULT_QUARTER } }
 );
 export const TFS_WORK_ITEM_PROFILE_FIELDS = Object.freeze(
   getProfileFieldNames(TFS_WORK_ITEM_PROFILES)
 );
-export const TFS_ISSUE_ANALYSIS_FIELD = firstNonEmpty(process.env.TFS_ISSUE_ANALYSIS_FIELD);
+export const TFS_ISSUE_ANALYSIS_FIELD = firstNonEmpty(
+  process.env.TFS_ISSUE_ANALYSIS_FIELD,
+  firstConfigured(FIELDS_CONFIG.issueAnalysis)
+);
 export const TFS_ISSUE_CORRECTION_AND_IMPACTS_FIELD = firstNonEmpty(
-  process.env.TFS_ISSUE_CORRECTION_AND_IMPACTS_FIELD
+  process.env.TFS_ISSUE_CORRECTION_AND_IMPACTS_FIELD,
+  firstConfigured(FIELDS_CONFIG.issueCorrectionAndImpacts)
+);
+export const TFS_SAVED_QUERIES = Object.freeze(
+  Object.fromEntries(
+    Object.entries(isPlainObject(LOCAL_CONFIG.savedQueries) ? LOCAL_CONFIG.savedQueries : {})
+      .map(([name, query]) => [normalizeAlias(name), String(query ?? "").trim()])
+      .filter(([name, query]) => name && query)
+  )
 );
 export const TFS_PAT_ALIASES = Object.freeze(
   Object.fromEntries(
@@ -121,14 +187,29 @@ export const TFS_PAT_ALIASES = Object.freeze(
       .filter(([alias]) => alias)
   )
 );
-export const TFS_DEFAULT_AUTH_ALIAS = normalizeAlias(process.env.TFS_DEFAULT_AUTH_ALIAS);
+export const TFS_DEFAULT_AUTH_ALIAS = normalizeAlias(
+  firstNonEmpty(process.env.TFS_DEFAULT_AUTH_ALIAS, firstConfigured(DEFAULTS_CONFIG.authAlias))
+);
 
 /** Token opcional para autenticar clientes no modo HTTP (Bearer). */
 export const MCP_HTTP_TOKEN = firstNonEmpty(process.env.MCP_HTTP_TOKEN);
 export const MCP_HTTP_HOST = firstNonEmpty(process.env.MCP_HTTP_HOST, "127.0.0.1");
-export const MCP_HTTP_BODY_LIMIT_BYTES = Number(process.env.MCP_HTTP_BODY_LIMIT_BYTES ?? 1_048_576);
-export const MCP_HTTP_SESSION_TTL_MS = Number(process.env.MCP_HTTP_SESSION_TTL_MS ?? 30 * 60_000);
-export const MCP_HTTP_MAX_SESSIONS = Number(process.env.MCP_HTTP_MAX_SESSIONS ?? 50);
+export const MCP_HTTP_PORT = positiveInteger(process.env.MCP_HTTP_PORT, 3010, "MCP_HTTP_PORT", 65_535);
+export const MCP_HTTP_BODY_LIMIT_BYTES = positiveInteger(
+  process.env.MCP_HTTP_BODY_LIMIT_BYTES,
+  1_048_576,
+  "MCP_HTTP_BODY_LIMIT_BYTES"
+);
+export const MCP_HTTP_SESSION_TTL_MS = positiveInteger(
+  process.env.MCP_HTTP_SESSION_TTL_MS,
+  30 * 60_000,
+  "MCP_HTTP_SESSION_TTL_MS"
+);
+export const MCP_HTTP_MAX_SESSIONS = positiveInteger(
+  process.env.MCP_HTTP_MAX_SESSIONS,
+  50,
+  "MCP_HTTP_MAX_SESSIONS"
+);
 
 /** Base URL de todos os endpoints _apis do projeto. */
 export const BASE = `${PROJECT_BASE_URL}/_apis`;
@@ -144,6 +225,27 @@ export function getConfiguredRepositories() {
 
 export function getConfiguredWorkItemProfile(workItemType) {
   return getWorkItemProfile(TFS_WORK_ITEM_PROFILES, workItemType);
+}
+
+export function getSavedQuery(name) {
+  return TFS_SAVED_QUERIES[normalizeAlias(name)] ?? "";
+}
+
+export function getConfigurationSummary() {
+  return {
+    configFileLoaded: Boolean(LOCAL_CONFIG.__file),
+    endpointConfigured: !TFS_URL.includes("tfs.example.com"),
+    collectionConfigured: TFS_COLLECTION !== "ExampleCollection",
+    projectConfigured: TFS_PROJECT !== "ExampleProject",
+    repositories: getConfiguredRepositories(),
+    workItemProfiles: Object.keys(TFS_WORK_ITEM_PROFILES),
+    savedQueries: Object.keys(TFS_SAVED_QUERIES),
+    auth: {
+      defaultPatConfigured: Boolean(TFS_PAT),
+      aliases: getAvailableAuthAliases(),
+      defaultAlias: TFS_DEFAULT_AUTH_ALIAS || null,
+    },
+  };
 }
 
 export function getRepositoryCandidates() {

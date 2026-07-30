@@ -4,6 +4,7 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { resolveInsideAny } from "@gustapaes/mcp-runtime";
 import { sessionManager } from "../session-manager.js";
 import type { BrowserChannel, BrowserName, ToolModule } from "../types.js";
 import { outputPath } from "../output-dir.js";
@@ -15,6 +16,11 @@ const channelEnum = ["", "chrome", "chrome-beta", "chrome-dev", "chrome-canary",
 
 function storagePath(input: string): string {
   return outputPath("storage", input);
+}
+
+export function resolveProfilePath(input: string): string {
+  const candidate = path.resolve(config.repoRoot, input);
+  return resolveInsideAny(config.allowedProfileRoots, candidate, { createRoot: true });
 }
 
 export const browserTools: ToolModule = {
@@ -137,7 +143,7 @@ export const browserTools: ToolModule = {
       name: "browser_install",
       description:
         "Run `npx playwright install <browser>` to install browser binaries on the host. Returns the command output.",
-      annotations: { title: "Install browser binaries" },
+      annotations: { title: "Install browser binaries", readOnlyHint: false, idempotentHint: true },
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -155,7 +161,7 @@ export const browserTools: ToolModule = {
         browser: args.browser as BrowserName | undefined,
         channel: args.channel as BrowserChannel | undefined,
         headless: args.headless as boolean | undefined,
-        userDataDir: args.user_data_dir as string | undefined,
+        userDataDir: args.user_data_dir ? resolveProfilePath(String(args.user_data_dir)) : undefined,
         viewport: args.viewport as { width: number; height: number } | undefined,
         locale: args.locale as string | undefined,
         timezoneId: args.timezone_id as string | undefined,
@@ -252,6 +258,11 @@ export const browserTools: ToolModule = {
     },
 
     async browser_install(args) {
+      if (!config.allowBrowserInstall) {
+        throw new Error(
+          "browser_install is disabled. Set PWMCP_ALLOW_BROWSER_INSTALL=true and restart the server to enable host changes.",
+        );
+      }
       const target = String(args.browser ?? "chromium");
       const cliArgs = ["playwright", "install"];
       if (args.with_deps) cliArgs.push("--with-deps");

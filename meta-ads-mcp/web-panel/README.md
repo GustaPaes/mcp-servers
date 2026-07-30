@@ -56,6 +56,7 @@ Open `http://localhost:3000/login`.
 
 ```powershell
 npm run typecheck
+npm test
 npm run build
 npm audit --omit=dev
 ```
@@ -65,12 +66,16 @@ Current validation target: typecheck clean, production build clean, `npm audit -
 ## Security model
 
 - The panel is not a replacement for MCP guardrails. Every mutation still goes through MCP tools.
+- Mutating routes enforce same-origin requests and reject cross-site form submissions.
+- Login attempts use a bounded in-memory rate limit. Deployments with multiple
+  instances should place a shared rate limiter or identity-aware proxy in front.
 - `publish_campaign`, `pause_campaign` and `apply_budget_change` are not exposed as one-click actions in v0.1. Operators should approve and execute through MCP after reviewing a dry-run plan.
 - Keep the MCP with `READ_ONLY=true` and `DRY_RUN=true` by default.
 - Do not expose the panel without TLS, a strong password, a strong session secret and network restrictions.
 
 ## Known gaps
 
-- No NextAuth/SSO yet. Local password auth is deliberately minimal for v0.1.
+- No NextAuth/SSO yet. Local password auth is deliberately minimal for v0.1;
+  production deployments should use SSO or an authenticated reverse proxy.
 - No Recharts/TanStack Query yet. The current implementation uses server-rendered pages and native fetch for forms.
 - No direct apply buttons for real mutations. This is intentional until RBAC/approval flows are expanded.

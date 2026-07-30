@@ -110,6 +110,16 @@ export async function runHttp(): Promise<void> {
     await session.closeServer();
   }
 
+  function touchSession(session: Session): void {
+    if (!stateful) return;
+    if (session.timer) clearTimeout(session.timer);
+    session.timer = setTimeout(
+      () => void closeSession(session),
+      env.MCP_HTTP_SESSION_TTL_MS,
+    );
+    session.timer.unref?.();
+  }
+
   async function createSession(): Promise<{ id: string; session: Session }> {
     if (stateful && sessions.size >= env.MCP_HTTP_MAX_SESSIONS) {
       throw new HttpInputError(503, 'session_limit_reached');
@@ -132,13 +142,7 @@ export async function runHttp(): Promise<void> {
     // Vamos gerar um id provisório e remapear no primeiro response.
     const id = transport.sessionId ?? randomUUID();
     const session: Session = { id, transport, closeServer };
-    if (stateful) {
-      session.timer = setTimeout(
-        () => void closeSession(session),
-        env.MCP_HTTP_SESSION_TTL_MS,
-      );
-      session.timer.unref?.();
-    }
+    touchSession(session);
     transport.onclose = () => {
       void closeSession(session);
     };
@@ -174,6 +178,7 @@ export async function runHttp(): Promise<void> {
         if (stateful) {
           if (sessionId && sessions.has(sessionId)) {
             const s = sessions.get(sessionId)!;
+            touchSession(s);
             const body =
               req.method === 'POST'
                 ? await readJsonBody(req, env.MCP_HTTP_BODY_LIMIT_BYTES)
@@ -183,10 +188,18 @@ export async function runHttp(): Promise<void> {
           }
 
           if (req.method === 'POST') {
-            // Sem session-id => nova sessão de inicialização.
+            const body = await readJsonBody(req, env.MCP_HTTP_BODY_LIMIT_BYTES);
+            const method =
+              body && typeof body === 'object' && 'method' in body
+                ? (body as { method?: unknown }).method
+                : undefined;
+            if (method !== 'initialize') {
+              writeJson(res, 400, { error: 'missing session id; initialize first' });
+              return;
+            }
+            // Sem session-id e initialize válido => nova sessão.
             const { id, session } = await createSession();
             sessions.set(id, session);
-            const body = await readJsonBody(req, env.MCP_HTTP_BODY_LIMIT_BYTES);
             await session.transport.handleRequest(req, res, body);
             // Pode ter sido remapeado pelo SDK; sincroniza.
             const real = session.transport.sessionId;

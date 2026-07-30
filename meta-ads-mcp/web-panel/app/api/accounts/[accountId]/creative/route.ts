@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireSession } from '../../../../../lib/auth';
 import { callTool } from '../../../../../lib/mcp';
+import { requireSameOrigin } from '../../../../../lib/request-security';
 
 const Input = z.object({
   headline: z.string().min(2),
@@ -15,6 +16,7 @@ const Input = z.object({
 
 export async function POST(req: Request, ctx: { params: Promise<{ accountId: string }> }): Promise<NextResponse> {
   try {
+    requireSameOrigin(req);
     await requireSession();
     const params = await ctx.params;
     const json = Input.parse(await req.json());

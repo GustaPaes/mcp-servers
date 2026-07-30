@@ -53,6 +53,12 @@ For **dry-run**, prefer:
 - HAR captures **request/response bodies** including auth headers and tokens. Treat HAR files as sensitive; do not commit them.
 - `context_storage_state` JSON files contain cookies and localStorage values. Same warning.
 
+## Public/private boundary
+
+- Keep real browser profiles, storage states, HAR files, screenshots, downloads, internal URLs and organization-specific automation under `local-private/` or `output/`; both are ignored by Git.
+- Commit only neutral examples and reusable browser behavior. Company portal selectors, credentials, exports and one-off scripts must never be added to tracked `src/`, `tests/`, `docs/` or example files.
+- Persistent profiles must use a directory inside `PWMCP_ALLOWED_PROFILE_ROOTS`. Prefer `local-private/profiles/<profile-name>` and never point the MCP at a personal Chrome or Edge profile.
+
 ## Escalation
 
 When uncertain, prefer:

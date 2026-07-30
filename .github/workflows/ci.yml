@@ -18,7 +18,7 @@ jobs:
         include:
           - name: tfs-mcp
             dir: tfs-mcp
-            command: npm test
+            command: npm test && npm run smoke:http
           - name: career-development-mcp
             dir: career-development-mcp
             command: npm test && npm run smoke:http
@@ -34,10 +34,10 @@ jobs:
             command: npm run lint && npm test && npm run typecheck && npm run build
           - name: meta-ads-mcp-web-panel
             dir: meta-ads-mcp/web-panel
-            command: npm run typecheck && npm run build
+            command: npm test && npm run typecheck && npm run build
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 20.19.0
           cache: npm
@@ -56,15 +56,26 @@ jobs:
         working-directory: ${{ matrix.dir }}
         run: npm audit --omit=dev --audit-level=high
 
+  portfolio-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 20.19.0
+      - name: Validate public/private boundary
+        run: node scripts/portfolio-doctor.mjs
+
   secrets:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - name: Scan Git history
-        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           # Scan the rewritten repository itself instead of the push-event
           # before/after range, whose old endpoint may no longer exist.

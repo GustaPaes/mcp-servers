@@ -26,3 +26,7 @@ Start with the full documentation in your language:
 
 - [English: install, safety model, client snippets and project map](./README.en.md)
 - [Portugues: instalacao, modelo de seguranca, snippets e mapa dos projetos](./README.pt-BR.md)
+
+Install and validate the complete workspace with `npm install` followed by
+`npm run validate`. Keep organization-specific configuration, adapters,
+runbooks and exports under each project's ignored `local-private/` directory.

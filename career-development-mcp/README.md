@@ -15,6 +15,9 @@ or Azure DevOps Server work item as evidence through the sibling
 - evidence collection with source metadata
 - career-readiness, roadmap and review preparation
 - optional TFS work-item evidence import
+- sanitized, versioned snapshot import from external career platforms
+- daily brief for goals, evidence gaps, blockers and upcoming deadlines
+- local configuration and integration diagnostics
 - stdio and authenticated Streamable HTTP transports
 - structured MCP results and explicit safety annotations
 
@@ -41,6 +44,7 @@ For stdio clients, run:
 | Variable | Default | Purpose |
 |---|---:|---|
 | `CAREER_MCP_DATA_DIR` | `./data` | Private local JSON storage |
+| `CAREER_MCP_IMPORT_ROOTS` | `./local-private` | Allowed snapshot roots, separated by the platform path delimiter |
 | `TFS_MCP_SERVER_DIR` | `../tfs-mcp` | Optional TFS MCP integration |
 | `LOG_LEVEL` | `info` | Log level |
 | `MCP_HTTP_HOST` | `127.0.0.1` | HTTP bind address |
@@ -50,9 +54,6 @@ For stdio clients, run:
 | `MCP_HTTP_SESSION_TTL_MS` | `1800000` | Idle session lifetime |
 | `MCP_HTTP_MAX_SESSIONS` | `50` | Concurrent session cap |
 
-Legacy environment aliases remain temporarily supported for local upgrades,
-but new configurations should use the generic names above.
-
 ## Privacy
 
 The directories `data/` and `local-private/`, plus `.env`, are ignored by Git.
@@ -60,6 +61,19 @@ Keep real feedback, review exports, organization-specific adapters, browser
 profiles and credentials there. Public fixtures must be fictional and neutral.
 
 See [`AGENTS.md`](./AGENTS.md) for the operating policy.
+
+## Daily workflow
+
+- `guide_doctor` checks storage, import roots and the optional `tfs-mcp`
+  integration without returning private paths.
+- `guide_daily_brief` turns active PDIs, goals and evidence into a prioritized
+  workday summary.
+- `guide_snapshot_validate` validates a neutral external snapshot without
+  persisting it.
+- `guide_snapshot_import` stores only the versioned, sanitized schema. Start
+  from [`examples/snapshot.example.json`](./examples/snapshot.example.json).
+- `guide_evidence_from_tfs` defaults to dry-run and can convert a configured TFS
+  work item into deduplicated career evidence after review.
 
 ## Validation
 

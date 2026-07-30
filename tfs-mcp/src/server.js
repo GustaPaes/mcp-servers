@@ -60,8 +60,11 @@ import {
   toolCompareBuildArtifacts,
 } from "./tools/infra.js";
 import { toolSpecialistReview } from "./tools/specialist.js";
+import { toolSavedQueriesList, toolTfsDoctor } from "./tools/doctor.js";
 import { runWithRequestContext } from "./request-context.js";
 import { MutationControlsSchema } from "./safety.js";
+import { redactSensitiveValue } from "@gustapaes/mcp-runtime";
+import { TFS_URL } from "./config.js";
 
 // ─── Tool metadata helpers ─────────────────────────────────────────────────
 
@@ -80,6 +83,11 @@ const NON_IDEMPOTENT_TOOLS = new Set([
   "tfs_work_item_create",
   "tfs_create_pr",
 ]);
+const DESTRUCTIVE_TOOLS = new Set([
+  "tfs_update_work_item",
+  "tfs_update_issue_analysis",
+  "tfs_update_pr",
+]);
 
 function withToolMetadata(tool) {
   const readOnly = !MUTATING_TOOLS.has(tool.name);
@@ -95,7 +103,7 @@ function withToolMetadata(tool) {
     ...tool,
     annotations: {
       readOnlyHint: readOnly,
-      destructiveHint: false,
+      destructiveHint: DESTRUCTIVE_TOOLS.has(tool.name),
       idempotentHint: idempotent,
       openWorldHint: true,
       ...(tool.annotations ?? {}),
@@ -120,6 +128,23 @@ function formatToolResult(result) {
 // ─── Tool definitions ──────────────────────────────────────────────────────
 
 const TOOL_DEFS = [
+  {
+    name: "tfs_doctor",
+    title: "TFS MCP Doctor",
+    description: "Valida configuração, autenticação, repositórios, perfis e consultas salvas sem expor PATs. A conectividade é opcional.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        check_connectivity: { type: "boolean", default: false },
+      },
+    },
+  },
+  {
+    name: "tfs_saved_queries",
+    title: "List Saved Queries",
+    description: "Lista os nomes das consultas WIQL configuradas localmente em TFS_MCP_CONFIG_FILE.",
+    inputSchema: { type: "object", properties: {} },
+  },
   {
     name: "tfs_analyze_work_item",
     title: "Analyze Work Item",
@@ -550,6 +575,10 @@ const TOOL_DEFS = [
           description:
             "HTML rico para criterios de negocio exibidos no campo padrao Acceptance Criteria.",
         },
+        saved_query: {
+          type: "string",
+          description: "Nome de uma consulta WIQL configurada localmente. Use tfs_saved_queries para listar.",
+        },
         story_points: { type: "number" },
         custom_fields: {
           type: "object",
@@ -684,6 +713,8 @@ export function getToolCount() {
 // ─── Dispatch table ────────────────────────────────────────────────────────
 
 const TOOL_HANDLERS = {
+  tfs_doctor: (args) => toolTfsDoctor(args),
+  tfs_saved_queries: () => toolSavedQueriesList(),
   tfs_analyze_work_item: (args) => toolAnalyzeWorkItem(args),
   tfs_work_item_context: (args) => toolWorkItemContext(args),
   tfs_specialist_review: (args) => toolSpecialistReview(args),
@@ -748,8 +779,10 @@ export function buildMcpServer() {
       const result = await runWithRequestContext(context, () => handler(args ?? {}));
       return formatToolResult(result);
     } catch (err) {
+      const safeMessage = String(redactSensitiveValue(err?.message ?? String(err)))
+        .replaceAll(TFS_URL, "<tfs-endpoint>");
       return {
-        content: [{ type: "text", text: `Erro: ${err.message}` }],
+        content: [{ type: "text", text: `Erro: ${safeMessage}` }],
         isError: true,
       };
     }

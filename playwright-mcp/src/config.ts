@@ -21,6 +21,10 @@ function envInt(key: string, fallback: number): number {
   const n = Number.parseInt(v, 10);
   return Number.isFinite(n) ? n : fallback;
 }
+function envPositiveInt(key: string, fallback: number, allowZero = false): number {
+  const n = envInt(key, fallback);
+  return Number.isSafeInteger(n) && (n > 0 || (allowZero && n === 0)) ? n : fallback;
+}
 function envBool(key: string, fallback: boolean): boolean {
   const v = process.env[key];
   if (v == null || v === "") return fallback;
@@ -53,23 +57,33 @@ export const config = Object.freeze({
   defaultLocale: envStr("PWMCP_DEFAULT_LOCALE", "pt-BR"),
   defaultTimezone: envStr("PWMCP_DEFAULT_TIMEZONE", "America/Sao_Paulo"),
 
-  maxSessions: envInt("PWMCP_MAX_SESSIONS", 5),
-  sessionTtlMinutes: envInt("PWMCP_SESSION_TTL_MINUTES", 30),
-  sessionSweepIntervalSeconds: envInt("PWMCP_SESSION_SWEEP_INTERVAL_SECONDS", 60),
+  maxSessions: envPositiveInt("PWMCP_MAX_SESSIONS", 5),
+  sessionTtlMinutes: envPositiveInt("PWMCP_SESSION_TTL_MINUTES", 30, true),
+  sessionSweepIntervalSeconds: envPositiveInt("PWMCP_SESSION_SWEEP_INTERVAL_SECONDS", 60),
 
   outputDir: path.resolve(envStr("PWMCP_OUTPUT_DIR", DEFAULT_OUTPUT_DIR)),
+  maxArtifactBytes: envPositiveInt("PWMCP_MAX_ARTIFACT_BYTES", 2_000_000),
+  maxNetworkBodyBytes: envPositiveInt("PWMCP_MAX_NETWORK_BODY_BYTES", 65_536),
 
   strict: envBool("PWMCP_STRICT", true),
   allowSecretReveal: envBool("PWMCP_ALLOW_SECRET_REVEAL", false),
+  allowBrowserInstall: envBool("PWMCP_ALLOW_BROWSER_INSTALL", false),
   allowedFileRoots: envStr("PWMCP_ALLOWED_FILE_ROOTS", REPO_ROOT)
     .split(path.delimiter)
     .filter(Boolean)
     .map((root) => path.resolve(root)),
-  evalTimeoutMs: envInt("PWMCP_EVAL_TIMEOUT_MS", 5000),
-  actionTimeoutMs: envInt("PWMCP_ACTION_TIMEOUT_MS", 10_000),
-  navigationTimeoutMs: envInt("PWMCP_NAVIGATION_TIMEOUT_MS", 30_000),
+  allowedProfileRoots: envStr(
+    "PWMCP_ALLOWED_PROFILE_ROOTS",
+    path.join(REPO_ROOT, "local-private", "profiles"),
+  )
+    .split(path.delimiter)
+    .filter(Boolean)
+    .map((root) => path.resolve(root)),
+  evalTimeoutMs: envPositiveInt("PWMCP_EVAL_TIMEOUT_MS", 5000),
+  actionTimeoutMs: envPositiveInt("PWMCP_ACTION_TIMEOUT_MS", 10_000),
+  navigationTimeoutMs: envPositiveInt("PWMCP_NAVIGATION_TIMEOUT_MS", 30_000),
 
-  httpPort: envInt("PWMCP_HTTP_PORT", 0),
+  httpPort: envPositiveInt("PWMCP_HTTP_PORT", 0, true),
   httpHost: envStr("PWMCP_HTTP_HOST", "127.0.0.1"),
 });
 

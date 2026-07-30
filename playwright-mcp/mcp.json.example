@@ -3,7 +3,7 @@
 
   "claude-desktop": {
     "mcpServers": {
-      "playwright": {
+      "playwright-mcp": {
         "command": "node",
         "args": ["C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"],
         "env": {
@@ -17,7 +17,7 @@
   "opencode": {
     "$schema": "https://opencode.ai/config.json",
     "mcp": {
-      "playwright": {
+      "playwright-mcp": {
         "type": "local",
         "command": ["node", "C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"],
         "enabled": true
@@ -27,7 +27,7 @@
 
   "cline": {
     "mcpServers": {
-      "playwright": {
+      "playwright-mcp": {
         "type": "stdio",
         "command": "node",
         "args": ["C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"],

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { competenciesSchema } from "../models/competency.js";
-import { loadCompetencies, saveCompetencies, loadProfile } from "../storage.js";
+import { loadCompetencies, saveCompetencies, loadProfile, withStorageMutation } from "../storage.js";
 import { analyzeCompetencyGap } from "../analytics/competency-gap.js";
 
 function nowDate() {
@@ -9,14 +9,16 @@ function nowDate() {
 
 export async function toolCompetencyAssess(args) {
   const { categories } = z.object({ categories: z.record(z.record(z.object({ level: z.number(), target: z.number(), evidence: z.string().default("") }))) }).parse(args);
-  const current = competenciesSchema.parse(await loadCompetencies());
-  const updated = competenciesSchema.parse({
-    ...current,
-    lastUpdated: nowDate(),
-    assessments: [...current.assessments, { date: nowDate(), categories }],
+  return withStorageMutation(async () => {
+    const current = competenciesSchema.parse(await loadCompetencies());
+    const updated = competenciesSchema.parse({
+      ...current,
+      lastUpdated: nowDate(),
+      assessments: [...current.assessments, { date: nowDate(), categories }],
+    });
+    await saveCompetencies(updated);
+    return updated;
   });
-  await saveCompetencies(updated);
-  return updated;
 }
 
 export async function toolCompetencyGap(args) {

@@ -6,7 +6,7 @@ import { spawn } from "node:child_process";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
-const MIN_EXPECTED_TOOLS = 25;
+const EXPECTED_TOOLS = 51;
 
 async function main() {
   const transport = new StdioClientTransport({
@@ -28,8 +28,8 @@ async function main() {
   for (const t of tools.slice(0, 5)) console.log(`  - ${t.name}`);
   if (tools.length > 5) console.log(`  … and ${tools.length - 5} more`);
 
-  if (tools.length < MIN_EXPECTED_TOOLS) {
-    console.error(`✗ expected at least ${MIN_EXPECTED_TOOLS}, got ${tools.length}`);
+  if (tools.length !== EXPECTED_TOOLS) {
+    console.error(`✗ expected exactly ${EXPECTED_TOOLS}, got ${tools.length}`);
     await client.close();
     process.exit(1);
   }
@@ -57,6 +57,18 @@ async function main() {
     process.exit(1);
   }
   console.log("✓ all required tools present");
+
+  const invalidMetadata = tools.filter((tool) =>
+    typeof tool.annotations?.readOnlyHint !== "boolean"
+    || typeof tool.annotations?.destructiveHint !== "boolean"
+    || typeof tool.annotations?.idempotentHint !== "boolean"
+  );
+  if (invalidMetadata.length) {
+    console.error("✗ tools missing explicit safety annotations:", invalidMetadata.map((tool) => tool.name));
+    await client.close();
+    process.exit(1);
+  }
+  console.log("✓ all tools expose safety annotations");
 
   await client.close();
   console.log("✓ smoke OK");

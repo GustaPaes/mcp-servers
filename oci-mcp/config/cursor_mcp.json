@@ -1,7 +1,7 @@
 {
   "_comment": "Cursor config — copy mcpServers into .cursor/mcp.json (project) or %USERPROFILE%/.cursor/mcp.json (global). Identical schema to Claude Desktop.",
   "mcpServers": {
-    "oci-extras": {
+    "oci-extras-mcp": {
       "type": "stdio",
       "command": "node",
       "args": ["C:/Workspace/MCP Servers/oci-mcp/oci-extras-mcp/index.js"],

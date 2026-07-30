@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { evidenceLogSchema, evidenceSchema } from "../models/evidence.js";
-import { loadEvidenceLog, saveEvidenceLog, listPdis, listGoals, saveGoal } from "../storage.js";
+import { loadEvidenceLog, saveEvidenceLog, listPdis, listGoals, saveGoal, withStorageMutation } from "../storage.js";
 import { importEvidenceFromWorkItem } from "../integrations/tfs-bridge.js";
 
 function nowIso() {
@@ -25,30 +25,32 @@ export async function toolEvidenceAdd(args) {
     visibility: z.enum(["self", "team", "org"]),
     tags: z.array(z.string()).default([]),
     source: z.enum(["manual", "tfs"]).default("manual"),
-    sourceMeta: z.record(z.any()).default({}),
+    sourceMeta: z.record(z.unknown()).default({}),
   }).parse(args);
 
-  const current = normalizeEvidence(await loadEvidenceLog());
-  const evidence = evidenceSchema.parse({
-    id: `ev-${Date.now()}`,
-    ...input,
-    createdAt: nowIso(),
+  return withStorageMutation(async () => {
+    const current = normalizeEvidence(await loadEvidenceLog());
+    const evidence = evidenceSchema.parse({
+      id: `ev-${Date.now()}`,
+      ...input,
+      createdAt: nowIso(),
+    });
+    const updated = { evidences: [...current.evidences, evidence] };
+    await saveEvidenceLog(updated);
+
+    const goals = await listGoals();
+    await Promise.all(
+      goals
+        .filter((goal) => evidence.linkedGoalIds.includes(goal.id))
+        .map((goal) => saveGoal({
+          ...goal,
+          evidenceIds: [...new Set([...(goal.evidenceIds ?? []), evidence.id])],
+          updatedAt: nowIso(),
+        }))
+    );
+
+    return evidence;
   });
-  const updated = { evidences: [...current.evidences, evidence] };
-  await saveEvidenceLog(updated);
-
-  const goals = await listGoals();
-  await Promise.all(
-    goals
-      .filter((goal) => evidence.linkedGoalIds.includes(goal.id))
-      .map((goal) => saveGoal({
-        ...goal,
-        evidenceIds: [...new Set([...(goal.evidenceIds ?? []), evidence.id])],
-        updatedAt: nowIso(),
-      }))
-  );
-
-  return evidence;
 }
 
 export async function toolEvidenceList(args) {
@@ -84,25 +86,47 @@ export async function toolEvidenceReport(args) {
 }
 
 export async function toolEvidenceFromTfs(args) {
-  const { workItemId, linkedPdiIds = [], linkedGoalIds = [] } = z.object({
+  const {
+    workItemId,
+    linkedPdiIds = [],
+    linkedGoalIds = [],
+    type,
+    visibility,
+    impact,
+    tags,
+    dryRun,
+  } = z.object({
     workItemId: z.union([z.string(), z.number()]),
     linkedPdiIds: z.array(z.string()).default([]),
     linkedGoalIds: z.array(z.string()).default([]),
+    type: z.enum(["delivery", "feedback", "certification", "presentation", "mentoring", "code_review", "leadership", "quality"]).default("delivery"),
+    visibility: z.enum(["self", "team", "org"]).default("self"),
+    impact: z.string().min(1).default("Evidencia importada de um work item para conectar uma entrega real ao desenvolvimento profissional."),
+    tags: z.array(z.string()).default(["tfs"]),
+    dryRun: z.boolean().default(true),
   }).parse(args);
   const imported = await importEvidenceFromWorkItem(workItemId);
-  return toolEvidenceAdd({
+  const existing = normalizeEvidence(await loadEvidenceLog()).evidences.find(
+    (item) => item.source === "tfs" && item.linkedWorkItems.includes(String(imported.workItemId))
+  );
+  if (existing) return { imported: false, duplicate: true, evidence: existing };
+  const proposed = {
     date: new Date().toISOString().slice(0, 10),
-    type: "quality",
+    type,
     title: imported.title,
     description: imported.summary,
-    impact: "Evidencia importada do TFS para conectar entrega real ao desenvolvimento e reconhecimento.",
+    impact,
     linkedPdiIds,
     linkedGoalIds,
     linkedWorkItems: [String(imported.workItemId)],
     linkedPRs: imported.prIds,
-    visibility: "team",
-    tags: ["tfs", "evidencia-automatica"],
+    visibility,
+    tags: [...new Set([...tags, "tfs"])],
     source: "tfs",
     sourceMeta: { importedSummary: imported.summary },
+  };
+  if (dryRun) return { imported: false, dryRun: true, proposed };
+  return toolEvidenceAdd({
+    ...proposed,
   });
 }

@@ -142,7 +142,7 @@ Minimal OpenCode snippet:
 {
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
-    "meta-ads": {
+    "meta-ads-mcp": {
       "type": "local",
       "command": ["node", "C:/Workspace/MCP Servers/meta-ads-mcp/dist/server.js"],
       "enabled": true,

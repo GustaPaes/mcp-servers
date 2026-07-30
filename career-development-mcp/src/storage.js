@@ -1,6 +1,12 @@
 import fs from "fs/promises";
 import path from "path";
 import {
+  assertSafeIdentifier,
+  atomicWriteJson,
+  createSerialExecutor,
+  resolveInside,
+} from "@gustapaes/mcp-runtime";
+import {
   DATA_DIR,
   ONLINE_DIR,
   PDIS_DIR,
@@ -12,6 +18,8 @@ import {
   ONLINE_STATE_PATH,
   ONLINE_APPROVED_CHANGES_PATH,
 } from "./config.js";
+
+const runStorageMutation = createSerialExecutor();
 
 async function ensureDir(dirPath) {
   await fs.mkdir(dirPath, { recursive: true });
@@ -38,8 +46,16 @@ async function readJsonFile(filePath, fallback) {
 }
 
 async function writeJsonFile(filePath, value) {
-  await ensureDir(path.dirname(filePath));
-  await fs.writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  await atomicWriteJson(filePath, value);
+}
+
+function entityPath(root, id) {
+  const safeId = assertSafeIdentifier(id);
+  return resolveInside(root, `${safeId}.json`);
+}
+
+export function withStorageMutation(task) {
+  return runStorageMutation(task);
 }
 
 async function listJsonFiles(dirPath) {
@@ -102,11 +118,11 @@ export async function listPdis() {
 }
 
 export async function getPdi(id) {
-  return readJsonFile(path.join(PDIS_DIR, `${id}.json`), null);
+  return readJsonFile(entityPath(PDIS_DIR, id), null);
 }
 
 export async function savePdi(pdi) {
-  return writeJsonFile(path.join(PDIS_DIR, `${pdi.id}.json`), pdi);
+  return writeJsonFile(entityPath(PDIS_DIR, pdi.id), pdi);
 }
 
 export async function listGoals() {
@@ -116,15 +132,15 @@ export async function listGoals() {
 }
 
 export async function getGoal(id) {
-  return readJsonFile(path.join(GOALS_DIR, `${id}.json`), null);
+  return readJsonFile(entityPath(GOALS_DIR, id), null);
 }
 
 export async function saveGoal(goal) {
-  return writeJsonFile(path.join(GOALS_DIR, `${goal.id}.json`), goal);
+  return writeJsonFile(entityPath(GOALS_DIR, goal.id), goal);
 }
 
 export async function saveSnapshot(snapshot) {
-  return writeJsonFile(path.join(SNAPSHOTS_DIR, `${snapshot.id}.json`), snapshot);
+  return writeJsonFile(entityPath(SNAPSHOTS_DIR, snapshot.id), snapshot);
 }
 
 export async function listSnapshots() {

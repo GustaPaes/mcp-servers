@@ -14,7 +14,7 @@ export const evidenceSchema = z.object({
   visibility: z.enum(["self", "team", "org"]),
   tags: z.array(z.string()).default([]),
   source: z.enum(["manual", "tfs"]),
-  sourceMeta: z.record(z.any()).default({}),
+  sourceMeta: z.record(z.unknown()).default({}),
   createdAt: z.string(),
 });
 

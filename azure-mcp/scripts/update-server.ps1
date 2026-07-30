@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Atualiza o cache do @azure/mcp e baixa a versao mais recente.
+    Atualiza o cache do @azure/mcp e baixa a versao validada ou informada.
 
 .DESCRIPTION
     - Limpa o cache do npx para forcar re-download.
@@ -22,10 +22,14 @@
 [CmdletBinding()]
 param(
     [switch] $Global,
-    [string] $Pin = "3.0.0-beta.30"
+    [string] $Pin = ""
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot "azure-version.ps1")
+if ([string]::IsNullOrWhiteSpace($Pin)) {
+    $Pin = Get-AzureMcpVersion
+}
 
 function Write-Info($t) { Write-Host "[i] $t" -ForegroundColor Cyan }
 function Write-Ok($t)   { Write-Host "[OK] $t" -ForegroundColor Green }

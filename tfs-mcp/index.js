@@ -5,8 +5,11 @@
 const cliArgs = new Set(process.argv.slice(2));
 
 if (cliArgs.has("--http") || cliArgs.has("--http:streamable")) {
-  const { startHttpStreamable } = await import("./src/http.js");
-  await startHttpStreamable(Number(process.env.MCP_HTTP_PORT ?? 3010), process.env.MCP_HTTP_HOST);
+  const [{ startHttpStreamable }, { MCP_HTTP_HOST, MCP_HTTP_PORT }] = await Promise.all([
+    import("./src/http.js"),
+    import("./src/config.js"),
+  ]);
+  await startHttpStreamable(MCP_HTTP_PORT, MCP_HTTP_HOST);
 } else {
   const { startStdio } = await import("./src/server.js");
   await startStdio();

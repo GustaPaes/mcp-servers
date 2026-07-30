@@ -121,6 +121,12 @@ For **dry-run**, prefer:
 - Drafts in storage may contain ad copy and targeting. Treat the storage file as sensitive.
 - HTTP transport without `MCP_HTTP_BEARER_TOKENS` is ONLY safe on `127.0.0.1`. The server logs a warning if you bind to a non-local host without auth.
 
+## Public/private boundary
+
+- Store real ad account IDs, owners, access-token environment names, client budgets, copy, exports and audience definitions only in `.env`, `data/` or `local-private/`; all are ignored by Git.
+- Keep organization-specific account configuration under `local-private/config` and reference it with `ACCOUNTS_CONFIG_PATH`. Commit only the neutral `config/accounts.example.json`.
+- One-off reports, campaign exports and customer-specific automation belong in `local-private/reports` or `local-private/scripts`, never in tracked examples, tests or documentation.
+
 ## Escalation
 
 When uncertain, prefer:

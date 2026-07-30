@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-07-30T12:00:00.000Z",
+  "url": "https://career.example.com/plans",
+  "pageTitle": "Development plans",
+  "visiblePlanCards": [
+    {
+      "sourceId": "plan-123",
+      "title": "Improve technical leadership",
+      "status": "in-progress",
+      "progressPct": 40,
+      "period": "2026 Q3",
+      "summary": "Practice design reviews and document decisions."
+    }
+  ],
+  "apiResponses": [
+    {
+      "url": "https://career.example.com/api/plans",
+      "status": 200,
+      "contentType": "application/json",
+      "detectedKeys": [
+        "plans",
+        "pagination"
+      ]
+    }
+  ]
+}

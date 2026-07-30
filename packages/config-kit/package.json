@@ -1,0 +1,19 @@
+{
+  "name": "@gustapaes/mcp-config-kit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Versioned local configuration loader for reusable MCP servers.",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}

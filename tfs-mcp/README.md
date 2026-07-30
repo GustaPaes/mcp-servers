@@ -42,12 +42,17 @@ copy .env.example .env
 notepad .env   # fill TFS_URL, TFS_PROJECT, TFS_REPOS, TFS_PAT_*
 ```
 
+For organization-specific fields and reusable queries, copy
+[`config/tfs.example.json`](./config/tfs.example.json) to the ignored
+`local-private/config/tfs.json`. Keep PATs in `.env`; never put credentials in
+the JSON file.
+
 Verify it starts:
 
 ```powershell
 node index.js          # stdio mode (will wait on stdin)
 # OR
-node index.js --http   # listens on http://localhost:3010 — try /health
+node index.js --http   # http://localhost:3010/healthz and authenticated /readyz
 ```
 
 Run the premium-workflow validation harness (executes against your real TFS):
@@ -73,12 +78,7 @@ npm run validate:premium
       "command": ["node", "C:/Workspace/MCP Servers/tfs-mcp/index.js"],
       "enabled": true,
       "env": {
-        "TFS_URL": "https://tfs.example.com",
-        "TFS_COLLECTION": "YourCollection",
-        "TFS_PROJECT": "YourProject",
-        "TFS_REPOS": "repo-one,repo-two",
-        "TFS_PAT_ALICE": "alice-pat",
-        "TFS_DEFAULT_AUTH_ALIAS": "alice"
+        "TFS_MCP_CONFIG_FILE": "C:/Workspace/MCP Servers/tfs-mcp/local-private/config/tfs.json"
       }
     }
   }
@@ -120,6 +120,8 @@ See the [root README](../README.md#%EF%B8%8F-install-in-your-mcp-client) for rea
 
 | Variable | Default | Purpose |
 |---|---|---|
+| `TFS_MCP_CONFIG_FILE` | `./local-private/config/tfs.json` when present | Versioned JSON configuration path; must not contain secrets |
+| `TFS_WORK_ITEM_PROFILES_FILE` | _(empty)_ | Optional separate JSON file containing only work-item profiles |
 | `TFS_URL` | `https://tfs.example.com` | Base URL of the TFS / Azure DevOps Server |
 | `TFS_COLLECTION` | `ExampleCollection` | Collection name |
 | `TFS_PROJECT` | `ExampleProject` | Project name |
@@ -132,6 +134,9 @@ See the [root README](../README.md#%EF%B8%8F-install-in-your-mcp-client) for rea
 | `MCP_HTTP_PORT` | `3010` | Port for `--http` mode |
 | `MCP_HTTP_HOST` | `127.0.0.1` | Host for HTTP mode; non-loopback requires `MCP_HTTP_TOKEN` |
 | `MCP_HTTP_TOKEN` | _(empty)_ | Bearer token for HTTP mode |
+| `MCP_HTTP_BODY_LIMIT_BYTES` | `1048576` | Maximum HTTP request size |
+| `MCP_HTTP_SESSION_TTL_MS` | `1800000` | Idle HTTP session lifetime |
+| `MCP_HTTP_MAX_SESSIONS` | `50` | Concurrent HTTP session cap |
 | `TFS_AUDIT_LOG_PATH` | `./data/audit.log` | Append-only JSONL audit log for mutation attempts |
 | `TFS_DEFAULT_QUARTER` | _(current quarter)_ | Value available as `{{currentQuarter}}` inside profile defaults |
 | `TFS_WORK_ITEM_PROFILES_JSON` | `{}` | Per-type rich-text fields and required/default fields, indexed by work item type |
@@ -142,6 +147,8 @@ See the [root README](../README.md#%EF%B8%8F-install-in-your-mcp-client) for rea
 ## Tool catalog
 
 ### Context & backlog
+- `tfs_doctor` — sanitized configuration diagnosis with optional connectivity check
+- `tfs_saved_queries` — names of reusable queries loaded from local configuration
 - `tfs_work_item` — full details of a work item; `include_fields:true` also returns the raw field map
 - `tfs_analyze_work_item` — quality score, US format, gaps, refinement checklist
 - `tfs_work_item_context` — work item + related items + PRs + wiki pages
@@ -149,7 +156,7 @@ See the [root README](../README.md#%EF%B8%8F-install-in-your-mcp-client) for rea
 - `tfs_prepare_refinement` — refinement package (DOR, questions, dependencies)
 - `tfs_generate_activity_template` — generate the standardized business + technical description
 - `tfs_generate_activity_template_from_items` — bulk version starting from existing items
-- `tfs_query_work_items` — WIQL, presets, structured filters
+- `tfs_query_work_items` — WIQL, presets, structured filters or a configured `saved_query`
 - `tfs_sprint_info` — current iteration metrics
 
 ### Pull requests & review
@@ -182,7 +189,10 @@ The 5 premium workflows ship with formal `outputSchema` so MCP clients can valid
 
 ## Work item profiles
 
-Different Azure DevOps processes can require different fields for the same operation. Keep those installation-specific rules outside the source by configuring `TFS_WORK_ITEM_PROFILES_JSON`:
+Different Azure DevOps processes can require different fields for the same
+operation. Keep installation-specific rules outside the source in
+`local-private/config/tfs.json` (recommended), `TFS_WORK_ITEM_PROFILES_FILE`, or
+`TFS_WORK_ITEM_PROFILES_JSON`:
 
 ```json
 {
@@ -210,7 +220,9 @@ The public tool remains generic. Calls can override profile defaults or provide 
 }
 ```
 
-Keep real process names, field reference names and allowed values in the local `.env`, which is ignored by Git. The committed `.env.example` contains only neutral examples.
+Keep real process names, field reference names and allowed values under
+`local-private/`, which is ignored by Git. Keep PATs in the local `.env`. The
+committed examples contain only neutral values.
 
 ---
 
@@ -319,6 +331,7 @@ tfs-mcp/
 │   ├── request-context.js      # Per-request context (auth alias, etc.)
 │   └── tools/
 │       ├── work-item.js
+│       ├── doctor.js
 │       ├── pull-request.js
 │       ├── sprint.js
 │       ├── handoff.js
@@ -334,13 +347,16 @@ tfs-mcp/
     └── issue-analysis.md
 ```
 
-`scripts/sprint-archive/` holds historical ad-hoc scripts used during sprint cleanups (creation/update batches, wiki readers, etc.). The folder is gitignored — it lives on disk for personal reference but is not published.
+`local-private/` holds organization-specific configuration, exports and
+ad-hoc scripts. It is gitignored and stays available locally without becoming
+part of the public server.
 
 ---
 
 ## Security
 
 - The `.env` file is gitignored. Use `.env.example` as the template.
+- Organization-specific files belong under ignored `local-private/` paths.
 - PATs are sent over HTTPS to your TFS endpoint and never logged.
 - Mutating tools (`tfs_update_work_item`, `tfs_update_issue_analysis`, `tfs_add_pr_comment`, `tfs_comment_review_findings`) require explicit input — there is no implicit batch-write.
 - `tfs_review_pr` and `tfs_comment_review_findings` default to `dry_run=true`.
@@ -389,9 +405,19 @@ notepad .env
 
 Veja a tabela acima na seção em inglês — os nomes são os mesmos.
 
+Copie `config/tfs.example.json` para o caminho ignorado
+`local-private/config/tfs.json` e personalize campos, perfis e consultas
+salvas. Mantenha PATs somente no `.env`.
+
 ### Perfis de work item
 
-Use `TFS_WORK_ITEM_PROFILES_JSON` no `.env` local para mapear campos ricos e defaults obrigatórios de qualquer tipo customizado. A tool continua genérica: `custom_fields` cria ou altera campos pelo reference name, `remove_fields` limpa campos na edição e `include_fields:true` retorna o mapa bruto para inspeção. Nomes e valores específicos da organização não devem ser versionados.
+Use `local-private/config/tfs.json` preferencialmente, ou
+`TFS_WORK_ITEM_PROFILES_FILE`/`TFS_WORK_ITEM_PROFILES_JSON`, para mapear campos
+ricos e defaults obrigatórios de qualquer tipo customizado. A tool continua
+genérica: `custom_fields` cria ou altera campos pelo reference name,
+`remove_fields` limpa campos na edição e `include_fields:true` retorna o mapa
+bruto para inspeção. Nomes e valores específicos da organização não devem ser
+versionados.
 
 ### Catálogo de tools
 

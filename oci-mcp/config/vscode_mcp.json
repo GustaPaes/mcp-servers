@@ -2,7 +2,7 @@
   "_comment": "VS Code MCP config — for the built-in MCP support in VS Code (settings.json -> 'mcp' key) or the GitHub Copilot Chat extension.",
   "mcp": {
     "servers": {
-      "oci-extras": {
+      "oci-extras-mcp": {
         "type": "stdio",
         "command": "node",
         "args": ["C:/Workspace/MCP Servers/oci-mcp/oci-extras-mcp/index.js"],

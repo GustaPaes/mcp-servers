@@ -15,11 +15,12 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
-    "test": "node --test --test-reporter=spec --import=tsx tests/smoke.test.ts tests/safety.test.ts",
+    "test": "node --test --test-reporter=spec --import=tsx tests/smoke.test.ts tests/safety.test.ts tests/security.test.ts",
     "test:install-browsers": "playwright install chromium",
     "clean": "node -e \"import('node:fs').then(fs=>fs.rmSync('dist',{recursive:true,force:true}))\""
   },
   "dependencies": {
+    "@gustapaes/mcp-runtime": "file:../packages/mcp-runtime",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "dotenv": "^16.4.5",
     "pino": "^9.5.0",

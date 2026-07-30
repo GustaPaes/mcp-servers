@@ -27,3 +27,9 @@ Delete, terminate, schedule deletion and third-party mutation require the server
 - Check active profile, region and compartment before mutating resources.
 - Prefer `oci-extras-mcp` for OKE/Vault/Kubernetes workflows and official Oracle MCP servers for generic OCI service coverage.
 - Keep audit logs, ownership ledger, kubeconfig and `.env` files out of Git.
+
+## Public/private boundary
+
+- Store real tenancy, compartment, cluster, Vault, function, stream and Kubernetes details only in `.env` or `local-private/`; both are ignored by Git.
+- Keep kubeconfigs, ownership ledgers, exported manifests, operational runbooks and organization-specific scripts under `local-private/config`, `local-private/runbooks`, `local-private/scripts` or `local-private/tests`.
+- Commit only neutral schemas, tools and examples. Never add real OCIDs, internal endpoints, account names or production topology to tracked documentation or fixtures.

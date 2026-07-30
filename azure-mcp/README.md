@@ -13,6 +13,7 @@
 
 - **Server**: `microsoft/mcp` → `Azure.Mcp.Server` (GA 1.0)
 - **Distribution**: NPM `@azure/mcp@3.0.0-beta.30` via `npx` (pinned for reproducibility)
+- **Single version source**: [`server-version.json`](./server-version.json), consumed by the launcher and validation/update scripts
 - **Auth**: `DefaultAzureCredential` — inherits the Azure CLI session you already have
 - **Multi-tenant / multi-subscription**: `scripts/switch-context.ps1`
 - **Safety policy** (mandatory reading for any LLM driving this MCP): [`AGENTS.md`](./AGENTS.md)
@@ -27,9 +28,9 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
-    "azure": {
+    "azure-mcp": {
       "type": "local",
-      "command": ["npx", "-y", "@azure/mcp@3.0.0-beta.30", "server", "start"],
+      "command": ["powershell", "-NoProfile", "-File", "C:/Workspace/MCP Servers/azure-mcp/scripts/start-server.ps1"],
       "enabled": true
     }
   }
@@ -41,8 +42,8 @@
 {
   "mcpServers": {
     "azure-mcp": {
-      "command": "npx",
-      "args": ["-y", "@azure/mcp@3.0.0-beta.30", "server", "start"]
+      "command": "powershell",
+      "args": ["-NoProfile", "-File", "C:/Workspace/MCP Servers/azure-mcp/scripts/start-server.ps1"]
     }
   }
 }
@@ -50,7 +51,7 @@
 
 ```bash
 # Claude Code (CLI)
-claude mcp add azure -- npx -y @azure/mcp@3.0.0-beta.30 server start
+claude mcp add azure-mcp -- powershell -NoProfile -File "C:/Workspace/MCP Servers/azure-mcp/scripts/start-server.ps1"
 ```
 
 For Cursor / Cline / Codex CLI / Continue snippets, see the [root README](../README.md#%EF%B8%8F-install-in-your-mcp-client).
@@ -206,9 +207,14 @@ Resumo das regras críticas:
 & "C:\Workspace\MCP Servers\azure-mcp\scripts\update-server.ps1"
 ```
 
-O script limpa o cache do `npx` e força o download da última versão de `@azure/mcp`.
+Sem parâmetros, o script limpa apenas o cache relacionado e baixa novamente a
+versão validada em `server-version.json`. Use `-Pin "<versao>"` para testar
+outra versão sem alterar automaticamente o pin público.
 
-> Para testar uma versão nova em sandbox, edite `mcp.json` substituindo o pin por `@latest` ou por outra versão específica. Só promova para uso diário depois de rodar `scripts\verify-auth.ps1 -Version "<versao>"`.
+> Para promover uma versão nova, teste com `update-server.ps1 -Pin "<versao>"`,
+> rode `verify-auth.ps1 -Version "<versao>"` e então altere
+> `server-version.json`. Todos os clientes que usam `start-server.ps1` passam a
+> consumir o mesmo pin.
 
 ---
 
@@ -228,6 +234,11 @@ Arquivos:
 - `docs\vm-scheduling-pattern.md`
 - `scripts\vm-power.ps1`
 - `scripts\register-vm-schedule.ps1`
+
+Scripts, inventários e runbooks específicos de uma organização devem ficar em
+`local-private/scripts`, `local-private/config` e `local-private/runbooks`.
+Esses diretórios são ignorados pelo Git; somente os helpers genéricos acima são
+publicados.
 
 Exemplo de uso manual:
 

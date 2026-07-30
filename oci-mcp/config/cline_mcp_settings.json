@@ -1,7 +1,7 @@
 {
   "_comment": "Cline (VS Code extension) config — copy mcpServers into cline_mcp_settings.json. Cline supports streamableHttp; use that for oci-extras if you prefer running it as a long-lived server.",
   "mcpServers": {
-    "oci-extras": {
+    "oci-extras-mcp": {
       "autoApprove": [
         "oke_list_clusters",
         "oke_get_cluster",

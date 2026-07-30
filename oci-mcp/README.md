@@ -172,7 +172,7 @@ Or add manually to OpenCode (`~/.config/opencode/opencode.json`):
 {
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
-    "oci-extras": {
+    "oci-extras-mcp": {
       "type": "local",
       "command": ["node", "C:/Workspace/MCP Servers/oci-mcp/oci-extras-mcp/index.js"],
       "enabled": true,

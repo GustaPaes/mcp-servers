@@ -6,33 +6,27 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { atomicWriteJsonSync } from "@gustapaes/mcp-runtime";
 import { config } from "../config.js";
 
 const FILE = config.ownershipLedgerPath;
 
-function ensureFile() {
-  try {
-    fs.mkdirSync(path.dirname(FILE), { recursive: true });
-  } catch {
-    /* ignore */
-  }
-  if (!fs.existsSync(FILE)) {
-    fs.writeFileSync(FILE, JSON.stringify({}, null, 2));
-  }
+function ensureParentDirectory() {
+  fs.mkdirSync(path.dirname(FILE), { recursive: true });
 }
 
 function read() {
-  ensureFile();
+  if (!fs.existsSync(FILE)) return {};
   try {
     return JSON.parse(fs.readFileSync(FILE, "utf-8"));
-  } catch {
-    return {};
+  } catch (error) {
+    throw new Error(`Ownership ledger is not valid JSON: ${error.message}`);
   }
 }
 
 function write(data) {
-  ensureFile();
-  fs.writeFileSync(FILE, JSON.stringify(data, null, 2));
+  ensureParentDirectory();
+  atomicWriteJsonSync(FILE, data);
 }
 
 export function record({ ocid, type, name, compartment, tags = {}, extra = {} }) {

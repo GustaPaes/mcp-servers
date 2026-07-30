@@ -6,9 +6,21 @@ import path from "node:path";
 import { sessionManager } from "../session-manager.js";
 import type { ToolModule } from "../types.js";
 import { outputPath, timestamp } from "../output-dir.js";
+import { config } from "../config.js";
 
 export const visualTools: ToolModule = {
   defs: [
+    {
+      name: "context_recording_status",
+      description: "Report HAR, video and trace recording state for a context without changing or closing it.",
+      annotations: { title: "Recording status", readOnlyHint: true, idempotentHint: true },
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["context_id"],
+        properties: { context_id: { type: "string" } },
+      },
+    },
     {
       name: "page_screenshot",
       description: "Take a screenshot. Saves to <output>/screenshots and optionally returns base64.",
@@ -127,6 +139,17 @@ export const visualTools: ToolModule = {
   ],
 
   handlers: {
+    async context_recording_status(args) {
+      const { ctx } = sessionManager.requireContext(String(args.context_id));
+      return {
+        context_id: ctx.id,
+        har: ctx.recording.har ? { active: true, path: ctx.recording.har.path } : { active: false },
+        video: ctx.recording.video ? { active: true, dir: ctx.recording.video.dir } : { active: false },
+        tracing: ctx.recording.tracing?.active
+          ? { active: true, output_path: ctx.recording.tracing.outputPath ?? null }
+          : { active: false },
+      };
+    },
     async page_screenshot(args) {
       const rec = sessionManager.resolvePage(args.page_id as string | undefined);
       const type = (args.type as "png" | "jpeg" | undefined) ?? "png";
@@ -149,7 +172,14 @@ export const visualTools: ToolModule = {
         buf = await rec.page.screenshot(opts);
       }
       const result: Record<string, unknown> = { path: filePath, bytes: buf.byteLength, type };
-      if (args.return_base64) result.base64 = buf.toString("base64");
+      if (args.return_base64) {
+        if (buf.byteLength <= config.maxArtifactBytes) {
+          result.base64 = buf.toString("base64");
+        } else {
+          result.base64_omitted = true;
+          result.base64_limit_bytes = config.maxArtifactBytes;
+        }
+      }
       return result;
     },
     async page_pdf(args) {
@@ -184,15 +214,30 @@ export const visualTools: ToolModule = {
       if (!ctx.recording.video) return { active: false, videos: [] };
       const dir = ctx.recording.video.dir;
       const closePages = (args.close_pages as boolean | undefined) ?? true;
+      const pages = [...ctx.pages.values()];
+      const videoHandles = pages
+        .map((record) => record.page.video())
+        .filter((video) => video != null);
       if (closePages) {
-        await Promise.allSettled([...ctx.pages.values()].map((p) => p.page.close()));
+        await Promise.allSettled(pages.map((record) => record.page.close()));
+      } else {
+        return {
+          active: true,
+          videos: [],
+          note: "Video remains active until pages or the context are closed.",
+        };
       }
-      // Allow filesystem flush
-      await new Promise((r) => setTimeout(r, 200));
-      const videos = await fs.readdir(dir).catch(() => [] as string[]);
+      const settledPaths = await Promise.all(
+        videoHandles.map((video) => video.path().catch(() => null)),
+      );
+      const discovered = await fs.readdir(dir).catch(() => [] as string[]);
+      const videos = [
+        ...settledPaths.filter((item): item is string => Boolean(item)),
+        ...discovered.map((file) => path.join(dir, file)),
+      ];
       return {
         active: false,
-        videos: videos.map((f) => path.join(dir, f)),
+        videos: [...new Set(videos)],
       };
     },
     async tracing_start(args) {

@@ -12,6 +12,7 @@ import {
   TFS_ISSUE_ANALYSIS_FIELD,
   TFS_ISSUE_CORRECTION_AND_IMPACTS_FIELD,
   getConfiguredWorkItemProfile,
+  getSavedQuery,
 } from "../config.js";
 import {
   validateCustomFields,
@@ -50,6 +51,7 @@ const zId = z.union([z.number(), z.string()]);
 
 const QueryArgs = z.object({
   preset: z.enum(["sprint", "my_tasks", "active_pbis", "bugs", "user_stories", "active_tasks"]).optional(),
+  saved_query: z.string().min(1).optional(),
   wiql: z.string().optional(),
   search: z.string().optional(),
   ids: z.string().optional(),
@@ -506,7 +508,7 @@ export async function toolWorkItemContext(args) {
 
 export async function toolQueryWorkItems(args) {
   const parsed = QueryArgs.parse(args);
-  const { preset, wiql, search, ids, state, work_item_type, assigned_to, area_path, iteration_path, top } = parsed;
+  const { preset, saved_query, wiql, search, ids, state, work_item_type, assigned_to, area_path, iteration_path, top } = parsed;
 
   // Direct IDs batch
   if (ids) {
@@ -518,7 +520,12 @@ export async function toolQueryWorkItems(args) {
 
   let query = wiql;
   if (!query) {
-    if (preset && QUERY_PRESETS[preset]) {
+    if (saved_query) {
+      query = getSavedQuery(saved_query);
+      if (!query) {
+        throw new Error(`Consulta salva desconhecida: ${saved_query}. Use tfs_saved_queries para listar as disponíveis.`);
+      }
+    } else if (preset && QUERY_PRESETS[preset]) {
       query = QUERY_PRESETS[preset];
     } else {
       const filters = [

@@ -28,14 +28,21 @@ async function closeSession(sessionId) {
 }
 
 function registerSession(sessionId, transport, server) {
-  const timer = setTimeout(() => void closeSession(sessionId), MCP_HTTP_SESSION_TTL_MS);
-  timer.unref?.();
-  sessions.set(sessionId, {
+  const entry = {
     transport,
     server,
-    timer,
-    expiresAt: Date.now() + MCP_HTTP_SESSION_TTL_MS,
-  });
+    timer: undefined,
+    expiresAt: 0,
+  };
+  sessions.set(sessionId, entry);
+  touchSession(sessionId, entry);
+}
+
+function touchSession(sessionId, entry) {
+  clearTimeout(entry.timer);
+  entry.expiresAt = Date.now() + MCP_HTTP_SESSION_TTL_MS;
+  entry.timer = setTimeout(() => void closeSession(sessionId), MCP_HTTP_SESSION_TTL_MS);
+  entry.timer.unref?.();
 }
 
 export async function startHttpStreamable(port, host = MCP_HTTP_HOST) {
@@ -116,6 +123,7 @@ export async function startHttpStreamable(port, host = MCP_HTTP_HOST) {
           res.end(JSON.stringify({ error: "session_expired" }));
           return;
         }
+        touchSession(sessionId, entry);
         transport = entry.transport;
       } else if (!sessionId && req.method === "POST" && parsedBody?.method === "initialize") {
         if (sessions.size >= MCP_HTTP_MAX_SESSIONS) {
@@ -165,4 +173,12 @@ export async function startHttpStreamable(port, host = MCP_HTTP_HOST) {
     { host, port, endpoint: `http://${host}:${port}/mcp`, health: `http://${host}:${port}/health` },
     "MCP HTTP server started"
   );
+
+  const shutdown = async () => {
+    await Promise.allSettled([...sessions.keys()].map((sessionId) => closeSession(sessionId)));
+    await new Promise((resolve) => httpServer.close(() => resolve()));
+  };
+  process.once("SIGINT", () => void shutdown());
+  process.once("SIGTERM", () => void shutdown());
+  return httpServer;
 }
