@@ -1,7 +1,7 @@
 # Meta Ads MCP
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Meta Marketing API](https://img.shields.io/badge/Meta%20Marketing%20API-v21.0-1877F2?logo=meta&logoColor=white)](https://developers.facebook.com/docs/marketing-apis)
+[![Meta Marketing API](https://img.shields.io/badge/Meta%20Marketing%20API-v25.0-1877F2?logo=meta&logoColor=white)](https://developers.facebook.com/docs/marketing-apis)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A520-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![MCP](https://img.shields.io/badge/Model%20Context%20Protocol-1.x-6f42c1)](https://modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../LICENSE)
@@ -74,7 +74,7 @@ AUDIT_LOG_PATH=./data/audit.log
 STORAGE_PATH=./data/storage.json
 
 # Meta Graph API
-META_GRAPH_API_VERSION=v21.0
+META_GRAPH_API_VERSION=v25.0
 META_GRAPH_API_BASE_URL=https://graph.facebook.com
 
 # Global safety switches

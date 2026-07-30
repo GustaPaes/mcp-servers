@@ -11,8 +11,14 @@ export interface McpTool<TInput extends ZodTypeAny, TOutput> {
   description: string;
   inputSchema: TInput;
   handler: (input: z.infer<TInput>, ctx: ToolContext) => Promise<TOutput>;
-  /** When true, this tool can perform real mutations on the Meta API. */
+  /** When true, this tool changes Meta state or the local draft/profile store. */
   mutating?: boolean;
+  /** Destructive operations are intentionally rare; deletion is not exposed. */
+  destructive?: boolean;
+  /** Override when a mutating operation is safe to repeat with the same input. */
+  idempotent?: boolean;
+  /** False for tools that only analyze caller-provided/local data. */
+  openWorld?: boolean;
 }
 
 export function defineTool<TInput extends ZodTypeAny, TOutput>(

@@ -46,6 +46,7 @@ export const getAccountProfileTool = defineTool({
 
 export const updateAccountProfileTool = defineTool({
   name: 'update_account_profile',
+  mutating: true,
   description:
     'Atualiza configurações estratégicas da conta (persona, restrições, limites, tom). Não altera credenciais. Validação Zod estrita.',
   inputSchema: z

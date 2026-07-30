@@ -5,6 +5,7 @@ import { sessionManager } from "../session-manager.js";
 import type { ToolModule } from "../types.js";
 import { assertSelectorAllowed } from "../safety/selectors.js";
 import { checkSafeEval, evalTimeoutMs, withTimeout } from "../safety/safe-eval.js";
+import { config } from "../config.js";
 
 export const extractionTools: ToolModule = {
   defs: [
@@ -163,6 +164,11 @@ export const extractionTools: ToolModule = {
         properties: {
           page_id: { type: "string" },
           urls: { type: "array", items: { type: "string" } },
+          reveal_values: {
+            type: "boolean",
+            default: false,
+            description: "Reveal cookie values only when PWMCP_ALLOW_SECRET_REVEAL=true.",
+          },
         },
       },
     },
@@ -280,7 +286,14 @@ export const extractionTools: ToolModule = {
       const rec = sessionManager.resolvePage(args.page_id as string | undefined);
       const ctx = sessionManager.requireContext(rec.contextId).ctx;
       const cookies = await ctx.context.cookies(args.urls as string[] | undefined);
-      return { count: cookies.length, cookies };
+      const reveal = Boolean(args.reveal_values);
+      if (reveal && !config.allowSecretReveal) {
+        throw new Error("cookie value reveal requires PWMCP_ALLOW_SECRET_REVEAL=true");
+      }
+      return {
+        count: cookies.length,
+        cookies: reveal ? cookies : cookies.map((cookie) => ({ ...cookie, value: "[REDACTED]" })),
+      };
     },
   },
 };

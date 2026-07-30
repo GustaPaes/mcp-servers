@@ -12,7 +12,7 @@
           "ACCOUNTS_CONFIG_PATH": "C:/Workspace/MCP Servers/meta-ads-mcp/config/accounts.json",
           "AUDIT_LOG_PATH": "C:/Workspace/MCP Servers/meta-ads-mcp/data/audit.log",
           "STORAGE_PATH": "C:/Workspace/MCP Servers/meta-ads-mcp/data/storage.json",
-          "META_GRAPH_API_VERSION": "v21.0",
+          "META_GRAPH_API_VERSION": "v25.0",
           "GLOBAL_MAX_DAILY_BUDGET": "500",
           "GLOBAL_MAX_BUDGET_CHANGE_PCT": "25",
           "META_TOKEN_ACME_FASHION": "EAA-replace-or-prefer-os-env"

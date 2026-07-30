@@ -26,3 +26,9 @@ For high-impact targets (production/release/main/master/hml/homolog patterns), t
 - Do not change work item state, assignee, story points or acceptance criteria without explicit confirmation in the same turn.
 - For development analysis of an `Issue`, use `tfs_update_issue_analysis`. It requires `development_analysis`, accepts optional `correction_and_impacts`, and follows [`docs/issue-analysis.md`](./docs/issue-analysis.md).
 - Treat production/release branches as high impact and ask for confirmation before posting or changing related items.
+
+## Public/private boundary
+
+- Keep organization names, internal URLs, process field names, PAT aliases, repository names and real work-item defaults in `.env` or `local-private/`; both are ignored by Git.
+- Commit only neutral examples and reusable behavior. When a custom process needs special fields, configure `TFS_WORK_ITEM_PROFILES_JSON` locally instead of hard-coding the organization in source.
+- Put one-off maintenance scripts and exported TFS payloads under `local-private/`. Never create them in tracked `src/`, `docs/`, `scripts/` or `tests/` paths.

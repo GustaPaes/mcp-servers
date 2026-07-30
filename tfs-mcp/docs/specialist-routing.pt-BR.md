@@ -20,7 +20,7 @@ O roteamento por especialistas está embutido em:
 
 Use `tfs_specialist_review` diretamente apenas quando quiser somente a análise por especialistas ou quando outro fluxo precisar reutilizar o bloco de recomendações.
 
-No uso normal do MCP, o agente não deve esperar o usuário mencionar especialistas. Se o usuário pedir para usar o `tfs-mcp` para escrita de atividade, refinamento, revisão de PR, release readiness, risco de entrega ou status de pipeline, escolha o fluxo embutido correspondente acima e consuma o bloco `specialistReview` automaticamente.
+No uso normal do MCP, o agente não deve esperar o usuário mencionar especialistas. Se o usuário pedir para usar este MCP para escrita de atividade, refinamento, revisão de PR, release readiness, risco de entrega ou status de pipeline, escolha o fluxo embutido correspondente acima e consuma o bloco `specialistReview` automaticamente.
 
 ## Catálogo De Especialistas
 
@@ -59,7 +59,7 @@ Agentes devem usar `specialistsUsed` como evidência de quais lentes foram aplic
 ## Padrão De Prompt Recomendado
 
 ```text
-Use o tfs-mcp para revisar a US 12345. Quero a escrita de negócio, critérios técnicos, riscos de pipeline/release e checklist de QA.
+Use o MCP de TFS para revisar a US 12345. Quero a escrita de negócio, critérios técnicos, riscos de pipeline/release e checklist de QA.
 ```
 
 O agente deve usar um fluxo que já embute especialistas, como `tfs_prepare_refinement` ou `tfs_generate_activity_template_from_items`. A camada de especialistas roda automaticamente e retorna `specialistReview`.
@@ -67,7 +67,7 @@ O agente deve usar um fluxo que já embute especialistas, como `tfs_prepare_refi
 Para PRs:
 
 ```text
-Use o tfs-mcp para preparar a revisão do PR 456 no repo X.
+Use o MCP de TFS para preparar a revisão do PR 456 no repo X.
 ```
 
 O agente deve chamar `tfs_prepare_pr_review`, que usa os arquivos alterados para rotear especialistas.
@@ -75,7 +75,7 @@ O agente deve chamar `tfs_prepare_pr_review`, que usa os arquivos alterados para
 Para release/pipeline:
 
 ```text
-Use o tfs-mcp para avaliar o risco da entrega na branch release/2026.06.
+Use o MCP de TFS para avaliar o risco da entrega na branch release/2026.06.
 ```
 
 O agente deve chamar `tfs_delivery_risk_report`, `tfs_release_readiness` ou `tfs_pipeline_status`, conforme o escopo. Cada fluxo retorna recomendações de especialistas sem exigir uma chamada separada para `tfs_specialist_review`.

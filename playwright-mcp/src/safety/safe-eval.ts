@@ -21,6 +21,12 @@ const FORBIDDEN_PATTERNS: ReadonlyArray<RegExp> = [
   /\bchrome\s*\.\s*webRequest\b/,
   /\bchrome\s*\.\s*declarativeNetRequest\b/,
 ];
+const STRICT_FORBIDDEN_PATTERNS: ReadonlyArray<RegExp> = [
+  /\bdocument\s*\.\s*cookie\b/i,
+  /\blocalStorage\b/i,
+  /\bsessionStorage\b/i,
+  /\bindexedDB\b/i,
+];
 
 export interface SafeEvalCheck {
   ok: boolean;
@@ -37,6 +43,13 @@ export function checkSafeEval(source: string): SafeEvalCheck {
   for (const pat of FORBIDDEN_PATTERNS) {
     if (pat.test(source)) {
       return { ok: false, reason: `forbidden token matched: ${pat}` };
+    }
+  }
+  if (config.strict) {
+    for (const pat of STRICT_FORBIDDEN_PATTERNS) {
+      if (pat.test(source)) {
+        return { ok: false, reason: `sensitive browser storage access matched: ${pat}` };
+      }
     }
   }
   // Must look like an arrow fn or `function`. Be permissive but require parens.

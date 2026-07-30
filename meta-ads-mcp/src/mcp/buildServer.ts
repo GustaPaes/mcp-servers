@@ -72,13 +72,34 @@ export async function buildMcpServer(): Promise<BuiltServer> {
         description: tool.description,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         inputSchema: (tool.inputSchema as any).shape ?? undefined,
+        annotations: {
+          title: tool.name,
+          readOnlyHint: !tool.mutating,
+          destructiveHint: tool.destructive ?? false,
+          idempotentHint: tool.idempotent ?? !tool.mutating,
+          openWorldHint: tool.openWorld ?? true,
+        },
       },
       async (args: unknown) => {
         try {
           const parsed = tool.inputSchema.parse(args ?? {});
           const result = await tool.handler(parsed, ctx);
+          const structuredContent: Record<string, unknown> | undefined =
+            result && typeof result === 'object'
+              ? Array.isArray(result)
+                ? { items: result }
+                : (result as Record<string, unknown>)
+              : undefined;
           return {
             content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+            ...(structuredContent ? { structuredContent } : {}),
+            isError:
+              Boolean(
+                result &&
+                  typeof result === 'object' &&
+                  'ok' in result &&
+                  (result as { ok?: boolean }).ok === false,
+              ),
           };
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);

@@ -1,4 +1,4 @@
-import { listPdis, listGoals, loadEvidenceLog, loadOnlineState, saveApprovedChanges } from "../storage.js";
+import { listPdis, listGoals, loadEvidenceLog, loadOnlineState } from "../storage.js";
 import { computePdiProgress } from "../analytics/progress-tracker.js";
 
 function normalizeText(value) {
@@ -19,7 +19,7 @@ export async function toolOnlineStateGet() {
   if (!onlineState) {
     return {
       available: false,
-      message: "Nenhum snapshot online capturado ainda. Execute npm run career-platform:capture.",
+      message: "Nenhum snapshot externo foi importado para o armazenamento local.",
     };
   }
   return {
@@ -45,7 +45,7 @@ export async function toolOnlineReviewSuggestions() {
     loadEvidenceLog(),
   ]);
   if (!onlineState) {
-    throw new Error("Nenhum snapshot online capturado ainda. Execute npm run career-platform:capture.");
+    throw new Error("Nenhum snapshot externo foi importado para o armazenamento local.");
   }
 
   const suggestions = (onlineState.visiblePlanCards ?? []).map((card) => {
@@ -92,11 +92,9 @@ export async function toolOnlineReviewSuggestions() {
     };
   });
 
-  const generated = {
+  return {
     generatedAt: new Date().toISOString(),
     sourceCaptureAt: onlineState.capturedAt,
     suggestions,
   };
-  await saveApprovedChanges({ generatedAt: generated.generatedAt, sourceCaptureAt: generated.sourceCaptureAt, changes: suggestions });
-  return generated;
 }

@@ -160,4 +160,4 @@ At ANY step that returns "no", the tool returns either:
 
 ## Versioning
 
-`meta-ads-mcp` follows SemVer. The Meta Graph API version is pinned via `META_GRAPH_API_VERSION` (default `v21.0`). Breaking changes in the Graph API are tracked in [`CHANGELOG.md`](./CHANGELOG.md).
+`meta-ads-mcp` follows SemVer. The Meta Graph API version is pinned via `META_GRAPH_API_VERSION` (default `v25.0`). Breaking changes in the Graph API are tracked in [`CHANGELOG.md`](./CHANGELOG.md).

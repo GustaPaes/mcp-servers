@@ -17,7 +17,7 @@ async function withTfsClient(run) {
     stderr: "pipe",
     env: { ...process.env },
   });
-  const client = new Client({ name: "career-development-mcp-bridge", version: "1.0.0" }, { capabilities: {} });
+  const client = new Client({ name: "career-development-tfs-bridge", version: "1.1.0" }, { capabilities: {} });
   try {
     await client.connect(transport);
     return await run(client);

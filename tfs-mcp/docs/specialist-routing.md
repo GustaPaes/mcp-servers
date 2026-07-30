@@ -20,7 +20,7 @@ Specialist routing is embedded in:
 
 Use `tfs_specialist_review` directly only when the user asks for a specialist-only analysis or when another workflow needs a reusable recommendation block.
 
-For normal MCP usage, agents should not wait for the user to mention specialists. If the user asks to use `tfs-mcp` for activity writing, refinement, PR review, release readiness, delivery risk or pipeline status, choose the matching embedded workflow above and consume its `specialistReview` block automatically.
+For normal MCP usage, agents should not wait for the user to mention specialists. If the user asks to use this MCP for activity writing, refinement, PR review, release readiness, delivery risk or pipeline status, choose the matching embedded workflow above and consume its `specialistReview` block automatically.
 
 ## Specialist Catalog
 
@@ -59,7 +59,7 @@ Agents should use `specialistsUsed` as evidence of which expert lenses were appl
 ## Recommended Prompt Style
 
 ```text
-Use o tfs-mcp para revisar a US 12345. Quero a escrita de negócio, critérios técnicos, riscos de pipeline/release e checklist de QA.
+Use o MCP de TFS para revisar a US 12345. Quero a escrita de negócio, critérios técnicos, riscos de pipeline/release e checklist de QA.
 ```
 
 The agent should use an embedded workflow such as `tfs_prepare_refinement` / `tfs_generate_activity_template_from_items`. The specialist layer runs automatically and returns `specialistReview`.
@@ -67,7 +67,7 @@ The agent should use an embedded workflow such as `tfs_prepare_refinement` / `tf
 For PRs:
 
 ```text
-Use o tfs-mcp para preparar a revisão do PR 456 no repo X.
+Use o MCP de TFS para preparar a revisão do PR 456 no repo X.
 ```
 
 The agent should call `tfs_prepare_pr_review`, which uses changed files to route specialists.
@@ -75,7 +75,7 @@ The agent should call `tfs_prepare_pr_review`, which uses changed files to route
 For release/pipeline work:
 
 ```text
-Use o tfs-mcp para avaliar o risco da entrega na branch release/2026.06.
+Use o MCP de TFS para avaliar o risco da entrega na branch release/2026.06.
 ```
 
 The agent should call `tfs_delivery_risk_report`, `tfs_release_readiness` or `tfs_pipeline_status` depending on scope. Each returns specialist recommendations without requiring a separate `tfs_specialist_review` call.

@@ -1,4 +1,4 @@
-# tfs-mcp MCP
+# tfs-mcp
 
 > **MCP server for on-prem TFS / Azure DevOps Server.** Built for the daily flow of an engineering team: backlog hygiene, refinement, PR review, release readiness, work-item writing template and executive risk score.
 
@@ -133,7 +133,8 @@ See the [root README](../README.md#%EF%B8%8F-install-in-your-mcp-client) for rea
 | `MCP_HTTP_HOST` | `127.0.0.1` | Host for HTTP mode; non-loopback requires `MCP_HTTP_TOKEN` |
 | `MCP_HTTP_TOKEN` | _(empty)_ | Bearer token for HTTP mode |
 | `TFS_AUDIT_LOG_PATH` | `./data/audit.log` | Append-only JSONL audit log for mutation attempts |
-| `TFS_DEFAULT_QUARTER` | _(current quarter)_ | Default value for legacy quarter fields during creation |
+| `TFS_DEFAULT_QUARTER` | _(current quarter)_ | Value available as `{{currentQuarter}}` inside profile defaults |
+| `TFS_WORK_ITEM_PROFILES_JSON` | `{}` | Per-type rich-text fields and required/default fields, indexed by work item type |
 | `LOG_LEVEL` | `info` | `trace`/`debug`/`info`/`warn`/`error` |
 
 ---
@@ -141,7 +142,7 @@ See the [root README](../README.md#%EF%B8%8F-install-in-your-mcp-client) for rea
 ## Tool catalog
 
 ### Context & backlog
-- `tfs_work_item` — full details of a work item
+- `tfs_work_item` — full details of a work item; `include_fields:true` also returns the raw field map
 - `tfs_analyze_work_item` — quality score, US format, gaps, refinement checklist
 - `tfs_work_item_context` — work item + related items + PRs + wiki pages
 - `tfs_specialist_review` — reusable specialist-only analysis block. Normal writing/refinement/PR/release/pipeline workflows already run specialists automatically.
@@ -167,8 +168,8 @@ See the [root README](../README.md#%EF%B8%8F-install-in-your-mcp-client) for rea
 - `tfs_list_repos`, `tfs_wiki`
 
 ### Controlled mutation
-- `tfs_work_item_create` — create a work item; defaults to `dry_run:true`
-- `tfs_update_work_item` — change state, owner, comment, title, story points or rich text; defaults to `dry_run:true`
+- `tfs_work_item_create` — create any standard or custom work item type; profile defaults and `custom_fields` support process-specific required fields; defaults to `dry_run:true`
+- `tfs_update_work_item` — change standard fields, write arbitrary `custom_fields` or clear `remove_fields`; defaults to `dry_run:true`
 - `tfs_update_issue_analysis` — write the required development analysis and optional correction/impact fields for an Issue; defaults to `dry_run:true`. See [`docs/issue-analysis.md`](./docs/issue-analysis.md).
 - `tfs_add_pr_comment` — add a PR comment; defaults to `dry_run:true`
 
@@ -179,13 +180,47 @@ The 5 premium workflows ship with formal `outputSchema` so MCP clients can valid
 
 ---
 
+## Work item profiles
+
+Different Azure DevOps processes can require different fields for the same operation. Keep those installation-specific rules outside the source by configuring `TFS_WORK_ITEM_PROFILES_JSON`:
+
+```json
+{
+  "Continuous Improvement": {
+    "businessField": "Custom.BusinessContext",
+    "technicalField": "Custom.TechnicalDetails",
+    "defaults": {
+      "Custom.Portfolio": "Platform",
+      "Custom.Quarter": "{{currentQuarter}}"
+    }
+  }
+}
+```
+
+The public tool remains generic. Calls can override profile defaults or provide additional fields by reference name:
+
+```json
+{
+  "work_item_type": "Continuous Improvement",
+  "title": "Automate the release workflow",
+  "custom_fields": {
+    "Custom.Impact": "High",
+    "Custom.ExpectedBenefits": "<div>Shorter lead time and fewer manual errors.</div>"
+  }
+}
+```
+
+Keep real process names, field reference names and allowed values in the local `.env`, which is ignored by Git. The committed `.env.example` contains only neutral examples.
+
+---
+
 ## Specialist routing
 
 Português: veja [`docs/specialist-routing.pt-BR.md`](./docs/specialist-routing.pt-BR.md).
 
 The MCP uses a deterministic specialist layer whenever the task involves activity writing, technical criteria, refinement, handoff, PR review, release readiness, delivery risk or pipeline status. This is not an external AI call and it does not rely on vague personas. The server detects signals from work item fields, tags, area path, affected locations, PR branches and changed files, then applies explicit rubrics.
 
-Agents do not need the user to mention `tfs_specialist_review` or "specialists". If the user asks to use `tfs-mcp` for one of these workflows, choose the normal domain tool and read its `specialistReview` block.
+Agents do not need the user to mention `tfs_specialist_review` or "specialists". If the user asks to use this MCP for one of these workflows, choose the normal domain tool and read its `specialistReview` block.
 
 Specialists currently modeled:
 
@@ -353,6 +388,10 @@ notepad .env
 ### Variáveis de ambiente
 
 Veja a tabela acima na seção em inglês — os nomes são os mesmos.
+
+### Perfis de work item
+
+Use `TFS_WORK_ITEM_PROFILES_JSON` no `.env` local para mapear campos ricos e defaults obrigatórios de qualquer tipo customizado. A tool continua genérica: `custom_fields` cria ou altera campos pelo reference name, `remove_fields` limpa campos na edição e `include_fields:true` retorna o mapa bruto para inspeção. Nomes e valores específicos da organização não devem ser versionados.
 
 ### Catálogo de tools
 

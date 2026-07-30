@@ -1,13 +1,22 @@
 {
   "name": "tfs-mcp",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "type": "module",
   "description": "MCP server for TFS / Azure DevOps Server work items, PRs, reviews and delivery workflows.",
   "license": "MIT",
   "main": "index.js",
-  "keywords": ["mcp", "model-context-protocol", "tfs", "azure-devops", "work-items", "pull-requests"],
-  "engines": { "node": ">=20" },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "tfs",
+    "azure-devops",
+    "work-items",
+    "pull-requests"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node index.js",
     "start:http": "node index.js --http",
@@ -20,7 +29,7 @@
     "test": "node --test tests"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "dotenv": "^16.4.7",
     "pino": "^9.6.0",
     "zod": "^3.25.0"

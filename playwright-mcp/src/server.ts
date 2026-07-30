@@ -31,6 +31,15 @@ function withToolMetadata(def: ToolDef): ToolDef {
   if (schema && typeof schema === "object" && schema.additionalProperties == null) {
     (schema as Record<string, unknown>).additionalProperties = false;
   }
+  const readOnly = def.annotations?.readOnlyHint === true;
+  def.annotations = {
+    title: def.annotations?.title ?? def.name.replaceAll("_", " "),
+    readOnlyHint: readOnly,
+    destructiveHint: def.annotations?.destructiveHint ?? false,
+    idempotentHint: def.annotations?.idempotentHint ?? readOnly,
+    openWorldHint: true,
+    ...def.annotations,
+  };
   return def;
 }
 
@@ -60,7 +69,13 @@ for (const def of TOOL_DEFS) {
 export function createServer(): Server {
   const server = new Server(
     { name: "playwright-mcp", version: "0.1.0" },
-    { capabilities: { tools: {} } },
+    {
+      capabilities: { tools: {} },
+      instructions:
+        "Browser automation can act on signed-in sessions. Confirm consequential actions, " +
+        "keep strict mode enabled, do not expose cookies or browser storage, and upload files " +
+        "only from configured allowed roots.",
+    },
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {

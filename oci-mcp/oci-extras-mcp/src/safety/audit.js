@@ -92,5 +92,5 @@ export function audit(event) {
     output: redact(event.output),
   });
   auditStream.write(line + "\n");
-  logger.debug(event, "audit");
+  logger.debug(redact(event), "audit");
 }

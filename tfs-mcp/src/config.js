@@ -8,6 +8,11 @@ import { fileURLToPath } from "url";
 import path from "path";
 import { execFileSync } from "child_process";
 import { getRequestContext } from "./request-context.js";
+import {
+  getProfileFieldNames,
+  getWorkItemProfile,
+  parseWorkItemProfiles,
+} from "./work-item-profile.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, "../.env") });
@@ -97,6 +102,13 @@ export const TFS_DEFAULT_QUARTER = firstNonEmpty(
   process.env.TFS_DEFAULT_QUARTER,
   `${new Date().getFullYear()} Q${Math.floor(new Date().getMonth() / 3) + 1}`
 );
+export const TFS_WORK_ITEM_PROFILES = parseWorkItemProfiles(
+  process.env.TFS_WORK_ITEM_PROFILES_JSON,
+  { variables: { currentQuarter: TFS_DEFAULT_QUARTER } }
+);
+export const TFS_WORK_ITEM_PROFILE_FIELDS = Object.freeze(
+  getProfileFieldNames(TFS_WORK_ITEM_PROFILES)
+);
 export const TFS_ISSUE_ANALYSIS_FIELD = firstNonEmpty(process.env.TFS_ISSUE_ANALYSIS_FIELD);
 export const TFS_ISSUE_CORRECTION_AND_IMPACTS_FIELD = firstNonEmpty(
   process.env.TFS_ISSUE_CORRECTION_AND_IMPACTS_FIELD
@@ -116,6 +128,7 @@ export const MCP_HTTP_TOKEN = firstNonEmpty(process.env.MCP_HTTP_TOKEN);
 export const MCP_HTTP_HOST = firstNonEmpty(process.env.MCP_HTTP_HOST, "127.0.0.1");
 export const MCP_HTTP_BODY_LIMIT_BYTES = Number(process.env.MCP_HTTP_BODY_LIMIT_BYTES ?? 1_048_576);
 export const MCP_HTTP_SESSION_TTL_MS = Number(process.env.MCP_HTTP_SESSION_TTL_MS ?? 30 * 60_000);
+export const MCP_HTTP_MAX_SESSIONS = Number(process.env.MCP_HTTP_MAX_SESSIONS ?? 50);
 
 /** Base URL de todos os endpoints _apis do projeto. */
 export const BASE = `${PROJECT_BASE_URL}/_apis`;
@@ -127,6 +140,10 @@ export function buildProjectUrl(pathname = "") {
 
 export function getConfiguredRepositories() {
   return [...TFS_REPOS];
+}
+
+export function getConfiguredWorkItemProfile(workItemType) {
+  return getWorkItemProfile(TFS_WORK_ITEM_PROFILES, workItemType);
 }
 
 export function getRepositoryCandidates() {

@@ -6,7 +6,7 @@ import { spawn } from "node:child_process";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
-const PORT = 3099;
+const PORT = 31_000 + Math.floor(Math.random() * 1_000);
 
 async function waitForReady(url, timeoutMs = 8000) {
   const deadline = Date.now() + timeoutMs;
@@ -34,7 +34,7 @@ async function main() {
   });
 
   try {
-    await waitForReady(`http://127.0.0.1:${PORT}/mcp`);
+    await waitForReady(`http://127.0.0.1:${PORT}/healthz`);
     const transport = new StreamableHTTPClientTransport(
       new URL(`http://127.0.0.1:${PORT}/mcp`)
     );

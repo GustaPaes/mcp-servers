@@ -12,7 +12,7 @@
 ## English overview
 
 - **Server**: `microsoft/mcp` → `Azure.Mcp.Server` (GA 1.0)
-- **Distribution**: NPM `@azure/mcp@3.0.0-beta.18` via `npx` (pinned for reproducibility)
+- **Distribution**: NPM `@azure/mcp@3.0.0-beta.30` via `npx` (pinned for reproducibility)
 - **Auth**: `DefaultAzureCredential` — inherits the Azure CLI session you already have
 - **Multi-tenant / multi-subscription**: `scripts/switch-context.ps1`
 - **Safety policy** (mandatory reading for any LLM driving this MCP): [`AGENTS.md`](./AGENTS.md)
@@ -29,7 +29,7 @@
   "mcp": {
     "azure": {
       "type": "local",
-      "command": ["npx", "-y", "@azure/mcp@3.0.0-beta.18", "server", "start"],
+      "command": ["npx", "-y", "@azure/mcp@3.0.0-beta.30", "server", "start"],
       "enabled": true
     }
   }
@@ -42,7 +42,7 @@
   "mcpServers": {
     "azure-mcp": {
       "command": "npx",
-      "args": ["-y", "@azure/mcp@3.0.0-beta.18", "server", "start"]
+      "args": ["-y", "@azure/mcp@3.0.0-beta.30", "server", "start"]
     }
   }
 }
@@ -50,7 +50,7 @@
 
 ```bash
 # Claude Code (CLI)
-claude mcp add azure -- npx -y @azure/mcp@3.0.0-beta.18 server start
+claude mcp add azure -- npx -y @azure/mcp@3.0.0-beta.30 server start
 ```
 
 For Cursor / Cline / Codex CLI / Continue snippets, see the [root README](../README.md#%EF%B8%8F-install-in-your-mcp-client).
@@ -64,7 +64,7 @@ For Cursor / Cline / Codex CLI / Continue snippets, see the [root README](../REA
 | Item | Valor |
 |---|---|
 | Servidor | [`microsoft/mcp` → `servers/Azure.Mcp.Server`](https://github.com/microsoft/mcp/tree/main/servers/Azure.Mcp.Server) |
-| Distribuição usada | NPM `@azure/mcp@3.0.0-beta.18` via `npx` |
+| Distribuição usada | NPM `@azure/mcp@3.0.0-beta.30` via `npx` |
 | Status do produto | **GA 1.0** ([anúncio](https://aka.ms/azmcp/announcement/ga)) |
 | Mantenedor | Microsoft (Azure SDK Team) |
 | Licença | MIT |
@@ -114,7 +114,7 @@ Validados no ambiente atual:
 - **VS Code** + extensão **GitHub Copilot Chat** (modo Agent)
 
 Opcional (recomendado para performance):
-- `npm install -g @azure/mcp@3.0.0-beta.18` para evitar download via `npx` em cada start.
+- `npm install -g @azure/mcp@3.0.0-beta.30` para evitar download via `npx` em cada start.
 
 ---
 
@@ -134,7 +134,7 @@ Se precisar reinstalar do zero, basta garantir o bloco no `mcp.json` do workspac
     "azure-mcp": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "@azure/mcp@3.0.0-beta.18", "server", "start"],
+      "args": ["-y", "@azure/mcp@3.0.0-beta.30", "server", "start"],
       "envFile": "C:\\Workspace\\MCP Servers\\azure-mcp\\.env"
     }
   }
@@ -147,7 +147,7 @@ Se precisar reinstalar do zero, basta garantir o bloco no `mcp.json` do workspac
 
 1. VS Code lê `C:\Workspace\.vscode\mcp.json` ao abrir o workspace.
 2. Para cada server `stdio`, faz spawn do `command + args`.
-3. O `azure-mcp` chama `npx -y @azure/mcp@3.0.0-beta.18 server start`, que baixa (na primeira vez) e inicia o servidor.
+3. O `azure-mcp` chama `npx -y @azure/mcp@3.0.0-beta.30 server start`, que baixa (na primeira vez) e inicia o servidor.
 4. As variáveis de `.env` (se existir) são injetadas no processo.
 5. As tools `azmcp_*` ficam disponíveis em **GitHub Copilot → Agent mode → 🛠 (refresh)**.
 
@@ -163,7 +163,7 @@ Se precisar reinstalar do zero, basta garantir o bloco no `mcp.json` do workspac
 O script:
 - Roda `az account show` (confirma tenant/subscription ativos)
 - Lista as subscriptions disponíveis
-- Executa `npx -y @azure/mcp@3.0.0-beta.18 tools list` e mostra a contagem de tools carregadas
+- Executa `npx -y @azure/mcp@3.0.0-beta.30 tools list` e mostra a contagem de tools carregadas
 
 ---
 
@@ -276,7 +276,7 @@ $env:NODE_EXTRA_CA_CERTS = "C:\caminho\para\corp-ca.pem"
 ### npx lento no startup
 Instale globalmente para eliminar o download em cada start:
 ```powershell
-npm install -g @azure/mcp@3.0.0-beta.18
+npm install -g @azure/mcp@3.0.0-beta.30
 ```
 E altere `mcp.json` para `"command": "azmcp"`, `"args": ["server", "start"]`.
 

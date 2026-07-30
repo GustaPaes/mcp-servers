@@ -15,20 +15,20 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
-    "test": "node --test --test-reporter=spec --import=tsx tests/smoke.test.ts",
+    "test": "node --test --test-reporter=spec --import=tsx tests/smoke.test.ts tests/safety.test.ts",
     "test:install-browsers": "playwright install chromium",
     "clean": "node -e \"import('node:fs').then(fs=>fs.rmSync('dist',{recursive:true,force:true}))\""
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "dotenv": "^16.4.5",
     "pino": "^9.5.0",
-    "playwright": "^1.59.1",
+    "playwright": "^1.62.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@types/node": "^22.7.4",
-    "tsx": "^4.19.1",
+    "@types/node": "^22.20.1",
+    "tsx": "^4.23.1",
     "typescript": "^5.6.2"
   },
   "license": "MIT"

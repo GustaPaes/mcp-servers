@@ -9,6 +9,7 @@ import { buildMcpServer, getToolCount } from "./server.js";
 import {
   MCP_HTTP_BODY_LIMIT_BYTES,
   MCP_HTTP_HOST,
+  MCP_HTTP_MAX_SESSIONS,
   MCP_HTTP_SESSION_TTL_MS,
   MCP_HTTP_TOKEN,
 } from "./config.js";
@@ -22,18 +23,21 @@ function isLoopback(host) {
   return ["127.0.0.1", "localhost", "::1"].includes(String(host ?? "").toLowerCase());
 }
 
-function closeSession(sessionId) {
+async function closeSession(sessionId) {
   const entry = sessions.get(sessionId);
   if (!entry) return;
   clearTimeout(entry.timer);
   sessions.delete(sessionId);
-  entry.transport?.close?.().catch?.(() => {});
+  await entry.transport?.close?.().catch?.(() => {});
+  await entry.server?.close?.().catch?.(() => {});
 }
 
-function registerSession(sessionId, transport) {
-  const timer = setTimeout(() => closeSession(sessionId), MCP_HTTP_SESSION_TTL_MS);
+function registerSession(sessionId, transport, server) {
+  const timer = setTimeout(() => void closeSession(sessionId), MCP_HTTP_SESSION_TTL_MS);
+  timer.unref?.();
   sessions.set(sessionId, {
     transport,
+    server,
     expiresAt: Date.now() + MCP_HTTP_SESSION_TTL_MS,
     timer,
   });
@@ -54,8 +58,8 @@ export async function startHttpStreamable(port, host = MCP_HTTP_HOST) {
           transport: "streamable-http",
           endpoint: `http://${host}:${port}/mcp`,
           tools: getToolCount(),
-          tfs: tfsHealth,
-          version: "2.0.0",
+          tfs: { ok: tfsHealth.ok, latencyMs: tfsHealth.latencyMs },
+          version: "2.1.0",
           activeSessions: sessions.size,
         });
         res.writeHead(200, { "Content-Type": "application/json" });
@@ -128,20 +132,26 @@ export async function startHttpStreamable(port, host = MCP_HTTP_HOST) {
         }
         transport = entry.transport;
       } else if (!sessionId && req.method === "POST" && parsedBody?.method === "initialize") {
+        if (sessions.size >= MCP_HTTP_MAX_SESSIONS) {
+          res.writeHead(503, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "session_limit_reached" }));
+          return;
+        }
         // New session — initialize
+        let mcpServer;
         transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: () => randomUUID(),
           onsessioninitialized: (sid) => {
-            registerSession(sid, transport);
+            registerSession(sid, transport, mcpServer);
             logger.debug({ sessionId: sid }, "MCP session initialized");
           },
           onsessionclosed: (sid) => {
-            closeSession(sid);
+            void closeSession(sid);
             logger.debug({ sessionId: sid }, "MCP session closed");
           },
         });
-        const server = buildMcpServer();
-        await server.connect(transport);
+        mcpServer = buildMcpServer();
+        await mcpServer.connect(transport);
       } else {
         // Unknown session or bad request
         res.writeHead(400, { "Content-Type": "application/json" });
@@ -154,7 +164,7 @@ export async function startHttpStreamable(port, host = MCP_HTTP_HOST) {
       logger.error({ err: err.message }, "HTTP request error");
       if (!res.headersSent) {
         res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+        res.end(JSON.stringify({ error: "internal_error" }));
       }
     }
   });

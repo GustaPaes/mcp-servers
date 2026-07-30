@@ -2,7 +2,12 @@
  * formatters.js — Normalização e formatação de dados do TFS.
  * Funções puras, sem side effects, sem network calls.
  */
-import { TFS_URL, TFS_COLLECTION, TFS_PROJECT } from "./config.js";
+import {
+  TFS_URL,
+  TFS_COLLECTION,
+  TFS_PROJECT,
+  getConfiguredWorkItemProfile,
+} from "./config.js";
 
 // ─── Text helpers ──────────────────────────────────────────────────────────
 
@@ -25,7 +30,7 @@ export function escapeWiql(value) {
 
 /**
  * Decodifica entidades HTML basicas. Usado para campos rich-text do TFS
- * (System.Description, example.DefinicoesDeNegocio, example.DefinicoesTecnicas, AcceptanceCriteria)
+ * (System.Description, campos ricos configurados e AcceptanceCriteria)
  * quando o cliente MCP serializa a string como HTML-encoded para evitar
  * interpretacao de markup no transporte.
  *
@@ -122,11 +127,30 @@ export function resolveRepository(preferredRepo, parsedRef, defaultRepo) {
 
 // ─── Domain formatters ─────────────────────────────────────────────────────
 
+export function getWorkItemRichTextContent(workItem) {
+  const fields = workItem?.fields ?? workItem ?? {};
+  const workItemType = fields["System.WorkItemType"] ?? "";
+  const profile = getConfiguredWorkItemProfile(workItemType);
+  const businessField = profile.businessField ?? "System.Description";
+  const technicalField =
+    profile.technicalField ?? "Microsoft.VSTS.Common.AcceptanceCriteria";
+
+  return {
+    businessField,
+    technicalField,
+    description: fields[businessField] ?? fields["System.Description"] ?? "",
+    acceptanceCriteria:
+      fields[technicalField] ??
+      fields["Microsoft.VSTS.Common.AcceptanceCriteria"] ??
+      "",
+  };
+}
+
 export function formatWorkItem(wi) {
   const f = wi.fields || {};
-  const rawBusinessDefinition = f["example.DefinicoesDeNegocio"] || f["System.Description"] || "";
-  const rawTechnicalDefinition =
-    f["example.DefinicoesTecnicas"] || f["Microsoft.VSTS.Common.AcceptanceCriteria"] || "";
+  const content = getWorkItemRichTextContent(wi);
+  const rawBusinessDefinition = content.description;
+  const rawTechnicalDefinition = content.acceptanceCriteria;
   const desc = stripHtml(rawBusinessDefinition);
   const ac = stripHtml(rawTechnicalDefinition);
   return {
@@ -145,10 +169,8 @@ export function formatWorkItem(wi) {
     tags: f["System.Tags"] ?? "",
     description: desc.length > 800 ? desc.slice(0, 800) + "…" : desc,
     acceptanceCriteria: ac.length > 1200 ? ac.slice(0, 1200) + "…" : ac,
-    businessDefinitionField: f["example.DefinicoesDeNegocio"] ? "example.DefinicoesDeNegocio" : "System.Description",
-    technicalDefinitionField: f["example.DefinicoesTecnicas"]
-      ? "example.DefinicoesTecnicas"
-      : "Microsoft.VSTS.Common.AcceptanceCriteria",
+    businessDefinitionField: content.businessField,
+    technicalDefinitionField: content.technicalField,
     parent:
       wi.relations
         ?.find((r) => r.rel === "System.LinkTypes.Hierarchy-Reverse")

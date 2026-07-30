@@ -5,6 +5,9 @@ import { sessionManager } from "../session-manager.js";
 import type { ToolModule } from "../types.js";
 import { assertSelectorAllowed } from "../safety/selectors.js";
 import { retry } from "../lib/retry.js";
+import fs from "node:fs";
+import path from "node:path";
+import { config } from "../config.js";
 
 const buttonEnum = ["left", "right", "middle"];
 const baseProps = {
@@ -12,6 +15,20 @@ const baseProps = {
   selector: { type: "string" },
   timeout_ms: { type: "number" },
 };
+
+function resolveAllowedUpload(input: string): string {
+  const candidate = fs.realpathSync(path.resolve(config.repoRoot, input));
+  const candidateKey = process.platform === "win32" ? candidate.toLowerCase() : candidate;
+  const allowed = config.allowedFileRoots.some((root) => {
+    const realRoot = fs.realpathSync(root);
+    const rootKey = process.platform === "win32" ? realRoot.toLowerCase() : realRoot;
+    return candidateKey === rootKey || candidateKey.startsWith(`${rootKey}${path.sep}`);
+  });
+  if (!allowed || !fs.statSync(candidate).isFile()) {
+    throw new Error("upload path must be a file inside PWMCP_ALLOWED_FILE_ROOTS");
+  }
+  return candidate;
+}
 
 export const interactionTools: ToolModule = {
   defs: [
@@ -392,11 +409,11 @@ export const interactionTools: ToolModule = {
       const selector = String(args.selector);
       assertSelectorAllowed(selector);
       const rec = sessionManager.resolvePage(args.page_id as string | undefined);
-      const paths = (args.paths as string[]) ?? [];
+      const paths = ((args.paths as string[]) ?? []).map(resolveAllowedUpload);
       await rec.page.setInputFiles(selector, paths, {
         timeout: args.timeout_ms as number | undefined,
       });
-      return { selector, files: paths };
+      return { selector, files: paths.map((file) => path.basename(file)) };
     },
   },
 };

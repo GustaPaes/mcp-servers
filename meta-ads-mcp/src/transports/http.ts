@@ -20,8 +20,11 @@ import { getLogger } from '../utils/logger.js';
 import { buildMcpServer } from '../mcp/buildServer.js';
 
 interface Session {
+  id: string;
   transport: StreamableHTTPServerTransport;
   closeServer: () => Promise<void>;
+  timer?: NodeJS.Timeout;
+  closing?: boolean;
 }
 
 const SESSION_HEADER = 'mcp-session-id';
@@ -44,21 +47,31 @@ function isAuthorized(req: IncomingMessage, allowed: Set<string>): boolean {
   return allowed.has(match[1].trim());
 }
 
-async function readJsonBody(req: IncomingMessage): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    req.on('data', (c: Buffer) => chunks.push(c));
-    req.on('end', () => {
-      const raw = Buffer.concat(chunks).toString('utf8');
-      if (!raw) return resolve(undefined);
-      try {
-        resolve(JSON.parse(raw));
-      } catch (e) {
-        reject(e);
-      }
-    });
-    req.on('error', reject);
-  });
+class HttpInputError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string,
+  ) {
+    super(code);
+  }
+}
+
+async function readJsonBody(req: IncomingMessage, limitBytes: number): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  let totalBytes = 0;
+  for await (const chunk of req) {
+    const buffer = Buffer.from(chunk);
+    totalBytes += buffer.length;
+    if (totalBytes > limitBytes) throw new HttpInputError(413, 'payload_too_large');
+    chunks.push(buffer);
+  }
+  const raw = Buffer.concat(chunks).toString('utf8');
+  if (!raw) return undefined;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new HttpInputError(400, 'invalid_json');
+  }
 }
 
 function writeJson(res: ServerResponse, status: number, body: unknown): void {
@@ -72,16 +85,34 @@ export async function runHttp(): Promise<void> {
   const allowed = parseBearerTokens(env.MCP_HTTP_BEARER_TOKENS);
   const stateful = env.MCP_HTTP_STATEFUL;
 
-  if (allowed.size === 0 && env.MCP_HTTP_HOST !== '127.0.0.1' && env.MCP_HTTP_HOST !== 'localhost') {
-    log.warn(
-      { host: env.MCP_HTTP_HOST },
-      'HTTP transport sem MCP_HTTP_BEARER_TOKENS em host não-local. EXTREMAMENTE inseguro.',
+  if (
+    allowed.size === 0 &&
+    !['127.0.0.1', 'localhost', '::1'].includes(env.MCP_HTTP_HOST.toLowerCase())
+  ) {
+    throw new Error(
+      'MCP_HTTP_BEARER_TOKENS is required when MCP_HTTP_HOST is not loopback',
     );
   }
 
   const sessions = new Map<string, Session>();
 
+  async function closeSession(session: Session): Promise<void> {
+    if (session.closing) return;
+    session.closing = true;
+    sessions.delete(session.id);
+    if (session.timer) clearTimeout(session.timer);
+    try {
+      await session.transport.close();
+    } catch {
+      /* ignore */
+    }
+    await session.closeServer();
+  }
+
   async function createSession(): Promise<{ id: string; session: Session }> {
+    if (stateful && sessions.size >= env.MCP_HTTP_MAX_SESSIONS) {
+      throw new HttpInputError(503, 'session_limit_reached');
+    }
     const { server } = await buildMcpServer();
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: stateful ? () => randomUUID() : undefined,
@@ -99,10 +130,16 @@ export async function runHttp(): Promise<void> {
     // Para modo stateful, o ID só fica disponível depois da inicialização.
     // Vamos gerar um id provisório e remapear no primeiro response.
     const id = transport.sessionId ?? randomUUID();
-    const session: Session = { transport, closeServer };
+    const session: Session = { id, transport, closeServer };
+    if (stateful) {
+      session.timer = setTimeout(
+        () => void closeSession(session),
+        env.MCP_HTTP_SESSION_TTL_MS,
+      );
+      session.timer.unref?.();
+    }
     transport.onclose = () => {
-      sessions.delete(id);
-      void closeServer();
+      void closeSession(session);
     };
     return { id, session };
   }
@@ -136,7 +173,10 @@ export async function runHttp(): Promise<void> {
         if (stateful) {
           if (sessionId && sessions.has(sessionId)) {
             const s = sessions.get(sessionId)!;
-            const body = req.method === 'POST' ? await readJsonBody(req) : undefined;
+            const body =
+              req.method === 'POST'
+                ? await readJsonBody(req, env.MCP_HTTP_BODY_LIMIT_BYTES)
+                : undefined;
             await s.transport.handleRequest(req, res, body);
             return;
           }
@@ -145,12 +185,13 @@ export async function runHttp(): Promise<void> {
             // Sem session-id => nova sessão de inicialização.
             const { id, session } = await createSession();
             sessions.set(id, session);
-            const body = await readJsonBody(req);
+            const body = await readJsonBody(req, env.MCP_HTTP_BODY_LIMIT_BYTES);
             await session.transport.handleRequest(req, res, body);
             // Pode ter sido remapeado pelo SDK; sincroniza.
             const real = session.transport.sessionId;
             if (real && real !== id) {
               sessions.delete(id);
+              session.id = real;
               sessions.set(real, session);
             }
             return;
@@ -162,17 +203,24 @@ export async function runHttp(): Promise<void> {
 
         // Stateless: cria sessão one-shot.
         const { session } = await createSession();
-        const body = req.method === 'POST' ? await readJsonBody(req) : undefined;
+        const body =
+          req.method === 'POST'
+            ? await readJsonBody(req, env.MCP_HTTP_BODY_LIMIT_BYTES)
+            : undefined;
         try {
           await session.transport.handleRequest(req, res, body);
         } finally {
-          await session.closeServer();
+          await closeSession(session);
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         log.error({ err: message }, 'http.handler.error');
         if (!res.headersSent) {
-          writeJson(res, 500, { error: 'internal error', message });
+          if (err instanceof HttpInputError) {
+            writeJson(res, err.status, { error: err.code });
+          } else {
+            writeJson(res, 500, { error: 'internal_error' });
+          }
         } else {
           try {
             res.end();
@@ -203,14 +251,7 @@ export async function runHttp(): Promise<void> {
   const shutdown = async () => {
     log.info('shutting down HTTP transport');
     httpServer.close();
-    for (const s of sessions.values()) {
-      try {
-        await s.transport.close();
-      } catch {
-        /* ignore */
-      }
-      await s.closeServer();
-    }
+    await Promise.allSettled([...sessions.values()].map((session) => closeSession(session)));
     process.exit(0);
   };
   process.on('SIGINT', () => void shutdown());

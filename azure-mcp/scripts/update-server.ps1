@@ -22,7 +22,7 @@
 [CmdletBinding()]
 param(
     [switch] $Global,
-    [string] $Pin = "3.0.0-beta.18"
+    [string] $Pin = "3.0.0-beta.30"
 )
 
 $ErrorActionPreference = 'Stop'

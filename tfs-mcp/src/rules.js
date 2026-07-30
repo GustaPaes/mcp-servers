@@ -1,5 +1,5 @@
 /**
- * rules.js — Regras de code review específicas da instalação original.
+ * rules.js — Regras genéricas e extensíveis de code review.
  * Funções puras. Recebem conteúdo de arquivo como string, retornam findings.
  */
 
@@ -19,7 +19,7 @@ function stripComments(text) {
 // ─── Rule definitions ──────────────────────────────────────────────────────
 
 /** @type {Array<{ id: string, label: string, severity: "blocking"|"high"|"medium", check: (content: string, filePath: string) => string[] }>} */
-export const ExampleOrgCARGO_RULES = [
+export const CODE_REVIEW_RULES = [
   {
     id: "tls-validation-bypass",
     label: "TLS validation bypass",
@@ -303,7 +303,7 @@ export const ExampleOrgCARGO_RULES = [
 
 export function runPatternChecks(content, filePath) {
   const findings = [];
-  for (const rule of ExampleOrgCARGO_RULES) {
+  for (const rule of CODE_REVIEW_RULES) {
     try {
       for (const issue of rule.check(content, filePath))
         findings.push({ rule: rule.id, label: rule.label, severity: rule.severity, issue });

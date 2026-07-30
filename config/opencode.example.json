@@ -13,6 +13,7 @@
         "TFS_COLLECTION": "YourCollection",
         "TFS_PROJECT": "YourProject",
         "TFS_REPOS": "repo-one,repo-two",
+        "TFS_WORK_ITEM_PROFILES_JSON": "{\"Continuous Improvement\":{\"businessField\":\"Custom.BusinessContext\",\"technicalField\":\"Custom.TechnicalDetails\",\"defaults\":{\"Custom.Portfolio\":\"Platform\",\"Custom.Quarter\":\"{{currentQuarter}}\"}}}",
         "TFS_PAT": "replace-with-your-pat"
       }
     },
@@ -38,7 +39,8 @@
       "env": {
         "PWMCP_DEFAULT_HEADLESS": "false",
         "PWMCP_DEFAULT_BROWSER": "chromium",
-        "PWMCP_DEFAULT_CHANNEL": "chrome"
+        "PWMCP_DEFAULT_CHANNEL": "chrome",
+        "PWMCP_STRICT": "true"
       }
     },
     "azure": {
@@ -46,7 +48,7 @@
       "command": [
         "npx",
         "-y",
-        "@azure/mcp@3.0.0-beta.18",
+        "@azure/mcp@3.0.0-beta.30",
         "server",
         "start"
       ],
@@ -79,7 +81,7 @@
         "ACCOUNTS_CONFIG_PATH": "C:/Workspace/MCP Servers/meta-ads-mcp/config/accounts.json",
         "AUDIT_LOG_PATH": "C:/Workspace/MCP Servers/meta-ads-mcp/data/audit.log",
         "STORAGE_PATH": "C:/Workspace/MCP Servers/meta-ads-mcp/data/storage.json",
-        "META_GRAPH_API_VERSION": "v21.0",
+        "META_GRAPH_API_VERSION": "v25.0",
         "READ_ONLY": "true",
         "DRY_RUN": "true",
         "GLOBAL_MAX_DAILY_BUDGET": "500",

@@ -20,3 +20,9 @@ Before WRITE tools, show the record that will be created or updated and ask for 
 - Keep local `data/` out of Git.
 - When importing from TFS, link the originating work item and avoid copying confidential implementation details into public-facing summaries.
 - For review/promotion outputs, separate factual evidence from suggested wording.
+
+## Public/private boundary
+
+- Store real career data, review exports, external-platform snapshots, browser profiles and organization-specific adapters only in `data/`, `.env` or `local-private/`; all are ignored by Git.
+- Commit neutral schemas, tools and examples only. One-off browser automation for a company portal must live in `local-private/`, never in tracked source or scripts.
+- Keep `guide_online_*` inputs sanitized: do not persist session cookies, access tokens or full private API responses in public fixtures.

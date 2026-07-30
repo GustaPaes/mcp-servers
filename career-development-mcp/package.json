@@ -1,23 +1,31 @@
 {
   "name": "career-development-mcp",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "description": "MCP server for PDIs, SMART goals, competencies, evidence and career review workflows.",
   "license": "MIT",
   "main": "index.js",
-  "keywords": ["mcp", "model-context-protocol", "career", "goals", "pdi", "evidence"],
-  "engines": { "node": ">=20" },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "career",
+    "goals",
+    "pdi",
+    "evidence"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node index.js",
     "start:http": "node index.js --http",
     "validate:tools": "node validate-tools.mjs",
     "smoke:http": "node smoke-http.mjs",
-    "career-platform:capture": "node browser/career-platform-capture.cjs",
     "test": "node validate-tools.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "dotenv": "^16.4.7",
     "pino": "^9.6.0",
     "zod": "^3.25.0"

@@ -59,7 +59,12 @@ export const config = Object.freeze({
 
   outputDir: path.resolve(envStr("PWMCP_OUTPUT_DIR", DEFAULT_OUTPUT_DIR)),
 
-  strict: envBool("PWMCP_STRICT", false),
+  strict: envBool("PWMCP_STRICT", true),
+  allowSecretReveal: envBool("PWMCP_ALLOW_SECRET_REVEAL", false),
+  allowedFileRoots: envStr("PWMCP_ALLOWED_FILE_ROOTS", REPO_ROOT)
+    .split(path.delimiter)
+    .filter(Boolean)
+    .map((root) => path.resolve(root)),
   evalTimeoutMs: envInt("PWMCP_EVAL_TIMEOUT_MS", 5000),
   actionTimeoutMs: envInt("PWMCP_ACTION_TIMEOUT_MS", 10_000),
   navigationTimeoutMs: envInt("PWMCP_NAVIGATION_TIMEOUT_MS", 30_000),

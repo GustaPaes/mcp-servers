@@ -69,10 +69,11 @@ tfs-mcp/scripts/sprint-archive/
 # Legacy files
 **/*.legacy
 
-# Scripts
-scripts/**
-
 # Local agent/client state
 **/.opencode/
 **/.claude/
 **/.codex/
+
+# Organization/client-specific automation and configuration.
+# Keep reusable examples in tracked folders and real targets under local-private/.
+**/local-private/

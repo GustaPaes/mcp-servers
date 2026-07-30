@@ -25,10 +25,28 @@ const ALL_TOOLS = {
   ...metaTools,
 };
 
+function toolAnnotations(name) {
+  const readOnly = /(?:^|_)(?:get|list|describe|whoami|recommend|dump|tail|load)(?:_|$)/.test(name);
+  const destructive = /(?:^|_)(?:delete|disable|schedule_deletion)(?:_|$)/.test(name);
+  return {
+    title: name.replaceAll("_", " "),
+    readOnlyHint: readOnly,
+    destructiveHint: destructive,
+    idempotentHint: readOnly,
+    openWorldHint: true,
+  };
+}
+
 export function buildServer() {
   const server = new McpServer(
     { name: "oci-extras-mcp", version: "0.1.0" },
-    { capabilities: { tools: {} } }
+    {
+      capabilities: { tools: {} },
+      instructions:
+        "Inspect OCI context before mutations. Prefer dry-run where supported. " +
+        "Never reveal credentials, kubeconfig, secret values, or private keys. " +
+        "Require explicit confirmation for destructive or production-impacting operations.",
+    }
   );
 
   for (const [name, def] of Object.entries(ALL_TOOLS)) {
@@ -38,6 +56,7 @@ export function buildServer() {
       {
         description: def.description ?? name,
         inputSchema: def.input.shape ?? def.input,
+        annotations: toolAnnotations(name),
       },
       async (args, ctx) => {
         const wrapped = withSafety(name, (a) => def.handler(a, ctx));

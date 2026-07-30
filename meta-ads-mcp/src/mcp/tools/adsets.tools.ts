@@ -29,6 +29,7 @@ export const listAdSetsTool = defineTool({
 
 export const createAdSetDraftTool = defineTool({
   name: 'create_ad_set_draft',
+  mutating: true,
   description:
     'Cria um RASCUNHO LOCAL de conjunto de anúncios, validando público contra políticas de segmentação.',
   inputSchema: AdSetDraftSchema,

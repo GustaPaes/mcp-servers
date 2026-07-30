@@ -95,7 +95,7 @@ function withToolMetadata(tool) {
     ...tool,
     annotations: {
       readOnlyHint: readOnly,
-      destructiveHint: !readOnly,
+      destructiveHint: false,
       idempotentHint: idempotent,
       openWorldHint: true,
       ...(tool.annotations ?? {}),
@@ -200,11 +200,16 @@ const TOOL_DEFS = [
     name: "tfs_work_item",
     title: "Get Work Item",
     description:
-      "Busca detalhes completos de um work item pelo ID. Retorna titulo, estado, descricao, criterios de aceite, story points, iteracao e hierarquia.",
+      "Busca detalhes completos de um work item pelo ID. Retorna titulo, estado, descricao, criterios de aceite, story points, iteracao e hierarquia; opcionalmente inclui o mapa bruto de campos.",
     inputSchema: {
       type: "object",
       properties: {
         id: { type: ["number", "string"], description: "ID ou URL do work item" },
+        include_fields: {
+          type: "boolean",
+          default: false,
+          description: "Inclui todos os campos retornados pelo TFS, indexados por reference name.",
+        },
       },
       required: ["id"],
     },
@@ -243,9 +248,11 @@ const TOOL_DEFS = [
         priority: { type: "number", enum: [1, 2, 3, 4], description: "Prioridade: 1 (alta) a 4 (baixa)" },
         parent_id: { type: "number", description: "ID do work item pai para criar hierarquia" },
         tags: { type: "string", description: "Tags separadas por ponto-e-virgula" },
-        sprint_task_category: {
-          type: "string",
-          description: "Categoria obrigatoria para Sprint Task; padrao: Montar Ambientes",
+        custom_fields: {
+          type: "object",
+          description:
+            "Campos adicionais indexados pelo reference name. Defaults específicos do processo devem ser configurados em TFS_WORK_ITEM_PROFILES_JSON.",
+          additionalProperties: true,
         },
         ...MutationControlsSchema,
       },
@@ -519,7 +526,7 @@ const TOOL_DEFS = [
     description:
       "Atualiza um work item: muda estado, reatribui, adiciona comentario/historico, altera titulo, story points, descricao ou criterios de aceite. " +
       "Os campos description e acceptance_criteria aceitam HTML rico - o servidor decodifica entidades automaticamente caso o cliente MCP envie a string HTML-encoded (&lt;b&gt;...). " +
-      "Padrao recomendado para templates com campos ricos customizados (como example.DefinicoesDeNegocio / example.DefinicoesTecnicas): cada bloco em <div>...</div>, listas em <div><ul><li>...</li></ul></div>, linhas em branco como <div><br></div>, espacos apos <b> usar &nbsp;. Tags <br> soltas sao colapsadas pelo renderer.",
+      "Campos específicos do processo podem ser enviados por reference name em custom_fields ou removidos por remove_fields.",
     inputSchema: {
       type: "object",
       properties: {
@@ -544,6 +551,16 @@ const TOOL_DEFS = [
             "HTML rico para criterios de negocio exibidos no campo padrao Acceptance Criteria.",
         },
         story_points: { type: "number" },
+        custom_fields: {
+          type: "object",
+          description: "Campos adicionais indexados pelo reference name.",
+          additionalProperties: true,
+        },
+        remove_fields: {
+          type: "array",
+          description: "Reference names dos campos que devem ser removidos.",
+          items: { type: "string" },
+        },
         ...MutationControlsSchema,
       },
       required: ["id"],
@@ -702,8 +719,12 @@ const TOOL_HANDLERS = {
 
 export function buildMcpServer() {
   const server = new Server(
-    { name: "tfs-mcp", version: "2.0.0" },
-    { capabilities: { tools: { listChanged: false } } }
+    { name: "tfs-mcp", version: "2.1.0" },
+    {
+      capabilities: { tools: { listChanged: false } },
+      instructions:
+        "TFS/Azure DevOps Server workflows. Read tools may be called directly. Mutations must start with dry_run:true; execute only after the user reviews the returned plan and explicitly supplies dry_run:false, confirm:true, reason and requestedBy. Never invent confirm_high_impact values or expose PATs/private payloads.",
+    }
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({

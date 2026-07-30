@@ -8,10 +8,15 @@ import {
   TFS_PROJECT,
   TFS_URL,
   TFS_COLLECTION,
-  TFS_DEFAULT_QUARTER,
+  TFS_WORK_ITEM_PROFILE_FIELDS,
   TFS_ISSUE_ANALYSIS_FIELD,
   TFS_ISSUE_CORRECTION_AND_IMPACTS_FIELD,
+  getConfiguredWorkItemProfile,
 } from "../config.js";
+import {
+  validateCustomFields,
+  validateFieldReferenceName,
+} from "../work-item-profile.js";
 import { buildActivityTemplate, parseBusinessDescription } from "../activity-template.js";
 import { enrichActivityInputWithSpecialists } from "../specialists.js";
 import { getRequestContext } from "../request-context.js";
@@ -28,6 +33,7 @@ import {
   normalizeState,
   asArray,
   autoDecodeRichText,
+  getWorkItemRichTextContent,
 } from "../formatters.js";
 import {
   calculateDescriptionQuality,
@@ -65,6 +71,8 @@ const UpdateArgs = z.object({
   description: z.string().optional(),
   acceptance_criteria: z.string().optional(),
   business_acceptance_criteria: z.string().optional(),
+  custom_fields: z.record(z.unknown()).optional(),
+  remove_fields: z.array(z.string().min(1)).optional(),
   dry_run: z.boolean().default(true),
   confirm: z.boolean().optional(),
   reason: z.string().optional(),
@@ -135,7 +143,7 @@ const CreateArgs = z.object({
   priority: z.number().int().min(1).max(4).optional(),
   parent_id: z.number().int().positive().optional(),
   tags: z.string().optional(),
-  sprint_task_category: z.string().min(1).optional(),
+  custom_fields: z.record(z.unknown()).optional(),
   dry_run: z.boolean().default(true),
   confirm: z.boolean().optional(),
   reason: z.string().optional(),
@@ -172,7 +180,7 @@ const TemplateFromItemsArgs = z.object({
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
-export const WI_FIELDS = [
+export const WI_FIELDS = [...new Set([
   "System.Id",
   "System.Title",
   "System.State",
@@ -185,21 +193,8 @@ export const WI_FIELDS = [
   "Microsoft.VSTS.Common.AcceptanceCriteria",
   "Microsoft.VSTS.Scheduling.StoryPoints",
   "Microsoft.VSTS.Common.Priority",
-  "example.DefinicoesDeNegocio",
-  "example.DefinicoesTecnicas",
-].join(",");
-
-function getBusinessFieldName(fields = {}, preferredField) {
-  if (preferredField === "example.DefinicoesDeNegocio") return "example.DefinicoesDeNegocio";
-  if (fields["example.DefinicoesDeNegocio"] !== undefined) return "example.DefinicoesDeNegocio";
-  return "System.Description";
-}
-
-function getTechnicalFieldName(fields = {}, preferredField) {
-  if (preferredField === "example.DefinicoesTecnicas") return "example.DefinicoesTecnicas";
-  if (fields["example.DefinicoesTecnicas"] !== undefined) return "example.DefinicoesTecnicas";
-  return "Microsoft.VSTS.Common.AcceptanceCriteria";
-}
+  ...TFS_WORK_ITEM_PROFILE_FIELDS,
+])].join(",");
 
 function extractBusinessAcceptanceCriteria(description = "") {
   const content = autoDecodeRichText(description);
@@ -244,12 +239,34 @@ function summarizePatchOps(ops) {
   });
 }
 
+function setFieldOperation(ops, field, value, op = "add") {
+  const referenceName = validateFieldReferenceName(field);
+  const path = `/fields/${referenceName}`;
+  const operation = {
+    op,
+    path,
+    ...(op === "remove" ? {} : { value }),
+  };
+  const existingIndex = ops.findIndex((item) => item.path === path);
+  if (existingIndex >= 0) ops[existingIndex] = operation;
+  else ops.push(operation);
+}
+
+function appendConfiguredFields(ops, fields, context) {
+  for (const [field, rawValue] of Object.entries(validateCustomFields(fields, context))) {
+    const value =
+      typeof rawValue === "string" ? autoDecodeRichText(rawValue) : rawValue;
+    setFieldOperation(ops, field, value);
+  }
+}
+
 async function fetchWorkItemFieldMap(id) {
   const workItem = await fetchWorkItemById(id, "all");
+  const content = getWorkItemRichTextContent(workItem);
   return {
     workItem,
-    businessField: getBusinessFieldName(workItem.fields ?? {}),
-    technicalField: getTechnicalFieldName(workItem.fields ?? {}),
+    businessField: content.businessField,
+    technicalField: content.technicalField,
   };
 }
 
@@ -392,9 +409,15 @@ function buildChecklist({ description, acceptanceCriteria, relatedItems }) {
 // ─── Tools ────────────────────────────────────────────────────────────────
 
 export async function toolWorkItem(args) {
-  const { id } = z.object({ id: zId }).parse(args);
+  const { id, include_fields } = z
+    .object({
+      id: zId,
+      include_fields: z.boolean().default(false),
+    })
+    .parse(args);
   const wi = await fetchWorkItemById(id, "all");
-  return formatWorkItem(wi);
+  const formatted = formatWorkItem(wi);
+  return include_fields ? { ...formatted, fields: wi.fields ?? {} } : formatted;
 }
 
 export async function toolAnalyzeWorkItem(args) {
@@ -545,41 +568,49 @@ export async function toolUpdateWorkItem(args) {
     description,
     acceptance_criteria,
     business_acceptance_criteria,
+    custom_fields,
+    remove_fields,
   } = parsed;
   const { workItem, businessField, technicalField } = await fetchWorkItemFieldMap(id);
   const ops = [];
-  if (state) ops.push({ op: "add", path: "/fields/System.State", value: state });
-  if (assigned_to) ops.push({ op: "add", path: "/fields/System.AssignedTo", value: assigned_to });
-  if (title) ops.push({ op: "add", path: "/fields/System.Title", value: title });
-  if (description) {
+  if (state) setFieldOperation(ops, "System.State", state);
+  if (assigned_to) setFieldOperation(ops, "System.AssignedTo", assigned_to);
+  if (title) setFieldOperation(ops, "System.Title", title);
+  if (description !== undefined) {
     const value = autoDecodeRichText(description);
-    ops.push({ op: "add", path: "/fields/System.Description", value });
+    setFieldOperation(ops, "System.Description", value);
     if (businessField !== "System.Description")
-      ops.push({ op: "add", path: `/fields/${businessField}`, value });
+      setFieldOperation(ops, businessField, value);
   }
-  if (acceptance_criteria)
-    ops.push({
-      op: "add",
-      path: `/fields/${technicalField}`,
-      value: autoDecodeRichText(acceptance_criteria),
-    });
-  if (business_acceptance_criteria)
-    ops.push({
-      op: "add",
-      path: "/fields/Microsoft.VSTS.Common.AcceptanceCriteria",
-      value: autoDecodeRichText(business_acceptance_criteria),
-    });
+  if (acceptance_criteria !== undefined)
+    setFieldOperation(
+      ops,
+      technicalField,
+      autoDecodeRichText(acceptance_criteria)
+    );
+  if (business_acceptance_criteria !== undefined)
+    setFieldOperation(
+      ops,
+      "Microsoft.VSTS.Common.AcceptanceCriteria",
+      autoDecodeRichText(business_acceptance_criteria)
+    );
   if (story_points)
-    ops.push({
-      op: "add",
-      path: "/fields/Microsoft.VSTS.Scheduling.StoryPoints",
-      value: story_points,
-    });
-  if (comment) ops.push({ op: "add", path: "/fields/System.History", value: comment });
+    setFieldOperation(ops, "Microsoft.VSTS.Scheduling.StoryPoints", story_points);
+  if (comment) setFieldOperation(ops, "System.History", comment);
+
+  appendConfiguredFields(ops, custom_fields, "custom_fields");
+  for (const field of remove_fields ?? []) {
+    setFieldOperation(
+      ops,
+      validateFieldReferenceName(field, `remove_fields.${field}`),
+      undefined,
+      "remove"
+    );
+  }
 
   if (!ops.length)
     throw new Error(
-      "Nenhum campo para atualizar. Forneça state, assigned_to, comment, title, description, acceptance_criteria, business_acceptance_criteria ou story_points."
+      "Nenhum campo para atualizar. Forneça um campo padrão, custom_fields ou remove_fields."
     );
 
   const formatted = formatWorkItem(workItem);
@@ -729,7 +760,7 @@ export async function toolGenerateActivityTemplateFromItems(args) {
   const generated = await Promise.all(
     items.map(async (item) => {
       const title = item.fields?.["System.Title"] ?? "";
-      const businessSource = item.fields?.["example.DefinicoesDeNegocio"] ?? item.fields?.["System.Description"] ?? "";
+      const businessSource = getWorkItemRichTextContent(item).description;
       const business = parseBusinessDescription(businessSource, title);
       const wikiMatches = parsed.include_wiki
         ? await findWikiMatchesDeep(parsed.wiki_search ?? title, 10).catch(() => [])
@@ -819,93 +850,54 @@ export async function toolCreateWorkItem(args) {
     priority,
     parent_id,
     tags,
-    sprint_task_category,
+    custom_fields,
   } = CreateArgs.parse(args);
 
-  // Tipos da instalacao original que usam os campos customizados
-  // example.DefinicoesDeNegocio / example.DefinicoesTecnicas
-  // ao inves de System.Description / Microsoft.VSTS.Common.AcceptanceCriteria.
-  // User Story, Sprint Task, Product Backlog Item e Product Backlog Item Desenvolvimento
-  // seguem esse template. Bug e Feature usam os campos padrao do TFS.
-  const usesExampleTemplate = /user story|sprint task|product backlog item/i.test(work_item_type);
-  const businessField = usesExampleTemplate ? "example.DefinicoesDeNegocio" : "System.Description";
-  const technicalField = usesExampleTemplate
-    ? "example.DefinicoesTecnicas"
-    : "Microsoft.VSTS.Common.AcceptanceCriteria";
+  const profile = getConfiguredWorkItemProfile(work_item_type);
+  const businessField = profile.businessField ?? "System.Description";
+  const technicalField =
+    profile.technicalField ?? "Microsoft.VSTS.Common.AcceptanceCriteria";
+  const ops = [];
 
-  const ops = [{ op: "add", path: "/fields/System.Title", value: title }];
-  if (description) {
+  appendConfiguredFields(
+    ops,
+    profile.defaults,
+    `defaults do perfil '${work_item_type}'`
+  );
+  setFieldOperation(ops, "System.Title", title);
+  if (description !== undefined) {
     const value = autoDecodeRichText(description);
-    ops.push({ op: "add", path: "/fields/System.Description", value });
+    setFieldOperation(ops, "System.Description", value);
     if (businessField !== "System.Description")
-      ops.push({ op: "add", path: `/fields/${businessField}`, value });
+      setFieldOperation(ops, businessField, value);
   }
-  if (acceptance_criteria)
-    ops.push({
-      op: "add",
-      path: `/fields/${technicalField}`,
-      value: autoDecodeRichText(acceptance_criteria),
-    });
-  const businessAcceptance = business_acceptance_criteria
+  if (acceptance_criteria !== undefined)
+    setFieldOperation(
+      ops,
+      technicalField,
+      autoDecodeRichText(acceptance_criteria)
+    );
+  const businessAcceptance = business_acceptance_criteria !== undefined
     ? autoDecodeRichText(business_acceptance_criteria)
     : extractBusinessAcceptanceCriteria(description);
   if (businessAcceptance)
-    ops.push({
-      op: "add",
-      path: "/fields/Microsoft.VSTS.Common.AcceptanceCriteria",
-      value: businessAcceptance,
-    });
+    setFieldOperation(
+      ops,
+      "Microsoft.VSTS.Common.AcceptanceCriteria",
+      businessAcceptance
+    );
   if (assigned_to)
-    ops.push({ op: "add", path: "/fields/System.AssignedTo", value: assigned_to });
-  if (area_path) ops.push({ op: "add", path: "/fields/System.AreaPath", value: area_path });
+    setFieldOperation(ops, "System.AssignedTo", assigned_to);
+  if (area_path) setFieldOperation(ops, "System.AreaPath", area_path);
   if (iteration_path)
-    ops.push({ op: "add", path: "/fields/System.IterationPath", value: iteration_path });
+    setFieldOperation(ops, "System.IterationPath", iteration_path);
   if (story_points)
-    ops.push({
-      op: "add",
-      path: "/fields/Microsoft.VSTS.Scheduling.StoryPoints",
-      value: story_points,
-    });
+    setFieldOperation(ops, "Microsoft.VSTS.Scheduling.StoryPoints", story_points);
   if (priority)
-    ops.push({ op: "add", path: "/fields/Microsoft.VSTS.Common.Priority", value: priority });
-  if (tags) ops.push({ op: "add", path: "/fields/System.Tags", value: tags });
+    setFieldOperation(ops, "Microsoft.VSTS.Common.Priority", priority);
+  if (tags) setFieldOperation(ops, "System.Tags", tags);
 
-  if (/sprint task/i.test(work_item_type)) {
-    ops.push({
-      op: "add",
-      path: "/fields/ExampleOrgigital.SprintTaskCategory",
-      value: sprint_task_category ?? "Montar Ambientes",
-    });
-  }
-
-  // Defaults obrigatorios do template legado para User Story / Sprint Task.
-  // O TFS rejeita criacao sem esses campos. Sao adicionados apenas se nao foram
-  // setados acima (verificacao por path) para nao sobrescrever overrides explicitos.
-  const isUserStoryLike = /user story|sprint task/i.test(work_item_type);
-  if (isUserStoryLike) {
-    const hasField = (path) => ops.some((op) => op.path === path);
-    if (!hasField("/fields/example.TipoDemanda")) {
-      ops.push({ op: "add", path: "/fields/example.TipoDemanda", value: "Planejada no plano de produto" });
-    }
-    if (!hasField("/fields/Example.Quarter")) {
-      ops.push({ op: "add", path: "/fields/Example.Quarter", value: TFS_DEFAULT_QUARTER });
-    }
-    if (!hasField("/fields/Example.Bloqueio")) {
-      ops.push({ op: "add", path: "/fields/Example.Bloqueio", value: "Não está bloqueado" });
-    }
-  }
-
-  // Defaults obrigatorios para Product Backlog Item / PBI Desenvolvimento.
-  const isPbi = /product backlog item/i.test(work_item_type);
-  if (isPbi) {
-    const hasField = (path) => ops.some((op) => op.path === path);
-    if (!hasField("/fields/ExampleOrg.RequestClassification")) {
-      ops.push({ op: "add", path: "/fields/ExampleOrg.RequestClassification", value: "Melhoria" });
-    }
-    if (!hasField("/fields/ExampleOrg.ClassificacaoIniciativaPBI")) {
-      ops.push({ op: "add", path: "/fields/ExampleOrg.ClassificacaoIniciativaPBI", value: "Backlog na CAPTAÇÃO" });
-    }
-  }
+  appendConfiguredFields(ops, custom_fields, "custom_fields");
 
   if (parent_id) {
     ops.push({

@@ -21,6 +21,28 @@ function isAuthorized(req) {
   return String(req.headers.authorization ?? "") === `Bearer ${config.httpToken}`;
 }
 
+async function readJsonBody(req, limitBytes) {
+  const chunks = [];
+  let total = 0;
+  for await (const chunk of req) {
+    total += chunk.length;
+    if (total > limitBytes) {
+      const error = new Error("payload_too_large");
+      error.statusCode = 413;
+      throw error;
+    }
+    chunks.push(chunk);
+  }
+  if (total === 0) return undefined;
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    const error = new Error("invalid_json");
+    error.statusCode = 400;
+    throw error;
+  }
+}
+
 export async function startHttpStreamable({ port, host }) {
   validateConfigForAuth();
   if (!isLoopback(host) && !config.httpToken) {
@@ -64,30 +86,43 @@ export async function startHttpStreamable({ port, host }) {
       return;
     }
 
-    let sessionId = req.headers["mcp-session-id"];
-    let entry = sessionId ? sessions.get(sessionId) : null;
-
-    if (!entry) {
-      sessionId = crypto.randomUUID();
-      const mcp = buildServer();
-      const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => sessionId,
-      });
-      await mcp.connect(transport);
-      const timer = setTimeout(() => closeSession(sessionId), config.httpSessionTtlMs);
-      entry = { server: mcp, transport, timer };
-      sessions.set(sessionId, entry);
-      res.setHeader("mcp-session-id", sessionId);
-      logger.info({ sessionId }, "new MCP session");
-    }
-
     try {
-      await entry.transport.handleRequest(req, res);
+      const requestBody = req.method === "POST"
+        ? await readJsonBody(req, config.httpBodyLimitBytes)
+        : undefined;
+      let sessionId = req.headers["mcp-session-id"];
+      let entry = sessionId ? sessions.get(sessionId) : null;
+
+      if (!entry) {
+        if (sessions.size >= config.httpMaxSessions) {
+          res.statusCode = 503;
+          res.setHeader("content-type", "application/json");
+          res.end(JSON.stringify({ error: "session_limit_reached" }));
+          return;
+        }
+        sessionId = crypto.randomUUID();
+        const mcp = buildServer();
+        const transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: () => sessionId,
+        });
+        await mcp.connect(transport);
+        const timer = setTimeout(() => closeSession(sessionId), config.httpSessionTtlMs);
+        timer.unref?.();
+        entry = { server: mcp, transport, timer };
+        sessions.set(sessionId, entry);
+        res.setHeader("mcp-session-id", sessionId);
+        logger.info({ sessionId }, "new MCP session");
+      }
+
+      await entry.transport.handleRequest(req, res, requestBody);
     } catch (err) {
       logger.error({ err }, "transport error");
       if (!res.headersSent) {
-        res.statusCode = 500;
-        res.end(JSON.stringify({ error: err.message }));
+        res.statusCode = err.statusCode ?? 500;
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({
+          error: err.statusCode ? err.message : "internal_server_error",
+        }));
       }
     }
   });

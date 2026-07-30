@@ -178,4 +178,21 @@ Ela é uma **camada adicional** de defesa, executada pelo agente.
 - Documentação geral: [`README.md`](./README.md)
 - Boas práticas técnicas: [`BEST_PRACTICES.md`](./BEST_PRACTICES.md)
 - Biblioteca de prompts: [`PROMPT_LIBRARY.md`](./PROMPT_LIBRARY.md)
-- MCP irmão (TFS on-prem): `C:\Workspace\MCP Servers\tfs-mcp\`
+- MCP irmão (TFS / Azure DevOps Server): `..\tfs-mcp\`
+
+---
+
+## 13. Conteúdo corporativo e privado
+
+Este repositório é reutilizável e pode ser publicado. Não salve em pastas
+rastreadas nomes de tenants, subscriptions, resource groups, domínios internos,
+e-mails, identificadores, topologias, inventários, runbooks operacionais ou
+scripts específicos de uma empresa.
+
+- Use `local-private/` para qualquer material específico de cliente ou empresa.
+- Organize, quando necessário, em `local-private/config`, `local-private/docs`,
+  `local-private/runbooks`, `local-private/scripts` e `local-private/tests`.
+- `local-private/` é ignorada pelo Git e deve permanecer apenas na máquina local.
+- Exemplos públicos devem usar valores fictícios e parâmetros de ambiente.
+- Antes de commitar, confirme que nenhum arquivo privado foi adicionado com
+  `git add -f`.

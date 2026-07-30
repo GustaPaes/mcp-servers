@@ -5,9 +5,13 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   node-mcps:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -17,16 +21,17 @@ jobs:
             command: npm test
           - name: career-development-mcp
             dir: career-development-mcp
-            command: npm test
+            command: npm test && npm run smoke:http
           - name: playwright-mcp
             dir: playwright-mcp
-            command: npm run build
+            command: npm test && npm run build
+            install-browsers: true
           - name: oci-extras-mcp
             dir: oci-mcp/oci-extras-mcp
-            command: npm test
+            command: npm run lint && npm test
           - name: meta-ads-mcp
             dir: meta-ads-mcp
-            command: npm test && npm run typecheck && npm run build
+            command: npm run lint && npm test && npm run typecheck && npm run build
           - name: meta-ads-mcp-web-panel
             dir: meta-ads-mcp/web-panel
             command: npm run typecheck && npm run build
@@ -34,12 +39,29 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 20.19.0
           cache: npm
           cache-dependency-path: ${{ matrix.dir }}/package-lock.json
       - name: Install dependencies
         working-directory: ${{ matrix.dir }}
         run: npm ci
+      - name: Install Playwright browser
+        if: matrix.install-browsers
+        working-directory: ${{ matrix.dir }}
+        run: npx playwright install --with-deps chromium
       - name: Validate ${{ matrix.name }}
         working-directory: ${{ matrix.dir }}
         run: ${{ matrix.command }}
+      - name: Audit production dependencies
+        working-directory: ${{ matrix.dir }}
+        run: npm audit --omit=dev --audit-level=high
+
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan Git history
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2

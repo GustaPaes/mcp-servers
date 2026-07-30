@@ -8,7 +8,7 @@ import {
   REVIEW_PREPARE_OUTPUT_SCHEMA,
   GOAL_PROGRESS_OUTPUT_SCHEMA,
 } from "../schemas.js";
-import { SERVER_VERSION } from "./config.js";
+import { SERVER_NAME, SERVER_VERSION } from "./config.js";
 import { ensureStorageReady, saveSnapshot } from "./storage.js";
 import { toolPdiAnalyze, toolPdiCreate, toolPdiGet, toolPdiList, toolPdiSnapshot, toolPdiUpdate } from "./tools/pdi.js";
 import { toolGoalAnalyze, toolGoalCreate, toolGoalList, toolGoalProgress, toolGoalUpdate } from "./tools/goals.js";
@@ -57,14 +57,14 @@ function formatToolResult(result) {
 const TOOL_DEFS = [
   {
     name: "guide_online_state_get",
-    title: "Get Online external career platform State",
-    description: "Retorna o ultimo snapshot capturado do external career platform online para revisao local.",
+    title: "Get External Career State",
+    description: "Retorna o ultimo snapshot importado de uma plataforma externa de carreira para revisao local.",
     inputSchema: { type: "object", properties: {} },
   },
   {
     name: "guide_online_review_suggestions",
-    title: "Prepare Online Review Suggestions",
-    description: "Compara o snapshot do external career platform online com a base local e gera sugestoes de revisao antes de aplicar no sistema real.",
+    title: "Prepare External Review Suggestions",
+    description: "Compara um snapshot externo com a base local e gera sugestoes sem alterar o sistema de origem.",
     inputSchema: { type: "object", properties: {} },
   },
   {
@@ -335,7 +335,14 @@ const TOOL_HANDLERS = {
 export const TOTAL_TOOLS = TOOL_DEFS.length;
 
 export function buildMcpServer() {
-  const server = new Server({ name: "career-development-mcp", version: SERVER_VERSION }, { capabilities: { tools: { listChanged: false } } });
+  const server = new Server(
+    { name: SERVER_NAME, version: SERVER_VERSION },
+    {
+      capabilities: { tools: { listChanged: false } },
+      instructions:
+        "Local-first career development MCP for PDIs, goals, competencies and evidence. Treat all stored career/review data as private. Read tools may run directly. Before writes that affect a real review or promotion packet, show the proposed record and obtain explicit approval. External snapshots are analyzed locally and are never mutated by this server.",
+    }
+  );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOL_DEFS.map(withToolMetadata) }));
 

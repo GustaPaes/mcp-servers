@@ -25,6 +25,7 @@ export const listCampaignsTool = defineTool({
 
 export const createCampaignDraftTool = defineTool({
   name: 'create_campaign_draft',
+  mutating: true,
   description:
     'Cria um RASCUNHO LOCAL de campanha. Nada é enviado à Meta. Use publish_campaign para publicar com confirmação humana.',
   inputSchema: CampaignDraftSchema,

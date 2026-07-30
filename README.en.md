@@ -31,7 +31,7 @@ It helps with:
 |---|---|---|---|---|
 | [`azure-mcp`](./azure-mcp) | MCP wrapper | Operates Azure resources through Microsoft's official `@azure/mcp` server and adds local scripts plus an LLM safety policy. | `npx`, Azure CLI, PowerShell | Stable |
 | [`meta-ads-mcp`](./meta-ads-mcp) | MCP server | Multi-account Meta Marketing API server (Facebook Ads / Instagram Ads) with strict recommend ↔ execute separation, dry-run, mutation gate, triple budget caps, audit log and protected-attribute targeting block. | TypeScript, Node 20, MCP SDK, undici, Zod | Beta |
-| [`tfs-mcp`](./tfs-mcp) | MCP server | TFS / Azure DevOps Server work items, PRs, code review, refinement, release readiness, delivery risk, activity-writing templates and automatic specialist routing. | Node 20, ESM, MCP SDK | Stable |
+| [`tfs-mcp`](./tfs-mcp) | MCP server | Generic TFS / Azure DevOps Server work items, configurable custom-process profiles, PRs, review, refinement, release readiness and specialist routing. | Node 20, ESM, MCP SDK | Stable |
 | [`oci-mcp`](./oci-mcp) | MCP toolkit | Combines official Oracle MCP servers with a custom `oci-extras-mcp` for OKE, Vault/Secrets, Kubernetes, Functions and streaming logs. | Node 20, OCI SDK, `uvx` | Stable |
 | [`playwright-mcp`](./playwright-mcp) | MCP server | Multi-session browser automation with Chromium/Firefox/WebKit, native Chrome/Edge, HAR, video, traces, PDF, request routing and light stealth. | TypeScript, Node 20, Playwright | Stable |
 | [`career-development-mcp`](./career-development-mcp) | MCP server | PDIs, SMART goals, competencies, evidence, career readiness, 1:1 preparation and optional TFS evidence import. | Node 20, ESM, local JSON storage | Beta |
@@ -96,7 +96,7 @@ cd career-development-mcp && npm install && cd ..
 cd playwright-mcp && npm install && npm run build && cd ..
 ```
 
-For `azure-mcp`, there is no local install step because it uses `npx -y @azure/mcp@3.0.0-beta.18 server start`.
+For `azure-mcp`, there is no local install step because it uses `npx -y @azure/mcp@3.0.0-beta.30 server start`.
 
 For `oci-mcp`, follow [`oci-mcp/docs/01-installation.md`](./oci-mcp/docs/01-installation.md) because it combines Node, OCI CLI and Oracle's Python-based MCP servers.
 
@@ -129,7 +129,7 @@ Use [`config/opencode.example.json`](./config/opencode.example.json) as a comple
     },
     "azure": {
       "type": "local",
-      "command": ["npx", "-y", "@azure/mcp@3.0.0-beta.18", "server", "start"],
+      "command": ["npx", "-y", "@azure/mcp@3.0.0-beta.30", "server", "start"],
       "enabled": true
     }
   }
@@ -144,7 +144,7 @@ Use `claude mcp add`:
 
 ```bash
 claude mcp add playwright node "C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"
-claude mcp add azure -- npx -y @azure/mcp@3.0.0-beta.18 server start
+claude mcp add azure -- npx -y @azure/mcp@3.0.0-beta.30 server start
 claude mcp list
 ```
 
@@ -169,7 +169,7 @@ Edit `%APPDATA%\Claude\claude_desktop_config.json` on Windows or `~/Library/Appl
     },
     "azure": {
       "command": "npx",
-      "args": ["-y", "@azure/mcp@3.0.0-beta.18", "server", "start"]
+      "args": ["-y", "@azure/mcp@3.0.0-beta.30", "server", "start"]
     }
   }
 }
@@ -205,7 +205,7 @@ args = ["C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"]
 
 [mcp_servers.azure]
 command = "npx"
-args = ["-y", "@azure/mcp@3.0.0-beta.18", "server", "start"]
+args = ["-y", "@azure/mcp@3.0.0-beta.30", "server", "start"]
 ```
 
 ## Install in Continue
@@ -288,7 +288,7 @@ A from-scratch TypeScript MCP for the Meta Marketing API. Multi-account by desig
 
 ### tfs-mcp
 
-This is the most domain-specific server in the repo. It targets TFS / Azure DevOps Server workflows: work items, PRs, review, release readiness, wiki, delivery risk and automatic specialist routing for business writing, technical writing, QA, pipelines, security and architecture. The normal domain tools return specialist guidance automatically, so users do not need to request a specialist tool by name. Replace the placeholder defaults in `.env.example` when adapting it to another company.
+This generic server targets TFS / Azure DevOps Server workflows: standard and custom work items, PRs, review, release readiness, wiki, delivery risk and automatic specialist routing. Required fields and rich-text mappings for organization-specific processes are configured with `TFS_WORK_ITEM_PROFILES_JSON` in the local `.env`; the committed source and examples remain neutral.
 
 ### oci-mcp
 

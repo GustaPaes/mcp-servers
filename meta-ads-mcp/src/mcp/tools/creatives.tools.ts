@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 
 export const createAdCreativeDraftTool = defineTool({
   name: 'create_ad_creative_draft',
+  mutating: true,
   description:
     'Cria rascunho local de criativo (copy, título, CTA, mídia/descrição). Não envia à Meta. Inclui análise heurística.',
   inputSchema: AdCreativeDraftSchema,

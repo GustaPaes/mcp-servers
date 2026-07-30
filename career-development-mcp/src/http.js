@@ -2,19 +2,54 @@ import http from "http";
 import { randomUUID } from "crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { buildMcpServer, TOTAL_TOOLS } from "./server.js";
-import { MCP_HTTP_TOKEN, SERVER_VERSION } from "./config.js";
+import {
+  MCP_HTTP_BODY_LIMIT_BYTES,
+  MCP_HTTP_HOST,
+  MCP_HTTP_MAX_SESSIONS,
+  MCP_HTTP_SESSION_TTL_MS,
+  MCP_HTTP_TOKEN,
+  SERVER_VERSION,
+} from "./config.js";
 import { logger } from "./logger.js";
 
 const sessions = new Map();
 
-export async function startHttpStreamable(port) {
+function isLoopback(host) {
+  return ["127.0.0.1", "localhost", "::1"].includes(String(host ?? "").toLowerCase());
+}
+
+async function closeSession(sessionId) {
+  const entry = sessions.get(sessionId);
+  if (!entry) return;
+  sessions.delete(sessionId);
+  clearTimeout(entry.timer);
+  await entry.transport?.close?.().catch?.(() => {});
+  await entry.server?.close?.().catch?.(() => {});
+}
+
+function registerSession(sessionId, transport, server) {
+  const timer = setTimeout(() => void closeSession(sessionId), MCP_HTTP_SESSION_TTL_MS);
+  timer.unref?.();
+  sessions.set(sessionId, {
+    transport,
+    server,
+    timer,
+    expiresAt: Date.now() + MCP_HTTP_SESSION_TTL_MS,
+  });
+}
+
+export async function startHttpStreamable(port, host = MCP_HTTP_HOST) {
+  if (!isLoopback(host) && !MCP_HTTP_TOKEN) {
+    throw new Error("MCP_HTTP_TOKEN is required when MCP_HTTP_HOST is not loopback");
+  }
+
   const httpServer = http.createServer(async (req, res) => {
     try {
-      if (req.url === "/health" && req.method === "GET") {
+      if ((req.url === "/health" || req.url === "/healthz") && req.method === "GET") {
         const body = JSON.stringify({
           status: "ok",
           transport: "streamable-http",
-          endpoint: `http://localhost:${port}/mcp`,
+          endpoint: `http://${host}:${port}/mcp`,
           tools: TOTAL_TOOLS,
           version: SERVER_VERSION,
           activeSessions: sessions.size,
@@ -49,7 +84,17 @@ export async function startHttpStreamable(port) {
       let parsedBody;
       if (req.method === "POST") {
         const chunks = [];
-        for await (const chunk of req) chunks.push(Buffer.from(chunk));
+        let totalBytes = 0;
+        for await (const chunk of req) {
+          const buffer = Buffer.from(chunk);
+          totalBytes += buffer.length;
+          if (totalBytes > MCP_HTTP_BODY_LIMIT_BYTES) {
+            res.writeHead(413, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "payload_too_large" }));
+            return;
+          }
+          chunks.push(buffer);
+        }
         const raw = Buffer.concat(chunks).toString("utf8");
         try {
           parsedBody = raw ? JSON.parse(raw) : undefined;
@@ -64,21 +109,34 @@ export async function startHttpStreamable(port) {
       let transport;
 
       if (sessionId && sessions.has(sessionId)) {
-        transport = sessions.get(sessionId);
+        const entry = sessions.get(sessionId);
+        if (entry.expiresAt < Date.now()) {
+          await closeSession(sessionId);
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "session_expired" }));
+          return;
+        }
+        transport = entry.transport;
       } else if (!sessionId && req.method === "POST" && parsedBody?.method === "initialize") {
+        if (sessions.size >= MCP_HTTP_MAX_SESSIONS) {
+          res.writeHead(503, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "session_limit_reached" }));
+          return;
+        }
+        let mcpServer;
         transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: () => randomUUID(),
           onsessioninitialized: (sid) => {
-            sessions.set(sid, transport);
+            registerSession(sid, transport, mcpServer);
             logger.debug({ sessionId: sid }, "MCP session initialized");
           },
           onsessionclosed: (sid) => {
-            sessions.delete(sid);
+            void closeSession(sid);
             logger.debug({ sessionId: sid }, "MCP session closed");
           },
         });
-        const server = buildMcpServer();
-        await server.connect(transport);
+        mcpServer = buildMcpServer();
+        await mcpServer.connect(transport);
       } else {
         res.writeHead(400, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "bad_request", message: "Missing or unknown mcp-session-id. Send initialize first." }));
@@ -90,18 +148,21 @@ export async function startHttpStreamable(port) {
       logger.error({ err: error instanceof Error ? error.message : String(error) }, "HTTP request error");
       if (!res.headersSent) {
         res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
+        res.end(JSON.stringify({ error: "internal_error" }));
       }
     }
   });
 
   await new Promise((resolve, reject) => {
     httpServer.once("error", reject);
-    httpServer.listen(port, () => {
+    httpServer.listen(port, host, () => {
       httpServer.off("error", reject);
       resolve();
     });
   });
 
-  logger.info({ port, endpoint: `http://localhost:${port}/mcp`, health: `http://localhost:${port}/health` }, "MCP HTTP server started");
+  logger.info(
+    { host, port, endpoint: `http://${host}:${port}/mcp`, health: `http://${host}:${port}/health` },
+    "MCP HTTP server started"
+  );
 }

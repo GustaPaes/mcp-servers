@@ -9,7 +9,7 @@ const EnvSchema = z.object({
   ACCOUNTS_CONFIG_PATH: z.string().default('./config/accounts.json'),
   AUDIT_LOG_PATH: z.string().default('./data/audit.log'),
   STORAGE_PATH: z.string().default('./data/storage.json'),
-  META_GRAPH_API_VERSION: z.string().regex(/^v\d+\.\d+$/).default('v21.0'),
+  META_GRAPH_API_VERSION: z.string().regex(/^v\d+\.\d+$/).default('v25.0'),
   META_GRAPH_API_BASE_URL: z.string().url().default('https://graph.facebook.com'),
   READ_ONLY: z
     .string()
@@ -63,6 +63,21 @@ const EnvSchema = z.object({
     .string()
     .default('true')
     .transform((v) => v.toLowerCase() === 'true'),
+  MCP_HTTP_BODY_LIMIT_BYTES: z
+    .string()
+    .default('1048576')
+    .transform((v) => Number(v))
+    .pipe(z.number().int().positive()),
+  MCP_HTTP_SESSION_TTL_MS: z
+    .string()
+    .default('1800000')
+    .transform((v) => Number(v))
+    .pipe(z.number().int().positive()),
+  MCP_HTTP_MAX_SESSIONS: z
+    .string()
+    .default('50')
+    .transform((v) => Number(v))
+    .pipe(z.number().int().positive().max(1000)),
 
   // ---- Storage backend ----------------------------------------------------
   // file (default) | memory | prisma (Postgres via Prisma client)

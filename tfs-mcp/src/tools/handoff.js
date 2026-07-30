@@ -3,7 +3,11 @@
  */
 import { z } from "zod";
 import { tfsGet } from "../tfs-client.js";
-import { formatWorkItem, normalizeWorkItemId } from "../formatters.js";
+import {
+  formatWorkItem,
+  getWorkItemRichTextContent,
+  normalizeWorkItemId,
+} from "../formatters.js";
 import { buildSpecialistReview } from "../specialists.js";
 import {
   calculateDescriptionQuality,
@@ -31,8 +35,8 @@ import { findWikiMatches } from "./infra.js";
 
 function estimateRefinementReadiness(workItem, relatedItems) {
   const f = workItem.fields ?? {};
-  const description = f["example.DefinicoesDeNegocio"] ?? f["System.Description"] ?? "";
-  const acceptanceCriteria = f["example.DefinicoesTecnicas"] ?? f["Microsoft.VSTS.Common.AcceptanceCriteria"] ?? "";
+  const { description, acceptanceCriteria } =
+    getWorkItemRichTextContent(workItem);
   const title = f["System.Title"] ?? "";
   const type = f["System.WorkItemType"] ?? "";
 
@@ -68,9 +72,8 @@ function estimateRefinementReadiness(workItem, relatedItems) {
 
 function buildRefinementQuestions(workItem, relatedItems) {
   const f = workItem.fields ?? {};
-  const type = f["System.WorkItemType"] ?? "";
-  const description = f["System.Description"] ?? "";
-  const acceptanceCriteria = f["Microsoft.VSTS.Common.AcceptanceCriteria"] ?? "";
+  const { description, acceptanceCriteria } =
+    getWorkItemRichTextContent(workItem);
 
   const questions = ["O escopo desta entrega está claro para todos do time?", "Há dependências externas que podem bloquear?"];
 
@@ -139,9 +142,8 @@ export async function toolWorkItemHandoff(args) {
     ? await findWikiMatches(wiki_search ?? workItem.fields?.["System.Title"] ?? "", 5)
     : [];
 
-  const f = workItem.fields ?? {};
-  const description = f["example.DefinicoesDeNegocio"] ?? f["System.Description"] ?? "";
-  const acceptanceCriteria = f["example.DefinicoesTecnicas"] ?? f["Microsoft.VSTS.Common.AcceptanceCriteria"] ?? "";
+  const { description, acceptanceCriteria } =
+    getWorkItemRichTextContent(workItem);
   const formatted = formatWorkItem(workItem);
 
   const stage = inferWorkItemStage(formatted);
@@ -227,8 +229,8 @@ export async function toolPrepareRefinement(args) {
     : [];
 
   const f = workItem.fields ?? {};
-  const description = f["System.Description"] ?? "";
-  const acceptanceCriteria = f["Microsoft.VSTS.Common.AcceptanceCriteria"] ?? "";
+  const { description, acceptanceCriteria } =
+    getWorkItemRichTextContent(workItem);
   const title = f["System.Title"] ?? "";
   const type = f["System.WorkItemType"] ?? "";
 
