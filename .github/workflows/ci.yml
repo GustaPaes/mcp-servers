@@ -65,3 +65,7 @@ jobs:
           fetch-depth: 0
       - name: Scan Git history
         uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
+        env:
+          # Scan the rewritten repository itself instead of the push-event
+          # before/after range, whose old endpoint may no longer exist.
+          GITLEAKS_LOG_OPTS: "--all"
