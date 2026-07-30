@@ -36,7 +36,8 @@ export const getAccountProfileTool = defineTool({
     ctx.audit.record({ action: 'tool.invoked', tool: 'get_account_profile', accountId: input.accountId });
     try {
       const a = ctx.accounts.get(input.accountId);
-      const { tokenEnvVar: _t, ...safe } = a;
+      const { tokenEnvVar: ignoredTokenEnvVar, ...safe } = a;
+      void ignoredTokenEnvVar;
       return ok({ ...safe, effectiveMode: effectiveMode(a) });
     } catch (e) {
       return fail((e as Error).message);

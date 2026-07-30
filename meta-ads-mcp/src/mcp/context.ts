@@ -1,12 +1,12 @@
 import type { AccountRegistry } from '../config/accounts.js';
 import type { MetaAdsClient } from '../meta/MetaAdsClient.js';
 import type { Storage } from '../storage/interfaces.js';
-import { AuditLog } from '../security/auditLog.js';
-import { OptimizationEngine } from '../optimization/OptimizationEngine.js';
-import { CreativeAnalysisEngine } from '../optimization/CreativeAnalysisEngine.js';
-import { AudienceStrategyEngine } from '../optimization/AudienceStrategyEngine.js';
-import { PolicyRiskEngine } from '../optimization/PolicyRiskEngine.js';
-import { BudgetEngine } from '../optimization/BudgetEngine.js';
+import type { AuditLog } from '../security/auditLog.js';
+import type { OptimizationEngine } from '../optimization/OptimizationEngine.js';
+import type { CreativeAnalysisEngine } from '../optimization/CreativeAnalysisEngine.js';
+import type { AudienceStrategyEngine } from '../optimization/AudienceStrategyEngine.js';
+import type { PolicyRiskEngine } from '../optimization/PolicyRiskEngine.js';
+import type { BudgetEngine } from '../optimization/BudgetEngine.js';
 
 export interface ToolContext {
   accounts: AccountRegistry;

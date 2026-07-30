@@ -13,7 +13,7 @@ export interface RetryOptions {
 
 export async function withRetry<T>(fn: () => Promise<T>, opts: RetryOptions): Promise<T> {
   let attempt = 0;
-  // eslint-disable-next-line no-constant-condition
+   
   while (true) {
     try {
       return await fn();

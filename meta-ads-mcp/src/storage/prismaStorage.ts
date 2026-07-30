@@ -49,10 +49,10 @@ export class PrismaStorage implements Storage {
       this.clientPromise = (async () => {
         // @prisma/client é dependência OPCIONAL — só existe quando o usuário
         // ativa STORAGE_BACKEND=prisma e instala manualmente.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/ban-ts-comment
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
         // @ts-ignore - pacote opcional, instalado pelo usuário sob demanda
-        const mod: any = await import('@prisma/client');
-        const PrismaClient = mod.PrismaClient as new () => PrismaClientLike;
+        const mod: unknown = await import('@prisma/client');
+        const { PrismaClient } = mod as { PrismaClient: new () => PrismaClientLike };
         return new PrismaClient();
       })();
     }

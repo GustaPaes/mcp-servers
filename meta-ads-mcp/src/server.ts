@@ -21,7 +21,7 @@ async function main(): Promise<void> {
 
 main().catch((err) => {
   // Last-resort error handler. Goes to stderr so it doesn't pollute MCP stdio.
-  // eslint-disable-next-line no-console
+   
   console.error('Fatal error starting meta-ads-mcp:', err);
   process.exit(1);
 });

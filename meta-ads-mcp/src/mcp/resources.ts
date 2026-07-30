@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer} from '@modelcontextprotocol/sdk/server/mcp.js';
+import { ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { AuditEntry } from '../security/auditLog.js';
 import { getEnv } from '../config/env.js';
 import { redactSecrets } from '../utils/logger.js';

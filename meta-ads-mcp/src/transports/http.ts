@@ -12,7 +12,8 @@
  * NUNCA expor sem auth fora de localhost. Para deploy público use reverse proxy
  * com TLS + tokens fortes + IP allowlist.
  */
-import { createServer, IncomingMessage, ServerResponse } from 'node:http';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { getEnv } from '../config/env.js';
