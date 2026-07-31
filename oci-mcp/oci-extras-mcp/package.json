@@ -21,8 +21,8 @@
     "@gustapaes/mcp-runtime": "file:../../packages/mcp-runtime",
     "@kubernetes/client-node": "^1.0.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "dotenv": "^16.4.7",
-    "js-yaml": "^4.3.0",
+    "dotenv": "^17.4.2",
+    "js-yaml": "^5.2.2",
     "oci-common": "^2.138.0",
     "oci-containerengine": "^2.138.0",
     "oci-core": "^2.138.0",
@@ -33,8 +33,8 @@
     "oci-secrets": "^2.138.0",
     "oci-vault": "^2.138.0",
     "oci-workrequests": "^2.138.0",
-    "pino": "^9.6.0",
-    "zod": "^3.25.0"
+    "pino": "^10.3.1",
+    "zod": "^4.4.3"
   },
   "keywords": [
     "mcp",
