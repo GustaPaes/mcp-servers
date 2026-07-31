@@ -172,7 +172,20 @@ See the [root README](../README.md#%EF%B8%8F-install-in-your-mcp-client) for rea
 - `tfs_work_item_handoff` — **premium** PO ↔ Dev ↔ QA ↔ Support handoff package
 - `tfs_delivery_risk_report` — **premium** executive delivery-risk score
 - `tfs_pipeline_status` — recent pipeline runs
-- `tfs_list_repos`, `tfs_wiki`
+- `tfs_list_repos`
+- `tfs_wiki` — list every wiki, recursively search nested page paths, read exact page content or enumerate a subtree
+
+`tfs_wiki` keeps the legacy `{ "search": "term" }` call, but the explicit actions are preferred:
+
+```json
+{ "action": "list" }
+{ "action": "search", "search": "Code-Review", "top": 50 }
+{ "action": "read", "wiki": "Product.wiki", "path": "/Engineering/Code-Review" }
+{ "action": "read", "url": "https://tfs.example.test/Collection/Project/_wiki/wikis/Product.wiki/123/Code-Review" }
+{ "action": "tree", "wiki": "Product.wiki", "path": "/Engineering", "skip": 0, "top": 200 }
+```
+
+`wiki` accepts either the wiki name or ID. When omitted, the operation covers every configured wiki. Search treats spaces, hyphens, underscores and accents equivalently. `read` also accepts the browser URL directly. `search` and `tree` support `skip`/`top` pagination. `tree` returns paths by default; use `include_content:true` only when the complete contents are required because the response can be large (maximum 200 pages per call with content).
 
 ### Controlled mutation
 - `tfs_work_item_create` — create any standard or custom work item type; profile defaults and `custom_fields` support process-specific required fields; defaults to `dry_run:true`
