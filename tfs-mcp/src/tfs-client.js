@@ -225,6 +225,32 @@ export async function tfsPatch(endpoint, body, params = {}, { authAlias } = {}) 
   });
 }
 
+/**
+ * PUT com corpo JSON.
+ * Usado para substituir recursos versionados, como definições de build.
+ */
+export async function tfsPut(endpoint, body, params = {}, { authAlias } = {}) {
+  const url = new URL(`${BASE}${endpoint}`);
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
+  if (!url.searchParams.has("api-version")) url.searchParams.set("api-version", "7.0");
+
+  return withRetry(async () => {
+    logger.debug({ method: "PUT", path: url.pathname }, "TFS →");
+    const res = await fetch(url.toString(), {
+      method: "PUT",
+      headers: buildHeaders({ "Content-Type": "application/json" }, { authAlias }),
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      const err = new Error(`TFS ${res.status} PUT ${endpoint}: ${txt.slice(0, 400)}`);
+      err.status = res.status;
+      throw err;
+    }
+    return res.json();
+  });
+}
+
 export async function tfsGetAbsoluteJson(url, { cacheKey, cacheTtlMs = 0, authAlias } = {}) {
   const scopedCacheKey = buildScopedCacheKey(cacheKey, authAlias);
   const hit = tryCacheHit(scopedCacheKey);

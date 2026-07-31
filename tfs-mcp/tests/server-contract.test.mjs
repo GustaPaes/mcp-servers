@@ -24,10 +24,12 @@ test("publishes the complete safe tool contract", async () => {
   try {
     await client.connect(transport);
     const { tools } = await client.listTools();
-    assert.equal(tools.length, 31);
+    assert.equal(tools.length, 33);
     const names = new Set(tools.map((tool) => tool.name));
     assert(names.has("tfs_doctor"));
     assert(names.has("tfs_saved_queries"));
+    assert(names.has("tfs_pipeline_upsert"));
+    assert(names.has("tfs_pipeline_queue"));
     for (const tool of tools) {
       assert.equal(tool.inputSchema?.additionalProperties, false, `${tool.name} input must be strict`);
       assert.equal(typeof tool.annotations?.readOnlyHint, "boolean", `${tool.name} readOnlyHint`);
