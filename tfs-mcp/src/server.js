@@ -535,14 +535,19 @@ const TOOL_DEFS = [
     name: "tfs_wiki",
     title: "Wiki Explorer",
     description:
-      "Acessa wikis do projeto configurado. Busca paginas por palavra-chave.",
+      "Lista todas as wikis, busca paginas recursivamente, le conteudo por caminho e enumera arvores de paginas aninhadas.",
     inputSchema: {
       type: "object",
       properties: {
-        search: { type: "string", description: "Buscar paginas cujo caminho contem o texto" },
-        top: { type: "number", default: 10 },
+        action: { type: "string", enum: ["list", "search", "read", "tree"], description: "Operacao. Quando omitida, e inferida por search/path." },
+        search: { type: "string", description: "Busca recursiva no caminho das paginas" },
+        wiki: { type: "string", description: "Nome ou ID da wiki; quando omitido, consulta todas" },
+        path: { type: "string", description: "Caminho exato para read ou raiz para tree" },
+        url: { type: "string", description: "URL de uma pagina da Wiki; action=read resolve o caminho aninhado automaticamente" },
+        include_content: { type: "boolean", description: "Inclui conteudo completo em search/tree; read sempre inclui", default: false },
+        skip: { type: "number", description: "Deslocamento para paginar search/tree", default: 0, minimum: 0 },
+        top: { type: "number", default: 50, maximum: 1000 },
       },
-      required: ["search"],
     },
   },
   {

@@ -31,102 +31,249 @@ function flattenWikiPages(page, bucket = []) {
   return bucket;
 }
 
-export async function getWikiPageWithChildren(path, top = 50) {
-  const wikisData = await getWikis().catch(() => ({ value: [] }));
-  const wikis = wikisData.value ?? [];
-  if (!wikis.length) return [];
+function buildWikiPageUrl(wiki, path) {
+  const wikiRef = wiki.name ?? wiki.id;
+  return `${TFS_URL}/${TFS_COLLECTION}/${TFS_PROJECT}/_wiki/wikis/${encodeURIComponent(wikiRef)}?pagePath=${encodeURIComponent(path ?? "/")}`;
+}
 
+function normalizeWikiText(value) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function parseWikiPageUrl(value) {
+  try {
+    const url = new URL(value);
+    const segments = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
+    const wikiIndex = segments.findIndex((segment) => segment.toLowerCase() === "wikis");
+    if (wikiIndex < 0 || !segments[wikiIndex + 1]) return null;
+    const wiki = segments[wikiIndex + 1];
+    const pagePath = url.searchParams.get("pagePath");
+    const slugStart = /^\d+$/.test(segments[wikiIndex + 2] ?? "") ? wikiIndex + 3 : wikiIndex + 2;
+    const slug = segments.slice(slugStart).join("/");
+    const pageId = /^\d+$/.test(segments[wikiIndex + 2] ?? "") ? Number(segments[wikiIndex + 2]) : null;
+    return { wiki, pageId, pagePath, slug };
+  } catch {
+    return null;
+  }
+}
+
+function formatWikiPage(wiki, page, includeContent = false) {
+  const result = {
+    id: page.id ?? null,
+    wikiId: wiki.id,
+    wikiName: wiki.name,
+    path: page.path ?? "/",
+    order: page.order ?? null,
+    url: buildWikiPageUrl(wiki, page.path),
+    remoteUrl: page.remoteUrl ?? null,
+  };
+  if (includeContent) result.content = page.content ?? "";
+  return result;
+}
+
+async function selectWikis(wikiSelector) {
+  const wikisData = await getWikis();
+  const wikis = wikisData.value ?? [];
+  if (!wikiSelector?.trim()) return wikis;
+  const normalized = wikiSelector.trim().toLowerCase();
+  const selected = wikis.filter(
+    (wiki) => String(wiki.id).toLowerCase() === normalized || String(wiki.name).toLowerCase() === normalized
+  );
+  if (!selected.length) throw new Error(`Wiki '${wikiSelector}' nao encontrada.`);
+  return selected;
+}
+
+async function loadWikiPages({ wikiSelector, path = "/", skip = 0, top = 100, includeContent = false }) {
+  const wikis = await selectWikis(wikiSelector);
   const settled = await Promise.allSettled(
     wikis.map(async (wiki) => {
       const tree = await getWikiPageTree(wiki.id, path, "full", false);
-      const pages = flattenWikiPages(tree)
-        .filter((page) => page.path)
-        .slice(0, top)
-        .map((page) => ({
-          wikiId: wiki.id,
-          wikiName: wiki.name,
-          path: page.path,
-          order: page.order,
-          url: `${TFS_URL}/${TFS_COLLECTION}/${TFS_PROJECT}/_wiki/wikis/${wiki.id}?pagePath=${encodeURIComponent(page.path ?? "/")}`,
-          remoteUrl: page.remoteUrl ?? null,
-        }));
-      return pages;
+      const allPages = flattenWikiPages(tree).filter((page) => page.path);
+      return { wiki, allPages };
     })
   );
 
-  return settled
-    .filter((result) => result.status === "fulfilled")
-    .flatMap((result) => result.value);
+  const successful = settled.filter((result) => result.status === "fulfilled").map((result) => result.value);
+  const failedWikis = settled
+    .map((result, index) => result.status === "rejected" ? { id: wikis[index].id, name: wikis[index].name } : null)
+    .filter(Boolean);
+  const allPages = successful.flatMap(({ wiki, allPages: pages }) => pages.map((page) => ({ wiki, page })));
+  const selectedPages = allPages.slice(skip, skip + top);
+  let pages = selectedPages.map(({ wiki, page }) => formatWikiPage(wiki, page, false));
+
+  if (includeContent) {
+    const contentResults = await Promise.allSettled(
+      selectedPages.map(({ wiki, page }) => getWikiPageTree(wiki.id, page.path, "none", true))
+    );
+    pages = contentResults.map((result, index) => {
+      const selected = selectedPages[index];
+      return result.status === "fulfilled"
+        ? formatWikiPage(selected.wiki, result.value, true)
+        : { ...formatWikiPage(selected.wiki, selected.page, false), contentUnavailable: true };
+    });
+  }
+
+  return {
+    wikiCount: successful.length,
+    failedWikis,
+    totalPages: allPages.length,
+    pages,
+  };
+}
+
+async function readWikiPage(path, wikiSelector) {
+  const wikis = await selectWikis(wikiSelector);
+  const settled = await Promise.allSettled(
+    wikis.map(async (wiki) => formatWikiPage(wiki, await getWikiPageTree(wiki.id, path, "none", true), true))
+  );
+  const pages = settled.filter((result) => result.status === "fulfilled").map((result) => result.value);
+  if (!pages.length) throw new Error(`Pagina de Wiki '${path}' nao encontrada.`);
+  return pages;
+}
+
+async function resolveAndReadWikiPage({ path, url, wiki }) {
+  const reference = url ? parseWikiPageUrl(url) : null;
+  const wikiSelector = wiki ?? reference?.wiki;
+  if (reference?.pageId) {
+    const wikis = await selectWikis(wikiSelector);
+    const settled = await Promise.allSettled(
+      wikis.map(async (selectedWiki) => {
+        const page = await tfsGet(
+          `/wiki/wikis/${selectedWiki.id}/pages/${reference.pageId}`,
+          { includeContent: "true" },
+          { cacheKey: `wiki:page-id:${selectedWiki.id}:${reference.pageId}`, cacheTtlMs: 5 * 60_000 }
+        );
+        return formatWikiPage(selectedWiki, page, true);
+      })
+    );
+    const pages = settled.filter((result) => result.status === "fulfilled").map((result) => result.value);
+    if (pages.length) return pages;
+  }
+  const exactPath = path ?? reference?.pagePath;
+  if (exactPath?.startsWith("/")) {
+    try {
+      return await readWikiPage(exactPath, wikiSelector);
+    } catch {
+      // Fall back to recursive normalized search for web URLs/slugs whose page
+      // path is not exposed directly by the browser URL.
+    }
+  }
+
+  const search = reference?.slug ?? exactPath;
+  if (!search?.trim()) throw new Error("Informe path ou url para ler a pagina de Wiki.");
+  const matches = await findWikiMatchesDeep(search, 20, wikiSelector);
+  if (!matches.length) throw new Error(`Pagina de Wiki '${search}' nao encontrada.`);
+  const normalizedSearch = normalizeWikiText(search);
+  const preferred = matches.find((match) => normalizeWikiText(match.path).endsWith(normalizedSearch)) ?? matches[0];
+  return readWikiPage(preferred.path, preferred.wikiId);
+}
+
+export async function getWikiPageWithChildren(path, top = 50) {
+  const result = await loadWikiPages({ path, top, includeContent: false });
+  return result.pages;
 }
 
 export async function findWikiMatches(search, top = 10) {
-  if (!search?.trim()) return [];
-  const wikisData = await getWikis().catch(() => ({ value: [] }));
-  const wikis = wikisData.value ?? [];
-
-  if (!wikis.length) return [];
-
-  const results = await Promise.allSettled(
-    wikis.slice(0, 3).map(async (wiki) => {
-      const data = await tfsGet(
-        "/wiki/wikis/" + wiki.id + "/pages",
-        {
-          path: "/",
-          recursionLevel: "oneLevel",
-          includeContent: "false",
-        },
-        { cacheKey: `wiki:pages:${wiki.id}`, cacheTtlMs: 5 * 60_000 }
-      );
-      return (data.value ?? data.subPages ?? []).filter((p) =>
-        p.path?.toLowerCase().includes(search.toLowerCase())
-      ).map((p) => ({
-        title: p.path ?? "/",
-        wikiName: wiki.name,
-        url: `${TFS_URL}/${TFS_COLLECTION}/${TFS_PROJECT}/_wiki/wikis/${wiki.id}?pagePath=${encodeURIComponent(p.path ?? "/")}`,
-        remoteUrl: p.remoteUrl ?? null,
-      }));
-    })
-  );
-
-  return results
-    .filter((r) => r.status === "fulfilled")
-    .flatMap((r) => r.value)
-    .slice(0, top);
+  return findWikiMatchesDeep(search, top);
 }
 
-export async function findWikiMatchesDeep(search, top = 20) {
+export async function findWikiMatchesDeep(search, top = 20, wikiSelector, skip = 0) {
   if (!search?.trim()) return [];
-  const wikisData = await getWikis().catch(() => ({ value: [] }));
-  const wikis = wikisData.value ?? [];
+  const wikis = await selectWikis(wikiSelector);
 
   if (!wikis.length) return [];
 
-  const results = await Promise.allSettled(
-    wikis.slice(0, 5).map(async (wiki) => {
+  const results = await Promise.all(
+    wikis.map(async (wiki) => {
       const data = await getWikiPageTree(wiki.id, "/", "full", false);
       return flattenWikiPages(data)
-        .filter((p) => p.path?.toLowerCase().includes(search.toLowerCase()))
+        .filter((p) => normalizeWikiText(p.path).includes(normalizeWikiText(search)))
         .map((p) => ({
+          ...formatWikiPage(wiki, p, false),
           title: p.path ?? "/",
-          path: p.path ?? "/",
-          wikiName: wiki.name,
-          url: `${TFS_URL}/${TFS_COLLECTION}/${TFS_PROJECT}/_wiki/wikis/${wiki.id}?pagePath=${encodeURIComponent(p.path ?? "/")}`,
-          remoteUrl: p.remoteUrl ?? null,
         }));
     })
   );
 
   return results
-    .filter((r) => r.status === "fulfilled")
-    .flatMap((r) => r.value)
-    .slice(0, top);
+    .flat()
+    .slice(skip, skip + top);
 }
 
 export async function toolWiki(args) {
-  const { search, top = 10 } = z
-    .object({ search: z.string().min(1), top: z.number().int().min(1).max(50).default(10) })
+  const parsed = z
+    .object({
+      action: z.enum(["list", "search", "read", "tree"]).optional(),
+      search: z.string().min(1).optional(),
+      wiki: z.string().min(1).optional(),
+      path: z.string().min(1).optional(),
+      url: z.string().url().optional(),
+      include_content: z.boolean().optional(),
+      skip: z.number().int().min(0).default(0),
+      top: z.number().int().min(1).max(1000).default(50),
+    })
+    .superRefine((value, context) => {
+      const action = value.action ?? (value.path || value.url ? "read" : value.search ? "search" : "list");
+      if (action === "search" && !value.search) {
+        context.addIssue({ code: z.ZodIssueCode.custom, path: ["search"], message: "search e obrigatorio para action=search" });
+      }
+      if (action === "read" && !value.path && !value.url) {
+        context.addIssue({ code: z.ZodIssueCode.custom, path: ["path"], message: "path ou url e obrigatorio para action=read" });
+      }
+      if (value.include_content && value.top > 200) {
+        context.addIssue({ code: z.ZodIssueCode.custom, path: ["top"], message: "top deve ser no maximo 200 quando include_content=true" });
+      }
+    })
     .parse(args);
-  return findWikiMatches(search, top);
+
+  const action = parsed.action ?? (parsed.path || parsed.url ? "read" : parsed.search ? "search" : "list");
+  if (action === "list") {
+    const wikis = await selectWikis(parsed.wiki);
+    return wikis.map((wiki) => ({
+      id: wiki.id,
+      name: wiki.name,
+      type: wiki.type ?? null,
+      repositoryId: wiki.repositoryId ?? null,
+      mappedPath: wiki.mappedPath ?? null,
+      url: buildWikiPageUrl(wiki, "/"),
+    }));
+  }
+  if (action === "read") return resolveAndReadWikiPage({ path: parsed.path, url: parsed.url, wiki: parsed.wiki });
+  if (action === "tree") {
+    const result = await loadWikiPages({
+      wikiSelector: parsed.wiki,
+      path: parsed.path ?? "/",
+      skip: parsed.skip,
+      top: parsed.top,
+      includeContent: parsed.include_content ?? false,
+    });
+    return {
+      rootPath: parsed.path ?? "/",
+      skip: parsed.skip,
+      includeContent: parsed.include_content ?? false,
+      totalPages: result.totalPages,
+      returnedPages: result.pages.length,
+      truncated: parsed.skip + result.pages.length < result.totalPages,
+      partial: result.failedWikis.length > 0,
+      failedWikis: result.failedWikis,
+      pages: result.pages,
+    };
+  }
+
+  const matches = await findWikiMatchesDeep(parsed.search, parsed.top, parsed.wiki, parsed.skip);
+  if (!(parsed.include_content ?? false)) return matches;
+  const withContent = await Promise.allSettled(
+    matches.map(async (match) => (await readWikiPage(match.path, match.wikiId))[0])
+  );
+  return withContent
+    .filter((result) => result.status === "fulfilled")
+    .map((result) => result.value);
 }
 
 // ─── Pipelines ─────────────────────────────────────────────────────────────
