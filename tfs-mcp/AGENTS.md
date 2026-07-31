@@ -1,5 +1,8 @@
 # AGENTS.md — Operating Policy For tfs-mcp
 
+> This file complements the [workspace-wide instructions](../AGENTS.md). Their
+> neutrality, reusability and local-content separation rules are mandatory.
+
 This MCP can read and mutate TFS / Azure DevOps Server state. Treat all calls as acting with the configured PAT permissions.
 
 ## Tool Safety Classification

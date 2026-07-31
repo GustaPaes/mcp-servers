@@ -1,5 +1,8 @@
 # AGENTS.md — Operating policy for the Playwright MCP
 
+> This file complements the [workspace-wide instructions](../AGENTS.md). Their
+> neutrality, reusability and local-content separation rules are mandatory.
+
 > Use this document as the **playbook** an LLM (or human operator) should consult before invoking tools. It defines safety classes, default behaviors, and confirmation templates.
 
 ## Tool safety classification

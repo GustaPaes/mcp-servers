@@ -14,6 +14,10 @@ const expectedServers = [
 const errors = [];
 const warnings = [];
 
+if (!fs.existsSync(path.join(root, "AGENTS.md"))) {
+  errors.push("missing workspace-wide AGENTS.md");
+}
+
 function publishableFiles() {
   return execFileSync(
     "git",

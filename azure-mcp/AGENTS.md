@@ -1,5 +1,8 @@
 # AGENTS.md — Política Operacional do azure-mcp
 
+> Este arquivo complementa as [diretrizes globais](../AGENTS.md). As regras de
+> neutralidade, reutilização e separação de conteúdo local são obrigatórias.
+
 > **Este arquivo é uma instrução vinculante para qualquer agente (GitHub Copilot, Claude, OpenCode, etc.) que utilize as tools `azmcp_*` neste workspace.** Leia-o no início de toda sessão que envolva o `azure-mcp`.
 
 ---
