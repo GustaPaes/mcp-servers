@@ -3,21 +3,49 @@ updates:
   - package-ecosystem: npm
     directory: /tfs-mcp
     schedule: { interval: weekly }
+    open-pull-requests-limit: 1
+    groups:
+      routine-updates:
+        patterns: ["*"]
   - package-ecosystem: npm
     directory: /career-development-mcp
     schedule: { interval: weekly }
+    open-pull-requests-limit: 1
+    groups:
+      routine-updates:
+        patterns: ["*"]
   - package-ecosystem: npm
     directory: /playwright-mcp
     schedule: { interval: weekly }
+    open-pull-requests-limit: 1
+    groups:
+      routine-updates:
+        patterns: ["*"]
   - package-ecosystem: npm
     directory: /oci-mcp/oci-extras-mcp
     schedule: { interval: weekly }
+    open-pull-requests-limit: 1
+    groups:
+      routine-updates:
+        patterns: ["*"]
   - package-ecosystem: npm
     directory: /meta-ads-mcp
     schedule: { interval: weekly }
+    open-pull-requests-limit: 1
+    groups:
+      routine-updates:
+        patterns: ["*"]
   - package-ecosystem: npm
     directory: /meta-ads-mcp/web-panel
     schedule: { interval: weekly }
+    open-pull-requests-limit: 1
+    groups:
+      routine-updates:
+        patterns: ["*"]
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
+    open-pull-requests-limit: 1
+    groups:
+      routine-updates:
+        patterns: ["*"]
