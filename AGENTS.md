@@ -88,5 +88,26 @@ domínio e permanece útil sem acesso ao ambiente de origem.
 5. Execute `npm run doctor`, `npm run validate` e `git diff --check` na raiz
    quando os comandos estiverem disponíveis e forem aplicáveis à mudança.
 
+## Pull requests e limpeza de branches
+
+- Entregue mudanças em uma branch de trabalho por pull request para `main`;
+  não envie commits diretamente para a branch padrão.
+- Depois de abrir uma pull request pronta, habilite o auto-merge assim que os
+  checks obrigatórios e as aprovações exigidas forem concluídos. Não ignore
+  falhas, conflitos, revisões pendentes ou proteções da branch.
+- Preserve commits separados com merge commit quando a divisão fizer parte da
+  entrega. Respeite outro método de merge solicitado explicitamente pelo
+  usuário ou exigido pelo repositório.
+- Considere a entrega concluída somente após confirmar o merge em `main`, salvo
+  quando o usuário pedir expressamente apenas a abertura da pull request.
+- Mantenha habilitada no repositório a exclusão automática da branch de origem
+  após o merge. Se a plataforma não a remover, exclua a branch remota e a branch
+  local somente depois de comprovar que seu conteúdo está integrado em `main`.
+- Após o merge, atualize `main` com fast-forward e remova referências remotas
+  obsoletas com `git fetch --prune`.
+- Nunca exclua `main`, branches com pull request aberta, branches não mergeadas,
+  branches usadas por outro worktree ou branches cuja integração não possa ser
+  comprovada.
+
 Se uma implementação não atender a estes critérios, generalize-a antes de
 versionar ou mantenha-a integralmente em `local-private/`.
