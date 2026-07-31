@@ -1,5 +1,8 @@
 # AGENTS.md — Operating policy for the Meta Ads MCP
 
+> This file complements the [workspace-wide instructions](../AGENTS.md). Their
+> neutrality, reusability and local-content separation rules are mandatory.
+
 > Use this document as the **playbook** an LLM (or human operator) must consult before invoking tools. It defines safety classes, default behaviors, confirmation templates and the few hard NEVER rules of paid media on Meta.
 
 This MCP operates **real ad accounts with real money**. Treat every 🟡/🔴 tool as financially consequential.

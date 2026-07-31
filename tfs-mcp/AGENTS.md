@@ -1,5 +1,8 @@
 # AGENTS.md — Operating Policy For tfs-mcp
 
+> This file complements the [workspace-wide instructions](../AGENTS.md). Their
+> neutrality, reusability and local-content separation rules are mandatory.
+
 This MCP can read and mutate TFS / Azure DevOps Server state. Treat all calls as acting with the configured PAT permissions.
 
 ## Tool Safety Classification
@@ -10,7 +13,7 @@ This MCP can read and mutate TFS / Azure DevOps Server state. Treat all calls as
 READ tools may be used without extra confirmation, but summarize sensitive results instead of pasting large private payloads.
 
 ### WRITE
-`tfs_work_item_create`, `tfs_update_work_item`, `tfs_update_issue_analysis`, `tfs_add_pr_comment`, `tfs_comment_review_findings`.
+`tfs_work_item_create`, `tfs_update_work_item`, `tfs_update_issue_analysis`, `tfs_add_pr_comment`, `tfs_comment_review_findings`, `tfs_create_pr`, `tfs_update_pr`, `tfs_pipeline_upsert`, `tfs_pipeline_queue`.
 
 WRITE tools are server-gated. They default to `dry_run:true` and return a mutation plan instead of changing TFS. To execute a real mutation, the call must include `dry_run:false`, `confirm:true`, `reason`, and `requestedBy`/`requested_by`.
 

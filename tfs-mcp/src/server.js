@@ -60,6 +60,7 @@ import {
   toolCompareBuildArtifacts,
 } from "./tools/infra.js";
 import { toolSpecialistReview } from "./tools/specialist.js";
+import { toolQueuePipeline, toolUpsertYamlPipeline } from "./tools/pipeline.js";
 import { toolSavedQueriesList, toolTfsDoctor } from "./tools/doctor.js";
 import { runWithRequestContext } from "./request-context.js";
 import { MutationControlsSchema } from "./safety.js";
@@ -76,12 +77,15 @@ const MUTATING_TOOLS = new Set([
   "tfs_work_item_create",
   "tfs_create_pr",
   "tfs_update_pr",
+  "tfs_pipeline_upsert",
+  "tfs_pipeline_queue",
 ]);
 const NON_IDEMPOTENT_TOOLS = new Set([
   "tfs_add_pr_comment",
   "tfs_comment_review_findings",
   "tfs_work_item_create",
   "tfs_create_pr",
+  "tfs_pipeline_queue",
 ]);
 const DESTRUCTIVE_TOOLS = new Set([
   "tfs_update_work_item",
@@ -532,6 +536,61 @@ const TOOL_DEFS = [
     },
   },
   {
+    name: "tfs_pipeline_upsert",
+    title: "Create or Update YAML Pipeline",
+    description: "Cria ou atualiza uma definição de pipeline YAML de forma genérica, com dry-run, confirmação e auditoria. Não aceita segredos como variáveis.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        yaml_path: { type: "string", description: "Caminho do YAML relativo à raiz do repositório" },
+        repository: { type: "string", description: "Nome ou ID; usa o repositório padrão quando omitido" },
+        default_branch: {
+          type: "string",
+          description: "Branch da definição; quando omitido, usa o padrão do repositório",
+        },
+        pool_name: { type: "string", description: "Nome da fila/pool padrão da definição" },
+        folder: { type: "string", default: "\\" },
+        variables: {
+          type: "object",
+          description: "Variáveis enviadas como não secretas; não informe credenciais ou tokens",
+          maxProperties: 100,
+          additionalProperties: { type: ["string", "number", "boolean"], maxLength: 4000 },
+        },
+        ...MutationControlsSchema,
+      },
+      required: ["name", "yaml_path"],
+    },
+  },
+  {
+    name: "tfs_pipeline_queue",
+    title: "Queue Pipeline Run",
+    description: "Enfileira uma execução existente por ID ou nome, branch e parâmetros YAML, com dry-run, confirmação e auditoria.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        definition_id: { type: "number" },
+        definition_name: { type: "string" },
+        branch: {
+          type: "string",
+          description: "Branch da execução; quando omitido, usa o padrão da definição",
+        },
+        template_parameters: {
+          type: "object",
+          description: "Parâmetros YAML não secretos, limitados a 64 KiB",
+          additionalProperties: true,
+        },
+        variables: {
+          type: "object",
+          description: "Variáveis enviadas como não secretas; não informe credenciais ou tokens",
+          maxProperties: 100,
+          additionalProperties: { type: ["string", "number", "boolean"], maxLength: 4000 },
+        },
+        ...MutationControlsSchema,
+      },
+    },
+  },
+  {
     name: "tfs_wiki",
     title: "Wiki Explorer",
     description:
@@ -740,6 +799,8 @@ const TOOL_HANDLERS = {
   tfs_get_pr: (args) => toolGetPR(args),
   tfs_review_pr: (args) => toolReviewPR(args),
   tfs_pipeline_status: (args) => toolPipelineStatus(args),
+  tfs_pipeline_upsert: (args) => toolUpsertYamlPipeline(args),
+  tfs_pipeline_queue: (args) => toolQueuePipeline(args),
   tfs_wiki: (args) => toolWiki(args),
   tfs_update_work_item: (args) => toolUpdateWorkItem(args),
   tfs_update_issue_analysis: (args) => toolUpdateIssueAnalysis(args),

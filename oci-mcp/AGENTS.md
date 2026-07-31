@@ -1,5 +1,8 @@
 # AGENTS.md — Operating Policy For oci-mcp
 
+> This file complements the [workspace-wide instructions](../AGENTS.md). Their
+> neutrality, reusability and local-content separation rules are mandatory.
+
 This toolkit combines official Oracle MCP servers with the local `oci-extras-mcp`. Treat all calls as acting with the configured OCI identity permissions.
 
 ## Mandatory Safety Rules

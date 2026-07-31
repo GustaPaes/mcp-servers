@@ -1,5 +1,8 @@
 # AGENTS.md — Operating Policy For career-development-mcp
 
+> This file complements the [workspace-wide instructions](../AGENTS.md). Their
+> neutrality, reusability and local-content separation rules are mandatory.
+
 This MCP stores personal career, PDI, goal and evidence data in local JSON files. Treat the data as private by default.
 
 ## Tool Safety Classification
