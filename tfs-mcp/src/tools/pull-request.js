@@ -500,9 +500,6 @@ export async function toolCreatePR(args) {
         targetRefName: `refs/heads/${targetBranch}`,
         title: input.titulo,
         description,
-        ...(input.work_item_ids.length
-          ? { workItemRefs: input.work_item_ids.map((id) => ({ id: String(id) })) }
-          : {}),
       });
       const workItemLinks = await ensurePullRequestWorkItemLinks({
         pr: result,

@@ -83,8 +83,12 @@ test("confirmed PR creation writes and audits a real work item ArtifactLink", as
     });
 
     const createRequest = requests.find((request) => request.method === "POST");
-    assert.deepEqual(createRequest.body.workItemRefs, [{ id: "301" }]);
-    const linkRequest = requests.find((request) => request.method === "PATCH");
+    assert.equal("workItemRefs" in createRequest.body, false);
+    const linkRequests = requests.filter(
+      (request) => request.method === "PATCH" && request.url.includes("/wit/workitems/301")
+    );
+    assert.equal(linkRequests.length, 1, "ArtifactLink reconciliation must be the only writer");
+    const [linkRequest] = linkRequests;
     assert.equal(linkRequest.contentType, "application/json-patch+json");
     assert.deepEqual(linkRequest.body[0], { op: "test", path: "/rev", value: 7 });
     assert.deepEqual(linkRequest.body[1], {

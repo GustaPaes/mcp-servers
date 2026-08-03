@@ -136,6 +136,73 @@ test("re-checks the relation after an optimistic concurrency conflict", async ()
   assert.equal(patchAttempts, 1);
 });
 
+test("reconciles an ambiguous ArtifactLink PATCH from persisted state without retry", async () => {
+  const item = { id: 204, rev: 1, relations: [] };
+  let reads = 0;
+  let patchAttempts = 0;
+  const get = async () => {
+    reads += 1;
+    return structuredClone(item);
+  };
+  const jsonPatch = async (_method, _endpoint, operations) => {
+    patchAttempts += 1;
+    item.rev += 1;
+    item.relations.push(
+      operations.find((operation) => operation.path === "/relations/-").value,
+    );
+    const error = new Error("synthetic response lost after ArtifactLink persistence");
+    error.status = 500;
+    throw error;
+  };
+
+  const result = await ensurePullRequestWorkItemLinks({
+    pr: { artifactId: ARTIFACT_ID },
+    repository: "example-repo",
+    pullRequestId: 42,
+    workItemIds: [204],
+    get,
+    jsonPatch,
+  });
+
+  assert.equal(result.status, "complete");
+  assert.deepEqual(result.addedIds, [204]);
+  assert.deepEqual(result.failed, []);
+  assert.equal(reads, 2, "the ambiguous response must trigger exactly one read-back");
+  assert.equal(patchAttempts, 1, "the ambiguous PATCH must never be retried");
+});
+
+test("preserves an ambiguous ArtifactLink PATCH failure when read-back is absent", async () => {
+  let reads = 0;
+  let patchAttempts = 0;
+  const get = async () => {
+    reads += 1;
+    return { id: 205, rev: 1, relations: [] };
+  };
+  const jsonPatch = async () => {
+    patchAttempts += 1;
+    const error = new Error("synthetic timeout before persistence confirmation");
+    error.status = 0;
+    throw error;
+  };
+
+  const result = await ensurePullRequestWorkItemLinks({
+    pr: { artifactId: ARTIFACT_ID },
+    repository: "example-repo",
+    pullRequestId: 42,
+    workItemIds: [205],
+    get,
+    jsonPatch,
+  });
+
+  assert.equal(result.status, "failed");
+  assert.deepEqual(result.linkedIds, []);
+  assert.equal(result.failed.length, 1);
+  assert.equal(result.failed[0].id, 205);
+  assert.match(result.failed[0].error, /timeout before persistence confirmation/);
+  assert.equal(reads, 2, "the ambiguous response must trigger exactly one read-back");
+  assert.equal(patchAttempts, 1, "the ambiguous PATCH must never be retried");
+});
+
 test("does not treat echoed workItemRefs as proof of an ArtifactLink", async () => {
   let patchAttempts = 0;
   const result = await ensurePullRequestWorkItemLinks({
@@ -224,8 +291,9 @@ test("matches builds only with repository plus PR id or source SHA", () => {
   );
 });
 
-test("loads PR pipelines from exact and recent queries without false negatives or duplicates", async () => {
+test("loads PR pipelines from exact, source-ref and recent queries without false negatives or duplicates", async () => {
   const observedRequests = [];
+  const sourceRefName = "refs/heads/feature/example";
   const exactBuilds = [
     {
       id: 501,
@@ -238,18 +306,30 @@ test("loads PR pipelines from exact and recent queries without false negatives o
       result: "succeeded",
     },
   ];
-  const recentBuilds = [
-    exactBuilds[0],
+  const sourceBuilds = [
     {
       id: 504,
       definition: { id: 40, name: "Manual source validation" },
       repository: { id: REPOSITORY_ID, name: "example-repo" },
-      sourceBranch: "refs/heads/feature/example",
+      sourceBranch: sourceRefName,
       sourceVersion: "cccccccccccccccccccccccccccccccccccccccc",
       queueTime: "2026-08-03T15:00:00Z",
       status: "completed",
       result: "succeeded",
     },
+    {
+      id: 506,
+      definition: { id: 60, name: "Same source branch, stale commit" },
+      repository: { id: REPOSITORY_ID, name: "example-repo" },
+      sourceBranch: sourceRefName,
+      sourceVersion: "dddddddddddddddddddddddddddddddddddddddd",
+      queueTime: "2026-08-03T16:00:00Z",
+      status: "completed",
+      result: "succeeded",
+    },
+  ];
+  const recentBuilds = [
+    exactBuilds[0],
     {
       id: 502,
       definition: { id: 20, name: "Unrelated repository" },
@@ -272,14 +352,15 @@ test("loads PR pipelines from exact and recent queries without false negatives o
   ];
   const get = async (endpoint, params) => {
     observedRequests.push({ endpoint, params });
-    return {
-      value: params.branchName ? exactBuilds : recentBuilds,
-    };
+    if (params.branchName === "refs/pull/42/merge") return { value: exactBuilds };
+    if (params.branchName === sourceRefName) return { value: sourceBuilds };
+    return { value: recentBuilds };
   };
 
   const result = await loadPullRequestPipelines({
     pr: {
       repository: { id: REPOSITORY_ID, name: "example-repo" },
+      sourceRefName,
       lastMergeCommit: { commitId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
       lastMergeSourceCommit: { commitId: "cccccccccccccccccccccccccccccccccccccccc" },
     },
@@ -288,33 +369,44 @@ test("loads PR pipelines from exact and recent queries without false negatives o
     get,
   });
 
-  assert.equal(observedRequests.length, 2);
+  assert.equal(observedRequests.length, 3);
   for (const request of observedRequests) {
     assert.equal(request.endpoint, "/build/builds");
     assert.equal(request.params.repositoryId, REPOSITORY_ID);
     assert.equal(request.params.repositoryType, "TfsGit");
     assert.equal(request.params.$top, 100);
   }
-  const exactRequest = observedRequests.find((request) => request.params.branchName);
+  const exactRequest = observedRequests.find(
+    (request) => request.params.branchName === "refs/pull/42/merge"
+  );
+  const sourceRequest = observedRequests.find(
+    (request) => request.params.branchName === sourceRefName
+  );
   const recentRequest = observedRequests.find((request) => !request.params.branchName);
   assert.equal(exactRequest.params.reasonFilter, "pullRequest");
-  assert.equal(exactRequest.params.branchName, "refs/pull/42/merge");
+  assert.equal(sourceRequest.params.reasonFilter, undefined);
   assert.equal(recentRequest.params.reasonFilter, undefined);
-  assert.equal(recentRequest.params.branchName, undefined);
   assert.deepEqual(result.map((pipeline) => pipeline.buildId), [504, 501]);
+  assert.equal(result.filter((pipeline) => pipeline.buildId === 501).length, 1);
+  assert.equal(result.some((pipeline) => pipeline.buildId === 506), false);
   assert.deepEqual(result[0].matchedBy, ["source-version"]);
   assert.deepEqual(result[1].matchedBy, ["pull-request-id", "source-version"]);
 });
 
 test("keeps the available PR build query when the complementary query fails", async () => {
+  let requestCount = 0;
   const result = await loadPullRequestPipelines({
     pr: {
       repository: { id: REPOSITORY_ID, name: "example-repo" },
+      sourceRefName: "refs/heads/feature/example",
     },
     repository: "example-repo",
     pullRequestId: 42,
     get: async (_endpoint, params) => {
-      if (!params.branchName) throw new Error("synthetic recent query failure");
+      requestCount += 1;
+      if (params.branchName !== "refs/pull/42/merge") {
+        throw new Error("synthetic complementary query failure");
+      }
       return {
         value: [{
           id: 505,
@@ -329,6 +421,7 @@ test("keeps the available PR build query when the complementary query fails", as
     },
   });
 
+  assert.equal(requestCount, 3);
   assert.deepEqual(result.map((pipeline) => pipeline.buildId), [505]);
 });
 

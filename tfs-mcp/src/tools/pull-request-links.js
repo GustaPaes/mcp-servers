@@ -1,6 +1,8 @@
 import { normalizeWorkItemId } from "../formatters.js";
 import { tfsGet, tfsJsonPatch } from "../tfs-client.js";
 
+const AMBIGUOUS_WRITE_STATUS = new Set([0, 429, 500, 502, 503, 504]);
+
 export function normalizePRWorkItemIds(values = []) {
   const normalized = [];
   for (const value of values ?? []) {
@@ -65,8 +67,9 @@ function errorMessage(error) {
 }
 
 /**
- * Reconciles direct PR ArtifactLinks on work items. The read-before-write and
- * revision test make retries idempotent while still reporting partial failures.
+ * Reconciles direct PR ArtifactLinks on work items. Read-before-write,
+ * revision checks and ambiguous-write read-back avoid duplicate links while
+ * still reporting partial failures.
  */
 export async function ensurePullRequestWorkItemLinks({
   pr,
@@ -127,7 +130,17 @@ export async function ensurePullRequestWorkItemLinks({
           await jsonPatch("PATCH", `/wit/workitems/${id}`, operations);
           return { id, disposition: "added" };
         } catch (error) {
-          if (attempt === 0 && [409, 412].includes(Number(error?.status))) continue;
+          const status = Number(error?.status ?? 0);
+          if (attempt === 0 && [409, 412].includes(status)) continue;
+          if (AMBIGUOUS_WRITE_STATUS.has(status)) {
+            const persisted = await get(
+              `/wit/workitems/${id}`,
+              { "$expand": "Relations" },
+            );
+            if (hasPullRequestArtifactLink(persisted, artifactId)) {
+              return { id, disposition: "added" };
+            }
+          }
           throw error;
         }
       }

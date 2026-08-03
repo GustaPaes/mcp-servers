@@ -711,6 +711,46 @@ test("does not retry an ambiguous policy create and reconciles only persisted de
   });
 });
 
+test("does not retry an ambiguous policy update and reconciles persisted desired state", async () => {
+  const existing = createPolicy({ isEnabled: false });
+  const mock = installFetch({
+    policies: [existing],
+    onRequest: ({ request, persistPolicy }) => {
+      if (request.method === "PUT") {
+        persistPolicy(request.body, {
+          id: existing.id,
+          revision: existing.revision + 1,
+        });
+        return jsonResponse({ message: "synthetic response lost after policy update" }, 500);
+      }
+      return undefined;
+    },
+  });
+
+  try {
+    const result = await toolUpsertBuildValidationPolicy({
+      repository: REPOSITORY.name,
+      branch: "main",
+      build_definition_id: DEFINITION.id,
+      display_name: "Required PR validation",
+      filename_patterns: ["/src/*"],
+      enabled: true,
+      dry_run: false,
+      confirm: true,
+      confirm_high_impact: String(existing.id),
+      reason: "test ambiguous update response",
+      requestedBy: "automated test",
+    });
+
+    assert.equal(result.policyId, existing.id);
+    assert.equal(result.revision, existing.revision + 1);
+    assert.equal(result.reconciled, true);
+    assert.equal(mock.requests.filter(request => request.method === "PUT").length, 1);
+  } finally {
+    mock.restore();
+  }
+});
+
 test("serializes concurrent creates for the same policy identity in one process", async () => {
   const mock = installFetch({
     onRequest: async ({ request }) => {

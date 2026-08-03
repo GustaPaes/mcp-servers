@@ -31,6 +31,7 @@ function pullRequestBuildIdentity(pr, repository, pullRequestId) {
     pullRequestId: Number(pullRequestId),
     repositoryId: pr?.repository?.id ?? null,
     repositoryName: pr?.repository?.name ?? repository ?? null,
+    sourceRefName: String(pr?.sourceRefName ?? "").trim() || null,
     commitIds: [
       pr?.lastMergeCommit?.commitId,
       pr?.lastMergeSourceCommit?.commitId,
@@ -108,17 +109,31 @@ export async function loadPullRequestPipelines({
     repositoryType: "TfsGit",
     queryOrder: "queueTimeDescending",
   };
-  const queries = await Promise.allSettled([
+  const mergeRefName = `refs/pull/${identity.pullRequestId}/merge`;
+  const requests = [
     get("/build/builds", {
       ...commonQuery,
       reasonFilter: "pullRequest",
       // This is the synthetic ref for this PR, not its shared target branch.
-      branchName: `refs/pull/${identity.pullRequestId}/merge`,
+      branchName: mergeRefName,
     }),
-    // A bounded repository window covers providers/reruns that expose the PR
-    // only through triggerInfo or a source/merge SHA instead of the merge ref.
-    get("/build/builds", commonQuery),
-  ]);
+  ];
+  if (
+    identity.sourceRefName &&
+    normalizeBuildToken(identity.sourceRefName) !== normalizeBuildToken(mergeRefName)
+  ) {
+    // The PR source ref narrows discovery without becoming matching evidence;
+    // classification below still requires the repository plus PR id or SHA.
+    requests.push(get("/build/builds", {
+      ...commonQuery,
+      branchName: identity.sourceRefName,
+    }));
+  }
+  // A bounded repository window covers providers/reruns that expose the PR
+  // only through triggerInfo or a source/merge SHA instead of either known ref.
+  requests.push(get("/build/builds", commonQuery));
+
+  const queries = await Promise.allSettled(requests);
   const successfulQueries = queries.filter((query) => query.status === "fulfilled");
   if (!successfulQueries.length) throw queries[0].reason;
 
