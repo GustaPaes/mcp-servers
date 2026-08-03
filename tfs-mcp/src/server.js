@@ -340,7 +340,7 @@ export const TOOL_DEFS = [
     name: "tfs_create_pr",
     title: "Create Pull Request",
     description:
-      "Cria Pull Request com titulo e descricao padronizados em portugues. A descricao e gerada com resumo, alteracoes, validacoes e itens relacionados.",
+      "Cria Pull Request com titulo e descricao padronizados em portugues e vincula work_item_ids como ArtifactLinks reais, com reconciliacao idempotente e resultado por item.",
     inputSchema: {
       type: "object",
       properties: {
@@ -351,7 +351,11 @@ export const TOOL_DEFS = [
         resumo: { type: "string", description: "Resumo em portugues do objetivo e impacto da mudanca." },
         alteracoes: { type: "array", items: { type: "string" } },
         validacoes: { type: "array", items: { type: "string" } },
-        work_item_ids: { type: "array", items: { type: ["number", "string"] } },
+        work_item_ids: {
+          type: "array",
+          items: { type: ["number", "string"] },
+          description: "IDs vinculados ao PR como ArtifactLinks reais; duplicatas sao ignoradas.",
+        },
         ...MutationControlsSchema,
       },
       required: ["source_branch", "target_branch", "titulo", "resumo"],
@@ -361,7 +365,7 @@ export const TOOL_DEFS = [
     name: "tfs_update_pr",
     title: "Update Pull Request",
     description:
-      "Atualiza titulo e descricao de um Pull Request ativo usando o padrao em portugues: resumo, alteracoes, validacoes e itens relacionados.",
+      "Atualiza titulo e descricao de um Pull Request ativo e adiciona work_item_ids como ArtifactLinks reais sem duplicar vinculos existentes.",
     inputSchema: {
       type: "object",
       properties: {
@@ -371,7 +375,11 @@ export const TOOL_DEFS = [
         resumo: { type: "string", description: "Resumo em portugues do objetivo e impacto da mudanca." },
         alteracoes: { type: "array", items: { type: "string" } },
         validacoes: { type: "array", items: { type: "string" } },
-        work_item_ids: { type: "array", items: { type: ["number", "string"] } },
+        work_item_ids: {
+          type: "array",
+          items: { type: ["number", "string"] },
+          description: "IDs adicionados ao PR como ArtifactLinks reais; vinculos existentes nao sao duplicados nem removidos.",
+        },
         ...MutationControlsSchema,
       },
       required: ["id", "titulo", "resumo"],
@@ -396,7 +404,7 @@ export const TOOL_DEFS = [
     name: "tfs_prepare_pr_review",
     title: "Prepare Pull Request Review",
     description:
-      "Prepara uma revisao de PR com especialistas automaticos por arquivos alterados e area afetada: work items vinculados, riscos, checklist, sinais de qualidade e review automatico.",
+      "Prepara uma revisao de PR com especialistas automaticos por arquivos alterados e area afetada. Pipelines sao associadas somente por repositorio e identidade do PR ou SHA, nunca apenas pela branch alvo.",
     outputSchema: PREPARE_PR_REVIEW_OUTPUT_SCHEMA,
     inputSchema: {
       type: "object",

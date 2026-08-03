@@ -24,6 +24,11 @@ import {
   detectCriticalFileAreas,
 } from "../analytics.js";
 import { fetchWorkItemsBatch, extractPullRequestRefs } from "./work-item.js";
+import {
+  ensurePullRequestWorkItemLinks,
+  normalizePRWorkItemIds,
+} from "./pull-request-links.js";
+import { loadPullRequestPipelines } from "./pull-request-builds.js";
 
 // Convenience wrapper that falls back to configured default repo
 function resolveRepo(preferredRepo) {
@@ -460,6 +465,7 @@ function parsePortuguesePRInput(args, { includeBranches }) {
   for (const item of [...(input.alteracoes ?? []), ...(input.validacoes ?? [])]) {
     assertPortugueseText(item, "conteudo");
   }
+  input.work_item_ids = normalizePRWorkItemIds(input.work_item_ids);
   return input;
 }
 
@@ -494,6 +500,15 @@ export async function toolCreatePR(args) {
         targetRefName: `refs/heads/${targetBranch}`,
         title: input.titulo,
         description,
+        ...(input.work_item_ids.length
+          ? { workItemRefs: input.work_item_ids.map((id) => ({ id: String(id) })) }
+          : {}),
+      });
+      const workItemLinks = await ensurePullRequestWorkItemLinks({
+        pr: result,
+        repository,
+        pullRequestId: result.pullRequestId,
+        workItemIds: input.work_item_ids,
       });
       return {
         pullRequestId: result.pullRequestId,
@@ -501,6 +516,7 @@ export async function toolCreatePR(args) {
         repository,
         sourceBranch,
         targetBranch,
+        workItemLinks,
         url: `${buildProjectUrl(`/_git/${repository}/pullrequest/${result.pullRequestId}`)}`,
       };
     },
@@ -536,7 +552,19 @@ export async function toolUpdatePR(args) {
         title: input.titulo,
         description,
       });
-      return { pullRequestId: result.pullRequestId, title: result.title, description, url: `${buildProjectUrl(`/_git/${repository}/pullrequest/${result.pullRequestId}`)}` };
+      const workItemLinks = await ensurePullRequestWorkItemLinks({
+        pr: { ...pr, ...result, repository: result.repository ?? pr.repository },
+        repository,
+        pullRequestId: parsedRef.id,
+        workItemIds: input.work_item_ids,
+      });
+      return {
+        pullRequestId: result.pullRequestId,
+        title: result.title,
+        description,
+        workItemLinks,
+        url: `${buildProjectUrl(`/_git/${repository}/pullrequest/${result.pullRequestId}`)}`,
+      };
     },
   });
 }
@@ -1010,11 +1038,12 @@ export async function toolPreparePRReview(args) {
     ...(criticalAreas.areas.length > 0 ? [`Revisão extra: ${criticalAreas.areas.slice(0, 2).join(", ")}`] : []),
   ];
   const pipeline = include_pipeline
-    ? await import("./infra.js")
-        .then(({ toolPipelineStatus }) =>
-          toolPipelineStatus({ branch: formattedPr.targetBranch || "master", top: 3 })
-        )
-        .catch((err) => ({
+    ? await loadPullRequestPipelines({
+        pr,
+        repository,
+        pullRequestId: parsedRef.id,
+        top: 3,
+      }).catch((err) => ({
           unavailable: true,
           error: err instanceof Error ? err.message : String(err),
         }))
