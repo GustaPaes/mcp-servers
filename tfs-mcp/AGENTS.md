@@ -36,13 +36,26 @@ For high-impact targets (production/release/main/master/hml/homolog patterns), t
 ### DESTRUCTIVE
 
 `tfs_update_work_item`, `tfs_update_issue_analysis`, `tfs_update_pr`,
-`tfs_pipeline_upsert`.
+`tfs_pipeline_upsert`, `tfs_branch_policy_upsert`.
 
 These edits overwrite remote state and use the same server guard. Before
-confirming a pipeline-definition edit, present `changes.changedFields`,
-`changes.before` and `changes.after`. Any pipeline/release definition deletion
-added in the future must identify the exact target, return its current state in
-the preview, require exact confirmation and be classified `DESTRUCTIVE`.
+confirming a pipeline-definition or branch-policy edit, present
+`changes.changedFields`, `changes.before` and `changes.after`. A branch-policy
+upsert is identified by repository, case-sensitive branch ref and build
+definition; duplicated or multi-scope policies must be reconciled explicitly
+instead of being overwritten implicitly. Exact scopes require an existing
+branch and prefix scopes are always high impact. The server serializes that
+identity only inside one process, rechecks refs and definition metadata before
+writes, and verifies persisted state afterwards. Separate MCP instances can
+still race, so a reported ambiguity must be resolved manually; do not describe
+the Policy API revision preflight as an atomic concurrency guarantee. An
+enabled Build Validation policy requires an enabled definition from the target
+repository unless the user explicitly approves the high-impact
+`allow_cross_repository:true` exception; disabling a policy remains allowed
+when its definition is paused or disabled. Any pipeline/release definition
+deletion added in the future must identify the exact target, return its current
+state in the preview, require exact confirmation and be classified
+`DESTRUCTIVE`.
 
 ### EXECUTION
 `tfs_pipeline_queue`.

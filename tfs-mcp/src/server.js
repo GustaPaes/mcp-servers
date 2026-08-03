@@ -61,6 +61,7 @@ import {
 } from "./tools/infra.js";
 import { toolSpecialistReview } from "./tools/specialist.js";
 import { toolQueuePipeline, toolUpsertYamlPipeline } from "./tools/pipeline.js";
+import { toolUpsertBuildValidationPolicy } from "./tools/branch-policy.js";
 import { toolSavedQueriesList, toolTfsDoctor } from "./tools/doctor.js";
 import { runWithRequestContext } from "./request-context.js";
 import { MutationControlsSchema } from "./safety.js";
@@ -590,6 +591,56 @@ export const TOOL_DEFS = [
     },
   },
   {
+    name: "tfs_branch_policy_upsert",
+    title: "Create or Update Build Validation Branch Policy",
+    description: "Cria ou atualiza uma Build Validation policy por repositório, branch e pipeline. Serializa a identidade no processo, relê o estado persistido, falha diante de ambiguidades e exige dry-run, confirmação, auditoria e confirmação adicional para alvos de alto impacto.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        repository: { type: "string", minLength: 1, description: "Nome ou ID; usa o repositório padrão quando omitido" },
+        branch: { type: "string", minLength: 1, description: "Branch protegida, com ou sem o prefixo refs/heads/" },
+        branch_match_kind: {
+          type: "string",
+          enum: ["exact", "prefix"],
+          default: "exact",
+          description: "Correspondência exata ou por prefixo para o escopo da branch",
+        },
+        build_definition_id: { type: "integer", minimum: 1, description: "ID da pipeline de validação" },
+        build_definition_name: { type: "string", minLength: 1, description: "Nome exato da pipeline, quando o ID não for informado" },
+        allow_cross_repository: {
+          type: "boolean",
+          default: false,
+          description: "Permite explicitamente uma pipeline ligada a outro repositório; o plano marca essa exceção como alto impacto",
+        },
+        display_name: { type: "string", minLength: 1, maxLength: 256, description: "Nome exibido na policy; usa o nome da pipeline quando omitido" },
+        filename_patterns: {
+          type: "array",
+          maxItems: 100,
+          items: { type: "string", maxLength: 512 },
+          default: [],
+          description: "Filtros de caminho da policy. Informe um padrão por item; vazio aplica a policy a todos os arquivos.",
+        },
+        enabled: { type: "boolean", default: true },
+        blocking: { type: "boolean", default: true },
+        manual_queue_only: { type: "boolean", default: false },
+        queue_on_source_update_only: { type: "boolean", default: false },
+        valid_duration: {
+          type: "integer",
+          minimum: 0,
+          maximum: 525600,
+          default: 0,
+          description: "Validade em minutos; deve ser zero quando queue_on_source_update_only for false",
+        },
+        ...MutationControlsSchema,
+      },
+      required: ["branch"],
+      anyOf: [
+        { required: ["build_definition_id"] },
+        { required: ["build_definition_name"] },
+      ],
+    },
+  },
+  {
     name: "tfs_wiki",
     title: "Wiki Explorer",
     description:
@@ -800,6 +851,7 @@ const TOOL_HANDLERS = {
   tfs_pipeline_status: (args) => toolPipelineStatus(args),
   tfs_pipeline_upsert: (args) => toolUpsertYamlPipeline(args),
   tfs_pipeline_queue: (args) => toolQueuePipeline(args),
+  tfs_branch_policy_upsert: (args) => toolUpsertBuildValidationPolicy(args),
   tfs_wiki: (args) => toolWiki(args),
   tfs_update_work_item: (args) => toolUpdateWorkItem(args),
   tfs_update_issue_analysis: (args) => toolUpdateIssueAnalysis(args),
@@ -822,7 +874,7 @@ export function buildMcpServer() {
     {
       capabilities: { tools: { listChanged: false } },
       instructions:
-        "TFS/Azure DevOps Server workflows. Read tools may be called directly. tfs_pipeline_queue may execute directly because it starts a run without changing its definition; use dry_run:true only when a preview is requested. Definition edits, deletions and other mutations must start with dry_run:true and execute only after the user reviews the returned plan and explicitly supplies dry_run:false, confirm:true, reason and requestedBy. Never invent confirm_high_impact values or expose PATs/private payloads.",
+        "TFS/Azure DevOps Server workflows. Read tools may be called directly. tfs_pipeline_queue may execute directly because it starts a run without changing its definition; use dry_run:true only when a preview is requested. Pipeline-definition edits, branch-policy edits, deletions and other mutations must start with dry_run:true and execute only after the user reviews the returned plan and explicitly supplies dry_run:false, confirm:true, reason and requestedBy. Never invent confirm_high_impact values or expose PATs/private payloads.",
     }
   );
 

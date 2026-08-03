@@ -31,6 +31,7 @@ export function applyContractLimits(schema, fieldName = "") {
     }
   }
   for (const option of schema.oneOf ?? []) applyContractLimits(option, fieldName);
+  for (const option of schema.anyOf ?? []) applyContractLimits(option, fieldName);
   return schema;
 }
 
@@ -51,11 +52,20 @@ export function validateToolArguments(schema, value, at = "arguments") {
     if (!valid) throw new Error(`${at} nao corresponde a um formato suportado.`);
     return;
   }
+  if (schema.anyOf) {
+    const valid = schema.anyOf.some((candidate) => {
+      try { validateToolArguments(candidate, value, at); return true; } catch { return false; }
+    });
+    if (!valid) throw new Error(`${at} nao corresponde a um formato suportado.`);
+  }
   const types = Array.isArray(schema.type) ? schema.type : schema.type ? [schema.type] : [];
   if (types.length && !types.some((type) => matchesType(value, type))) {
     throw new Error(`${at} deve ser ${types.join(" ou ")}.`);
   }
   if (schema.enum && !schema.enum.includes(value)) throw new Error(`${at} possui valor nao suportado.`);
+  if (typeof value === "string" && schema.minLength != null && value.length < schema.minLength) {
+    throw new Error(`${at} deve ter no minimo ${schema.minLength} caracteres.`);
+  }
   if (typeof value === "string" && schema.maxLength != null && value.length > schema.maxLength) {
     throw new Error(`${at} excede ${schema.maxLength} caracteres.`);
   }
