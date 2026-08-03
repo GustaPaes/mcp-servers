@@ -200,7 +200,7 @@ export async function tfsPost(endpoint, body, params = {}, { authAlias } = {}) {
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
   if (!url.searchParams.has("api-version")) url.searchParams.set("api-version", "7.0");
 
-  return withRetry(async () => {
+  const request = async () => {
     logger.debug({ method: "POST", path: url.pathname }, "TFS →");
     const res = await fetchWithTimeout(url.toString(), {
       method: "POST",
@@ -213,7 +213,8 @@ export async function tfsPost(endpoint, body, params = {}, { authAlias } = {}) {
       throw attachResponseMetadata(err, res);
     }
     return res.json();
-  });
+  };
+  return withRetry(request);
 }
 
 /**
@@ -269,12 +270,12 @@ export async function tfsPatch(endpoint, body, params = {}, { authAlias } = {}) 
  * PUT com corpo JSON.
  * Usado para substituir recursos versionados, como definições de build.
  */
-export async function tfsPut(endpoint, body, params = {}, { authAlias } = {}) {
+export async function tfsPut(endpoint, body, params = {}, { authAlias, retry = true } = {}) {
   const url = new URL(`${BASE}${endpoint}`);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
   if (!url.searchParams.has("api-version")) url.searchParams.set("api-version", "7.0");
 
-  return withRetry(async () => {
+  const request = async () => {
     logger.debug({ method: "PUT", path: url.pathname }, "TFS →");
     const res = await fetchWithTimeout(url.toString(), {
       method: "PUT",
@@ -287,7 +288,8 @@ export async function tfsPut(endpoint, body, params = {}, { authAlias } = {}) {
       throw attachResponseMetadata(err, res);
     }
     return res.json();
-  }, { safeToRetry: true });
+  };
+  return withRetry(request, { safeToRetry: retry });
 }
 
 export async function tfsGetAbsoluteJson(url, { cacheKey, cacheTtlMs = 0, authAlias } = {}) {
