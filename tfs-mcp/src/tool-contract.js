@@ -31,6 +31,7 @@ export function applyContractLimits(schema, fieldName = "") {
     }
   }
   for (const option of schema.oneOf ?? []) applyContractLimits(option, fieldName);
+  for (const option of schema.anyOf ?? []) applyContractLimits(option, fieldName);
   return schema;
 }
 
@@ -44,6 +45,12 @@ function matchesType(value, type) {
 
 export function validateToolArguments(schema, value, at = "arguments") {
   if (!schema || typeof schema !== "object") return;
+  if (schema.anyOf) {
+    const valid = schema.anyOf.some((candidate) => {
+      try { validateToolArguments(candidate, value, at); return true; } catch { return false; }
+    });
+    if (!valid) throw new Error(`${at} nao corresponde a nenhum formato aceito.`);
+  }
   if (schema.oneOf) {
     const valid = schema.oneOf.some((candidate) => {
       try { validateToolArguments(candidate, value, at); return true; } catch { return false; }

@@ -9,6 +9,30 @@ export const NULLABLE_OBJECT_OR_ARRAY_SCHEMA = {
   ],
 };
 
+export const BRANCH_POLICY_UPSERT_OUTPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: true,
+  properties: {
+    policyId: { type: "number" },
+    revision: { type: "number" },
+    repository: { type: "string" },
+    branch: { type: "string" },
+    buildDefinitionId: { type: "number" },
+    buildDefinitionName: { type: "string" },
+    created: { type: "boolean" },
+    updated: { type: "boolean" },
+    unchanged: { type: "boolean" },
+    reconciled: { type: "boolean" },
+    url: { type: "string" },
+    correlationId: { type: "string" },
+    dryRun: { type: "boolean" },
+    willMutate: { type: "boolean" },
+    blockReasons: { type: "array", items: { type: "string" } },
+    mutationPlan: { type: "object", additionalProperties: true },
+  },
+  required: ["correlationId", "dryRun", "willMutate"],
+};
+
 export const WORK_ITEM_SUMMARY_SCHEMA = {
   type: "object",
   properties: {

@@ -32,6 +32,7 @@ export const TOOL_POLICY = Object.freeze({
   tfs_create_pr: WRITE({ idempotent: false }),
   tfs_update_pr: WRITE({ risk: TOOL_RISK.DESTRUCTIVE }),
   tfs_pipeline_upsert: WRITE({ risk: TOOL_RISK.DESTRUCTIVE }),
+  tfs_branch_policy_upsert: WRITE({ risk: TOOL_RISK.DESTRUCTIVE }),
   tfs_update_work_item: WRITE({ risk: TOOL_RISK.DESTRUCTIVE }),
   tfs_update_issue_analysis: WRITE({ risk: TOOL_RISK.DESTRUCTIVE }),
   tfs_add_pr_comment: WRITE({ idempotent: false }),
