@@ -538,7 +538,7 @@ const TOOL_DEFS = [
   {
     name: "tfs_pipeline_upsert",
     title: "Create or Update YAML Pipeline",
-    description: "Cria ou atualiza uma definição de pipeline YAML de forma genérica, com dry-run, confirmação e auditoria. Não aceita segredos como variáveis.",
+    description: "Cria ou atualiza uma definição de pipeline YAML de forma genérica, com controle explícito do override de CI, dry-run, confirmação e auditoria. Não aceita segredos como variáveis.",
     inputSchema: {
       type: "object",
       properties: {
@@ -550,6 +550,12 @@ const TOOL_DEFS = [
           description: "Branch da definição; quando omitido, usa o padrão do repositório",
         },
         pool_name: { type: "string", description: "Nome da fila/pool padrão da definição" },
+        ci_trigger_mode: {
+          type: "string",
+          enum: ["preserve", "yaml", "disabled"],
+          default: "preserve",
+          description: "Controle do CI da definição: preserve mantém a configuração atual; yaml usa o trigger declarado no YAML; disabled desabilita somente o CI e preserva outros tipos de gatilho",
+        },
         folder: { type: "string", default: "\\" },
         variables: {
           type: "object",

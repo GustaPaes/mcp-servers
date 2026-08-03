@@ -142,6 +142,36 @@ Use `[skip ci]` or the installation's equivalent to avoid trigger loops.
 If the on-prem platform does not react to tags reliably, queue the release
 build explicitly through the REST API.
 
+### 9.1 Definition-level CI override for YAML pipelines
+
+Azure DevOps stores a small CI trigger object in the build definition even when
+branch, tag and path filters are declared in YAML. Use `ci_trigger_mode` in
+`tfs_pipeline_upsert` to make that intent explicit:
+
+| Mode | Behavior |
+|---|---|
+| `preserve` | Keeps the current definition-level CI configuration. This is the safe default. |
+| `yaml` | Enables CI at the definition level and delegates filters to the repository YAML. |
+| `disabled` | Removes definition-level CI triggers while preserving schedules and other trigger types. |
+
+The `yaml` mode writes a `continuousIntegration` trigger with
+`settingsSourceType: 2`; branch and path filters remain empty in the REST
+definition because their source is the YAML file. The `disabled` mode writes an
+empty CI trigger list when no other trigger types exist. This is different from
+`trigger: none` in the repository: the former is a definition-level control,
+while the latter is versioned YAML behavior.
+
+Always preview the mutation before changing a definition:
+
+```json
+{
+  "name": "Example Release",
+  "yaml_path": "pipelines/release.yml",
+  "ci_trigger_mode": "yaml",
+  "dry_run": true
+}
+```
+
 ## 10. Suggested release-stage layout
 
 ### Deploy Dev

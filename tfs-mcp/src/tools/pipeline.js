@@ -14,6 +14,11 @@ import { tfsGet, tfsPost, tfsPut } from "../tfs-client.js";
 
 const MAX_PIPELINE_VARIABLES = 100;
 const MAX_TEMPLATE_PARAMETERS_BYTES = 64 * 1024;
+const CiTriggerMode = z.enum(["preserve", "yaml", "disabled"]);
+const CI_TRIGGER_TYPES = new Set([
+  "continuousIntegration",
+  "batchedContinuousIntegration",
+]);
 const PipelineVariableValue = z.union([
   z.string().max(4_000),
   z.number().finite(),
@@ -35,6 +40,7 @@ const UpsertPipelineArgs = z.object({
   repository: z.string().trim().min(1).optional(),
   default_branch: z.string().trim().min(1).optional(),
   pool_name: z.string().trim().min(1).optional(),
+  ci_trigger_mode: CiTriggerMode.default("preserve"),
   folder: z.string().trim().min(1).default("\\"),
   variables: z.record(PipelineVariableValue)
     .refine(value => Object.keys(value).length <= MAX_PIPELINE_VARIABLES, {
@@ -85,6 +91,36 @@ function normalizeVariables(variables) {
   );
 }
 
+function applyCiTriggerMode(payload, mode) {
+  if (mode === "preserve") return;
+
+  const nonCiTriggers = (payload.triggers ?? []).filter(
+    trigger => !CI_TRIGGER_TYPES.has(trigger.triggerType),
+  );
+
+  if (mode === "disabled") {
+    payload.triggers = nonCiTriggers;
+    return;
+  }
+
+  if (mode === "yaml") {
+    payload.triggers = [
+      ...nonCiTriggers,
+      {
+        branchFilters: [],
+        pathFilters: [],
+        settingsSourceType: 2,
+        batchChanges: false,
+        maxConcurrentBuildsPerBranch: 1,
+        triggerType: "continuousIntegration",
+      },
+    ];
+    return;
+  }
+
+  throw new Error(`Modo de gatilho CI não suportado: ${mode}`);
+}
+
 export function buildYamlDefinitionPayload({
   existing,
   name,
@@ -94,6 +130,7 @@ export function buildYamlDefinitionPayload({
   queue,
   folder,
   variables,
+  ciTriggerMode = "preserve",
 }) {
   const payload = {
     ...(existing ?? {}),
@@ -128,6 +165,7 @@ export function buildYamlDefinitionPayload({
   delete payload._links;
   delete payload.url;
   delete payload.uri;
+  applyCiTriggerMode(payload, ciTriggerMode);
   return payload;
 }
 
@@ -190,6 +228,7 @@ export async function toolUpsertYamlPipeline(args) {
     queue,
     folder: input.folder,
     variables: input.variables,
+    ciTriggerMode: input.ci_trigger_mode,
   });
   const impact = detectHighImpact(input.name, input.yaml_path, defaultBranch, input.folder);
   const confirmation = existing ? String(existing.id) : input.name;
@@ -206,6 +245,7 @@ export async function toolUpsertYamlPipeline(args) {
       yamlPath: normalizeYamlPath(input.yaml_path),
       pool: queue.name,
       folder: input.folder,
+      ciTriggerMode: input.ci_trigger_mode,
       nonSecretVariables: Object.keys(input.variables),
     },
     controls,
@@ -228,6 +268,7 @@ export async function toolUpsertYamlPipeline(args) {
         name: result.name,
         revision: result.revision,
         yamlPath: result.process?.yamlFilename ?? normalizeYamlPath(input.yaml_path),
+        ciTriggerMode: input.ci_trigger_mode,
         url: pipelineWebUrl(result.id),
         created: !existing,
       };

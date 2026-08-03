@@ -172,7 +172,7 @@ See the [root README](../README.md#%EF%B8%8F-install-in-your-mcp-client) for rea
 - `tfs_work_item_handoff` — **premium** PO ↔ Dev ↔ QA ↔ Support handoff package
 - `tfs_delivery_risk_report` — **premium** executive delivery-risk score
 - `tfs_pipeline_status` — recent pipeline runs
-- `tfs_pipeline_upsert` — safely create or update a repository-backed YAML pipeline definition
+- `tfs_pipeline_upsert` — safely create or update a repository-backed YAML pipeline definition; `ci_trigger_mode` can preserve the current CI override, delegate CI filters to YAML or disable CI
 - `tfs_pipeline_queue` — safely queue a pipeline by ID/name, branch and YAML parameters
 - `tfs_list_repos`
 - `tfs_wiki` — list every wiki, recursively search nested page paths, read exact page content or enumerate a subtree
