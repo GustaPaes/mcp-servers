@@ -30,9 +30,9 @@ export async function createStorage(): Promise<Storage> {
         log.info('storage.backend=prisma');
         return new mod.PrismaStorage();
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
         throw new Error(
-          `Falha ao carregar PrismaStorage (instale @prisma/client e rode prisma generate): ${message}`,
+          'Falha ao carregar PrismaStorage. Instale @prisma/client e rode prisma generate.',
+          { cause: err },
         );
       }
     }

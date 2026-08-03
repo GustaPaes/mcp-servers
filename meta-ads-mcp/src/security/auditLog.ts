@@ -68,7 +68,7 @@ export class AuditLog {
       const message = err instanceof Error ? err.message : String(err);
       getLogger().error({ err: redactSecrets(message) }, 'failed to write audit log');
       if (options.required) {
-        throw new Error(`Required audit write failed: ${message}`);
+        throw new Error('Required audit write failed.', { cause: err });
       }
     }
     getLogger().info({ audit: full }, `audit:${full.action}`);

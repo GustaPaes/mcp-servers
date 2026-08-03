@@ -34,8 +34,7 @@ export class FileStorage implements Storage {
     try {
       return normalizeState(JSON.parse(readFileSync(this.path, 'utf8')) as Partial<StorageState>);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      throw new Error(`Storage file is not valid JSON: ${message}`);
+      throw new Error('Storage file is not valid JSON.', { cause: err });
     }
   }
 }
