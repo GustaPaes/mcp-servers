@@ -34,6 +34,10 @@ const MutationInput = {
   confirm_high_impact: z.string().optional(),
 };
 
+const ExecutionInput = {
+  dry_run: z.boolean().default(false),
+};
+
 const UpsertPipelineArgs = z.object({
   name: z.string().trim().min(1),
   yaml_path: z.string().trim().min(1),
@@ -64,7 +68,7 @@ const QueuePipelineArgs = z.object({
       message: `Informe no máximo ${MAX_PIPELINE_VARIABLES} variáveis`,
     })
     .default({}),
-  ...MutationInput,
+  ...ExecutionInput,
 }).refine(value => value.definition_id || value.definition_name, {
   message: "Informe definition_id ou definition_name",
 });
@@ -169,6 +173,44 @@ export function buildYamlDefinitionPayload({
   return payload;
 }
 
+function detectCiTriggerMode(definition) {
+  if (!Array.isArray(definition?.triggers)) return "unknown";
+  const ciTriggers = definition.triggers.filter(trigger => CI_TRIGGER_TYPES.has(trigger.triggerType));
+  if (ciTriggers.length === 0) return "disabled";
+  return ciTriggers.every(trigger => trigger.settingsSourceType === 2) ? "yaml" : "configured";
+}
+
+function summarizePipelineDefinition(definition, fallbackCiTriggerMode) {
+  if (!definition) return null;
+  return {
+    yamlPath: definition.process?.yamlFilename ?? null,
+    repository: definition.repository?.name ?? null,
+    defaultBranch: definition.repository?.defaultBranch ?? null,
+    pool: definition.queue?.name ?? null,
+    folder: definition.path ?? null,
+    ciTriggerMode: fallbackCiTriggerMode ?? detectCiTriggerMode(definition),
+    variableNames: Object.keys(definition.variables ?? {}).sort(),
+  };
+}
+
+export function buildPipelineChangeSummary(existing, payload, requestedCiTriggerMode = "preserve") {
+  const before = summarizePipelineDefinition(existing);
+  const effectiveCiTriggerMode = requestedCiTriggerMode === "preserve"
+    ? before?.ciTriggerMode ?? detectCiTriggerMode(payload)
+    : requestedCiTriggerMode;
+  const after = summarizePipelineDefinition(payload, effectiveCiTriggerMode);
+  const changedFields = before
+    ? Object.keys(after).filter(key => JSON.stringify(before[key]) !== JSON.stringify(after[key]))
+    : Object.keys(after);
+
+  return {
+    action: existing ? "update" : "create",
+    changedFields,
+    before,
+    after,
+  };
+}
+
 async function resolveRepository(selector, authAlias) {
   const data = await tfsGet("/git/repositories", {}, { authAlias });
   const normalized = String(selector).toLowerCase();
@@ -241,13 +283,7 @@ export async function toolUpsertYamlPipeline(args) {
       defaultBranch,
     },
     operation: existing ? "update YAML pipeline definition" : "create YAML pipeline definition",
-    changes: {
-      yamlPath: normalizeYamlPath(input.yaml_path),
-      pool: queue.name,
-      folder: input.folder,
-      ciTriggerMode: input.ci_trigger_mode,
-      nonSecretVariables: Object.keys(input.variables),
-    },
+    changes: buildPipelineChangeSummary(existing, payload, input.ci_trigger_mode),
     controls,
     highImpact: impact.highImpact,
     highImpactMatch: impact.match,
@@ -296,9 +332,10 @@ export async function toolQueuePipeline(args) {
     operation: "queue pipeline run",
     changes: {
       templateParameterNames: Object.keys(input.template_parameters),
-      nonSecretVariables: Object.keys(input.variables),
+      variableNames: Object.keys(input.variables),
     },
     controls,
+    confirmationRequired: false,
     highImpact: impact.highImpact,
     highImpactMatch: impact.match,
     highImpactConfirmation: String(definition.id),

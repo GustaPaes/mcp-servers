@@ -36,6 +36,22 @@ test("publishes the complete safe tool contract", async () => {
       ["preserve", "yaml", "disabled"],
     );
     assert.equal(pipelineUpsert.inputSchema.properties.ci_trigger_mode.default, "preserve");
+    assert.equal(pipelineUpsert.inputSchema.properties.dry_run.default, true);
+    assert(pipelineUpsert.inputSchema.properties.confirm);
+
+    const pipelineQueue = tools.find(tool => tool.name === "tfs_pipeline_queue");
+    assert.equal(pipelineQueue.inputSchema.properties.dry_run.default, false);
+    for (const confirmationField of [
+      "confirm",
+      "reason",
+      "requestedBy",
+      "requested_by",
+      "confirm_high_impact",
+    ]) {
+      assert.equal(pipelineQueue.inputSchema.properties[confirmationField], undefined);
+    }
+    assert.equal(pipelineQueue.annotations.readOnlyHint, false);
+    assert.equal(pipelineQueue.annotations.idempotentHint, false);
     for (const tool of tools) {
       assert.equal(tool.inputSchema?.additionalProperties, false, `${tool.name} input must be strict`);
       assert.equal(typeof tool.annotations?.readOnlyHint, "boolean", `${tool.name} readOnlyHint`);

@@ -13,11 +13,18 @@ This MCP can read and mutate TFS / Azure DevOps Server state. Treat all calls as
 READ tools may be used without extra confirmation, but summarize sensitive results instead of pasting large private payloads.
 
 ### WRITE
-`tfs_work_item_create`, `tfs_update_work_item`, `tfs_update_issue_analysis`, `tfs_add_pr_comment`, `tfs_comment_review_findings`, `tfs_create_pr`, `tfs_update_pr`, `tfs_pipeline_upsert`, `tfs_pipeline_queue`.
+`tfs_work_item_create`, `tfs_update_work_item`, `tfs_update_issue_analysis`, `tfs_add_pr_comment`, `tfs_comment_review_findings`, `tfs_create_pr`, `tfs_update_pr`, `tfs_pipeline_upsert`.
 
 WRITE tools are server-gated. They default to `dry_run:true` and return a mutation plan instead of changing TFS. To execute a real mutation, the call must include `dry_run:false`, `confirm:true`, `reason`, and `requestedBy`/`requested_by`.
 
 For high-impact targets (production/release/main/master/hml/homolog patterns), the dry-run response will also require `confirm_high_impact` with an exact value. Do not guess that value; copy it from the returned mutation plan only after user approval.
+
+Before confirming a pipeline-definition edit, present the returned `changes.changedFields`, `changes.before` and `changes.after`. Any pipeline/release definition deletion added in the future must follow the same confirmation flow and identify exactly what will be deleted.
+
+### EXECUTION
+`tfs_pipeline_queue`.
+
+Execution tools may start an existing pipeline or release-oriented YAML pipeline directly because they do not change its definition. They default to `dry_run:false`, remain audited and accept `dry_run:true` when a preview is explicitly useful. Report the definition, branch, and parameter/variable names without exposing values that may be sensitive.
 
 ## Defaults
 
@@ -28,7 +35,7 @@ For high-impact targets (production/release/main/master/hml/homolog patterns), t
 - Use `auth_alias` when the user names a specific PAT identity.
 - Do not change work item state, assignee, story points or acceptance criteria without explicit confirmation in the same turn.
 - For development analysis of an `Issue`, use `tfs_update_issue_analysis`. It requires `development_analysis`, accepts optional `correction_and_impacts`, and follows [`docs/issue-analysis.md`](./docs/issue-analysis.md).
-- Treat production/release branches as high impact and ask for confirmation before posting or changing related items.
+- Treat production/release branches as high impact and ask for confirmation before posting, editing or deleting related items. Starting an existing run through `tfs_pipeline_queue` is the documented execution exception and remains audited.
 
 ## Public/private boundary
 
