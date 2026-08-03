@@ -49,6 +49,99 @@ test("preserves an existing definition while replacing YAML-specific fields", ()
   assert.deepEqual(payload.variables.EXISTING, { value: "kept" });
 });
 
+test("delegates CI trigger settings to YAML without removing other trigger types", () => {
+  const schedule = { triggerType: "schedule", schedules: [{ branchFilters: ["+refs/heads/main"] }] };
+  const payload = buildYamlDefinitionPayload({
+    existing: {
+      triggers: [
+        schedule,
+        {
+          triggerType: "continuousIntegration",
+          settingsSourceType: 1,
+          branchFilters: ["+refs/heads/main"],
+        },
+      ],
+    },
+    name: "Delivery",
+    yamlPath: "pipelines/delivery.yml",
+    repository: { id: "repo-id", name: "app" },
+    defaultBranch: "refs/heads/main",
+    queue: { id: 10, name: "Linux" },
+    folder: "\\",
+    variables: {},
+    ciTriggerMode: "yaml",
+  });
+
+  assert.deepEqual(payload.triggers, [
+    schedule,
+    {
+      branchFilters: [],
+      pathFilters: [],
+      settingsSourceType: 2,
+      batchChanges: false,
+      maxConcurrentBuildsPerBranch: 1,
+      triggerType: "continuousIntegration",
+    },
+  ]);
+});
+
+test("disables only CI triggers and preserves other trigger types", () => {
+  const schedule = { triggerType: "schedule", schedules: [] };
+  const payload = buildYamlDefinitionPayload({
+    existing: {
+      triggers: [
+        { triggerType: "continuousIntegration", settingsSourceType: 2 },
+        { triggerType: "batchedContinuousIntegration", settingsSourceType: 1 },
+        schedule,
+      ],
+    },
+    name: "Delivery",
+    yamlPath: "pipelines/delivery.yml",
+    repository: { id: "repo-id", name: "app" },
+    defaultBranch: "refs/heads/main",
+    queue: { id: 10, name: "Linux" },
+    folder: "\\",
+    variables: {},
+    ciTriggerMode: "disabled",
+  });
+
+  assert.deepEqual(payload.triggers, [schedule]);
+});
+
+test("represents a disabled CI override with an empty trigger list", () => {
+  const payload = buildYamlDefinitionPayload({
+    existing: {
+      triggers: [{ triggerType: "continuousIntegration", settingsSourceType: 2 }],
+    },
+    name: "Delivery",
+    yamlPath: "pipelines/delivery.yml",
+    repository: { id: "repo-id", name: "app" },
+    defaultBranch: "refs/heads/main",
+    queue: { id: 10, name: "Linux" },
+    folder: "\\",
+    variables: {},
+    ciTriggerMode: "disabled",
+  });
+
+  assert.deepEqual(payload.triggers, []);
+});
+
+test("rejects unsupported CI trigger modes in direct payload construction", () => {
+  assert.throws(
+    () => buildYamlDefinitionPayload({
+      name: "Delivery",
+      yamlPath: "pipelines/delivery.yml",
+      repository: { id: "repo-id", name: "app" },
+      defaultBranch: "refs/heads/main",
+      queue: { id: 10, name: "Linux" },
+      folder: "\\",
+      variables: {},
+      ciTriggerMode: "unexpected",
+    }),
+    /não suportado/,
+  );
+});
+
 test("rejects YAML paths outside the repository", () => {
   assert.throws(
     () => buildYamlDefinitionPayload({
