@@ -31,18 +31,31 @@ READ tools may be used without extra confirmation, but summarize sensitive resul
 
 REMOTE_WRITE tools are server-gated. They default to `dry_run:true` and return a mutation plan instead of changing TFS. To execute a real mutation, the call must include `dry_run:false`, `confirm:true`, `reason`, and `requestedBy`/`requested_by`.
 
-For high-impact targets (production/release/main/master/hml/homolog patterns), the dry-run response will also require `confirm_high_impact` with an exact value. Do not guess that value; copy it from the returned mutation plan only after user approval.
+For high-impact targets (production/release/releases/main/master/hml/homolog patterns), the dry-run response will also require `confirm_high_impact` with an exact value. Do not guess that value; copy it from the returned mutation plan only after user approval.
 
 ### DESTRUCTIVE
 
 `tfs_update_work_item`, `tfs_update_issue_analysis`, `tfs_update_pr`,
-`tfs_pipeline_upsert`.
+`tfs_pipeline_upsert`, `tfs_branch_policy_upsert`.
 
 These edits overwrite remote state and use the same server guard. Before
-confirming a pipeline-definition edit, present `changes.changedFields`,
-`changes.before` and `changes.after`. Any pipeline/release definition deletion
-added in the future must identify the exact target, return its current state in
-the preview, require exact confirmation and be classified `DESTRUCTIVE`.
+confirming a pipeline-definition or branch-policy edit, present
+`changes.changedFields`, `changes.before` and `changes.after`.
+
+A branch-policy upsert is identified by repository, case-sensitive branch ref
+and build definition. Never overwrite duplicated or multi-scope policies
+implicitly. Exact scopes require an existing branch; prefix scopes are always
+high impact. The tool serializes this identity only inside one process, rechecks
+the branch and build definition before writing, and verifies the persisted state
+afterwards. Separate MCP instances can still race, so treat a reported
+ambiguity as requiring manual reconciliation, not as an atomic concurrency
+guarantee. Enabled Build Validation policies require an enabled definition in
+the target repository unless the user explicitly approves the high-impact
+`allow_cross_repository:true` exception.
+
+Any pipeline/release definition deletion added in the future must identify the
+exact target, return its current state in the preview, require exact
+confirmation and be classified `DESTRUCTIVE`.
 
 ### EXECUTION
 `tfs_pipeline_queue`.
@@ -60,6 +73,11 @@ origin. Retries are allowed only for safe/idempotent operations.
 - Treat `specialistReview.specialistsUsed` as the source of truth for which expert lenses were applied. Do not invent extra specialists outside the returned rubrics unless the user asks for a human-level brainstorming answer outside the MCP.
 - Prefer `tfs_comment_review_findings` with `dry_run:true` first.
 - Avoid posting duplicate PR comments; use the server deduplication flow where available.
+- For PR work-item links, use the tool's revision-guarded reconciliation path.
+  Do not add a second `workItemRefs` mutation around it. Report `partial` and
+  the sanitized failed-item list when metadata succeeds but links do not.
+- Treat pipeline evidence in PR reviews as valid only when repository and PR
+  identity or commit SHA match; target-branch equality is not sufficient.
 - Use `auth_alias` when the user names a specific PAT identity.
 - Do not change work item state, assignee, story points or acceptance criteria without explicit confirmation in the same turn.
 - For development analysis of an `Issue`, use `tfs_update_issue_analysis`. It requires `development_analysis`, accepts optional `correction_and_impacts`, and follows [`docs/issue-analysis.md`](./docs/issue-analysis.md).

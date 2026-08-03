@@ -24,11 +24,12 @@ test("publishes the complete safe tool contract", async () => {
   try {
     await client.connect(transport);
     const { tools } = await client.listTools();
-    assert.equal(tools.length, 33);
+    assert.equal(tools.length, 34);
     const names = new Set(tools.map((tool) => tool.name));
     assert(names.has("tfs_doctor"));
     assert(names.has("tfs_saved_queries"));
     assert(names.has("tfs_pipeline_upsert"));
+    assert(names.has("tfs_branch_policy_upsert"));
     assert(names.has("tfs_pipeline_queue"));
     const pipelineUpsert = tools.find(tool => tool.name === "tfs_pipeline_upsert");
     assert.deepEqual(
@@ -38,6 +39,37 @@ test("publishes the complete safe tool contract", async () => {
     assert.equal(pipelineUpsert.inputSchema.properties.ci_trigger_mode.default, "preserve");
     assert.equal(pipelineUpsert.inputSchema.properties.dry_run.default, true);
     assert(pipelineUpsert.inputSchema.properties.confirm);
+
+    const branchPolicyUpsert = tools.find(tool => tool.name === "tfs_branch_policy_upsert");
+    assert.equal(branchPolicyUpsert.inputSchema.properties.branch_match_kind.default, "exact");
+    assert.equal(branchPolicyUpsert.inputSchema.properties.enabled.default, true);
+    assert.equal(branchPolicyUpsert.inputSchema.properties.blocking.default, true);
+    assert.equal(branchPolicyUpsert.inputSchema.properties.manual_queue_only.default, false);
+    assert.equal(branchPolicyUpsert.inputSchema.properties.queue_on_source_update_only.default, false);
+    assert.equal(branchPolicyUpsert.inputSchema.properties.allow_cross_repository.default, false);
+    for (const property of ["repository", "branch", "build_definition_name", "display_name"]) {
+      assert.equal(branchPolicyUpsert.inputSchema.properties[property].minLength, 1);
+    }
+    assert.equal(branchPolicyUpsert.inputSchema.properties.build_definition_id.type, "integer");
+    assert.equal(branchPolicyUpsert.inputSchema.properties.build_definition_id.minimum, 1);
+    assert.equal(branchPolicyUpsert.inputSchema.properties.valid_duration.type, "integer");
+    assert.equal(branchPolicyUpsert.inputSchema.properties.valid_duration.default, 0);
+    assert.equal(branchPolicyUpsert.inputSchema.properties.dry_run.default, true);
+    assert(branchPolicyUpsert.inputSchema.properties.confirm);
+    assert.equal(branchPolicyUpsert.annotations.readOnlyHint, false);
+    assert.equal(branchPolicyUpsert.annotations.idempotentHint, true);
+    assert.equal(branchPolicyUpsert.annotations.destructiveHint, true);
+    assert.deepEqual(
+      branchPolicyUpsert.outputSchema.required,
+      ["correlationId", "dryRun", "willMutate"],
+    );
+
+    const missingBuildDefinition = await client.callTool({
+      name: "tfs_branch_policy_upsert",
+      arguments: { branch: "develop" },
+    });
+    assert.equal(missingBuildDefinition.isError, true);
+    assert.match(missingBuildDefinition.content[0].text, /nenhum formato aceito/i);
 
     const pipelineQueue = tools.find(tool => tool.name === "tfs_pipeline_queue");
     assert.equal(pipelineQueue.inputSchema.properties.dry_run.default, false);
