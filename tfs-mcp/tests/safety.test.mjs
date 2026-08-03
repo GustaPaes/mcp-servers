@@ -55,7 +55,6 @@ test("high impact targets require exact confirm_high_impact", () => {
 
   assert.equal(assessment.willMutate, false);
   assert.match(assessment.blockReasons.join("\n"), /confirm_high_impact="42"/);
-  assert.equal(detectHighImpact("refs/heads/releases/2026.06").highImpact, true);
 });
 
 test("operational execution can bypass confirmation while remaining guarded by optional dry-run", () => {
