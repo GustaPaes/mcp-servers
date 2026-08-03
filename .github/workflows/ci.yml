@@ -60,7 +60,8 @@ jobs:
         run: ${{ matrix.command }}
       - name: Audit production dependencies
         working-directory: ${{ matrix.dir }}
-        run: npm audit --omit=dev --audit-level=high
+        # Cada MCP mantem lockfile proprio e e instalado fora do workspace raiz.
+        run: npm audit --omit=dev --audit-level=high --workspaces=false
 
   azure-wrapper:
     runs-on: windows-latest
@@ -83,7 +84,7 @@ jobs:
         run: npm test && npm run lint:powershell
       - name: Audit production dependencies
         working-directory: azure-mcp
-        run: npm audit --omit=dev --audit-level=high
+        run: npm audit --omit=dev --audit-level=high --workspaces=false
 
   repository-contract:
     runs-on: ubuntu-latest

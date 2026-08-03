@@ -60,7 +60,7 @@ function Show-Current {
     }
 }
 
-function Show-Subscriptions {
+function Show-SubscriptionList {
     try {
         $subs = az account list --output json | ConvertFrom-Json
         Write-Host ""
@@ -79,7 +79,7 @@ function Show-Subscriptions {
 # --- modo somente listar ---
 if ($List -or (-not $Subscription -and -not $Tenant)) {
     Show-Current
-    Show-Subscriptions
+    Show-SubscriptionList
     if (-not $List) {
         Write-Host ""
         Write-Info "Para trocar, rode com -Subscription <nome> ou -Tenant <guid>."
@@ -102,7 +102,7 @@ if ($Subscription) {
         Write-Ok "Subscription definida."
     } catch {
         Write-Err "Falha ao definir subscription. Verifique se o nome/ID existe e voce tem acesso."
-        Show-Subscriptions
+        Show-SubscriptionList
         exit 1
     }
 }
