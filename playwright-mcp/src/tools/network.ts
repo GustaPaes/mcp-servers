@@ -4,9 +4,11 @@
 import { sessionManager } from "../session-manager.js";
 import type { ToolModule } from "../types.js";
 import type { Route, Request as PWRequest } from "playwright";
-import { outputPath, timestamp } from "../output-dir.js";
+import fs from "node:fs";
+import { enforceArtifactFileLimit, outputPath, timestamp } from "../output-dir.js";
 import { redactHeaders, redactTextPayload } from "@gustapaes/mcp-runtime";
 import { config } from "../config.js";
+import { assertUrlAllowed } from "../safety/selectors.js";
 
 interface ActiveRoute {
   pattern: string;
@@ -124,9 +126,20 @@ export const networkTools: ToolModule = {
       },
     },
     {
+      name: "network_log_status",
+      description: "Report HAR recording status for a context without changing or closing it.",
+      annotations: { title: "Network log status", readOnlyHint: true, idempotentHint: true },
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["context_id"],
+        properties: { context_id: { type: "string" } },
+      },
+    },
+    {
       name: "network_log_start",
       description:
-        "Start HAR capture by re-creating the context with recordHar. Note: HAR is a context-level feature in Playwright, so you must pass record_har=true on context_new instead. This tool reports current HAR status for an existing context.",
+        "Deprecated compatibility alias for network_log_status. HAR must be enabled with record_har=true on context_new.",
       annotations: { title: "Network log start (HAR)" },
       inputSchema: {
         type: "object",
@@ -138,7 +151,7 @@ export const networkTools: ToolModule = {
     {
       name: "network_log_stop",
       description: "Stop HAR by closing the context (Playwright flushes HAR on close). Returns the HAR path.",
-      annotations: { title: "Network log stop (HAR)" },
+      annotations: { title: "Network log stop (HAR)", destructiveHint: true },
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -163,6 +176,7 @@ export const networkTools: ToolModule = {
       const handler = async (route: Route) => {
         count++;
         try {
+          await assertUrlAllowed(route.request().url());
           if (times != null && count > times) {
             await route.continue();
             return;
@@ -189,12 +203,14 @@ export const networkTools: ToolModule = {
               post_data?: string;
               headers?: Record<string, string>;
             };
+            if (c.url) await assertUrlAllowed(c.url);
             await route.continue({ url: c.url, method: c.method, postData: c.post_data, headers: c.headers });
           } else {
             await route.continue();
           }
         } catch {
-          // ignore route teardown races
+          // Fail closed for blocked destinations; ignore teardown races from abort itself.
+          await route.abort("blockedbyclient").catch(() => {});
         }
       };
       await rec.page.route(matcher, handler);
@@ -284,7 +300,7 @@ export const networkTools: ToolModule = {
       }
       return out;
     },
-    async network_log_start(args) {
+    async network_log_status(args) {
       const { ctx } = sessionManager.requireContext(String(args.context_id));
       if (!ctx.recording.har) {
         return {
@@ -294,6 +310,9 @@ export const networkTools: ToolModule = {
       }
       return { active: true, har_path: ctx.recording.har.path };
     },
+    async network_log_start(args) {
+      return networkTools.handlers.network_log_status(args);
+    },
     async network_log_stop(args) {
       const { ctx } = sessionManager.requireContext(String(args.context_id));
       const harPath = ctx.recording.har?.path;
@@ -301,9 +320,13 @@ export const networkTools: ToolModule = {
       const closeContext = (args.close_context as boolean | undefined) ?? true;
       if (closeContext) {
         // Playwright flushes HAR when the context closes.
-        await sessionManager.closeContext(ctx.id).catch(() => {});
+        await sessionManager.closeContext(ctx.id);
       }
-      return { active: false, path: harPath, note: closeContext ? "context closed; HAR flushed" : "context still open; HAR may be incomplete" };
+      if (closeContext && !fs.existsSync(harPath)) {
+        return { active: false, path: null, removed: true, note: "context closed; HAR exceeded an artifact quota and was removed" };
+      }
+      const bytes = closeContext ? enforceArtifactFileLimit(harPath) : null;
+      return { active: false, path: harPath, bytes, note: closeContext ? "context closed; HAR flushed" : "context still open; HAR may be incomplete" };
     },
   },
 };

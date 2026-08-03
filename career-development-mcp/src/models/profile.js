@@ -1,12 +1,13 @@
 import { z } from "zod";
+import { dateTextSchema, optionalLongTextSchema, shortTextListSchema, shortTextSchema } from "./common.js";
 
 export const profileSchema = z.object({
-  name: z.string().min(1),
-  currentRole: z.string().min(1),
-  targetRole: z.string().min(1),
-  context: z.string().default(""),
-  strengths: z.array(z.string()).default([]),
-  focusAreas: z.array(z.string()).default([]),
-  managerAgreements: z.array(z.string()).default([]),
-  updatedAt: z.string(),
-});
+  name: shortTextSchema,
+  currentRole: shortTextSchema,
+  targetRole: shortTextSchema,
+  context: optionalLongTextSchema.default(""),
+  strengths: shortTextListSchema.default([]),
+  focusAreas: shortTextListSchema.default([]),
+  managerAgreements: shortTextListSchema.default([]),
+  updatedAt: dateTextSchema,
+}).strict();

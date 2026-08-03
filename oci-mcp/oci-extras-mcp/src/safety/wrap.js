@@ -2,7 +2,7 @@
  * Tool wrapper — uniform error handling, audit, validation.
  * Every tool registered with the MCP server is wrapped through this helper.
  */
-import { audit, logger } from "./audit.js";
+import { audit, logger, normaliseError } from "./audit.js";
 import { GuardError } from "./guards.js";
 
 /**
@@ -26,14 +26,15 @@ export function withSafety(name, handler) {
       });
       return output;
     } catch (err) {
+      const safeError = normaliseError(err);
       audit({
         tool: name,
         status: "error",
         durationMs: Date.now() - start,
         input,
-        error: { message: err.message, code: err.code, stack: err.stack?.split("\n")[0] },
+        error: safeError,
       });
-      logger.error({ err, tool: name }, "tool error");
+      logger.error({ error: safeError, tool: name }, "tool error");
       if (err instanceof GuardError) {
         return { ok: false, error: err.message, code: err.code };
       }

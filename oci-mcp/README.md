@@ -35,7 +35,7 @@ Inspired by — and interoperable with — [`oracle/mcp`](https://github.com/ora
 ## Quickstart (Windows)
 
 ```powershell
-cd "C:\Workspace\MCP Servers\oci-mcp"
+cd "<repo-root>/oci-mcp"
 
 # 1. Install prerequisites (uv, OCI CLI, Node 20+, kubectl, optional podman)
 .\scripts\install-prereqs.ps1
@@ -174,7 +174,7 @@ Or add manually to OpenCode (`~/.config/opencode/opencode.json`):
   "mcp": {
     "oci-extras-mcp": {
       "type": "local",
-      "command": ["node", "C:/Workspace/MCP Servers/oci-mcp/oci-extras-mcp/index.js"],
+      "command": ["node", "<repo-root>/oci-mcp/oci-extras-mcp/index.js"],
       "enabled": true,
       "env": {
         "OCI_AUTH_METHOD": "session_token",

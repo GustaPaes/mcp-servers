@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![MCP](https://img.shields.io/badge/Model%20Context%20Protocol-1.x-6f42c1)](https://modelcontextprotocol.io)
-[![Node](https://img.shields.io/badge/Node-%E2%89%A520-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![Node](https://img.shields.io/badge/Node-%E2%89%A520.19-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 
 ## Choose Your Language
 
@@ -28,5 +28,6 @@ Start with the full documentation in your language:
 - [Portugues: instalacao, modelo de seguranca, snippets e mapa dos projetos](./README.pt-BR.md)
 
 Install and validate the complete workspace with `npm install` followed by
-`npm run validate`. Keep organization-specific configuration, adapters,
+`npm run validate` (`npm run validate:fast` is available for quick iteration).
+Keep organization-specific configuration, adapters,
 runbooks and exports under each project's ignored `local-private/` directory.

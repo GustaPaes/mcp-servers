@@ -4,7 +4,7 @@
 import { sessionManager } from "../session-manager.js";
 import type { ToolModule } from "../types.js";
 import { assertSelectorAllowed } from "../safety/selectors.js";
-import { checkSafeEval, evalTimeoutMs, withTimeout } from "../safety/safe-eval.js";
+import { assertEvalEnabled, checkSafeEval, evalTimeoutMs, withTimeout } from "../safety/safe-eval.js";
 import { config } from "../config.js";
 
 export const extractionTools: ToolModule = {
@@ -225,6 +225,7 @@ export const extractionTools: ToolModule = {
       return { selector: sel, name: args.name, value };
     },
     async page_evaluate(args) {
+      assertEvalEnabled();
       const source = String(args.function);
       const check = checkSafeEval(source);
       if (!check.ok) throw new Error(`page_evaluate rejected: ${check.reason}`);

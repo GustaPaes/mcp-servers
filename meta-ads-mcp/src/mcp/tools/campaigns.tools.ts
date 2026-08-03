@@ -13,7 +13,6 @@ export const listCampaignsTool = defineTool({
     .object({ accountId: z.string(), limit: z.number().int().min(1).max(200).default(50) })
     .strict(),
   async handler(input, ctx) {
-    ctx.audit.record({ action: 'tool.invoked', tool: 'list_campaigns', accountId: input.accountId });
     try {
       const res = await ctx.meta.listCampaigns(input.accountId, { limit: input.limit });
       return ok({ count: res.data.length, campaigns: res.data, next: res.paging?.cursors?.after });
@@ -32,7 +31,6 @@ export const createCampaignDraftTool = defineTool({
   async handler(input, ctx) {
     try {
       ctx.accounts.get(input.accountId); // existence check
-      const state = await ctx.storage.read();
       const draft = {
         id: `cdraft_${randomUUID()}`,
         accountId: input.accountId,
@@ -40,13 +38,8 @@ export const createCampaignDraftTool = defineTool({
         updatedAt: new Date().toISOString(),
         data: input,
       };
-      state.campaignDrafts.push(draft);
-      await ctx.storage.write(state);
-      ctx.audit.record({
-        action: 'tool.invoked',
-        tool: 'create_campaign_draft',
-        accountId: input.accountId,
-        result: { draftId: draft.id },
+      await ctx.storage.update((state) => {
+        state.campaignDrafts.push(draft);
       });
       return ok({ draft, note: 'Rascunho local. Não publicado.' });
     } catch (e) {

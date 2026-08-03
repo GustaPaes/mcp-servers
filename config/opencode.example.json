@@ -5,30 +5,30 @@
       "type": "local",
       "command": [
         "node",
-        "C:/Workspace/MCP Servers/tfs-mcp/index.js"
+        "<repo-root>/tfs-mcp/index.js"
       ],
       "enabled": false,
       "env": {
-        "TFS_MCP_CONFIG_FILE": "C:/Workspace/MCP Servers/tfs-mcp/local-private/config/tfs.json"
+        "TFS_MCP_CONFIG_FILE": "<repo-root>/tfs-mcp/local-private/config/tfs.json"
       }
     },
     "career-development-mcp": {
       "type": "local",
       "command": [
         "node",
-        "C:/Workspace/MCP Servers/career-development-mcp/index.js"
+        "<repo-root>/career-development-mcp/index.js"
       ],
       "enabled": true,
       "env": {
         "LOG_LEVEL": "info",
-        "TFS_MCP_SERVER_DIR": "C:/Workspace/MCP Servers/tfs-mcp"
+        "TFS_MCP_SERVER_DIR": "<repo-root>/tfs-mcp"
       }
     },
     "playwright-mcp": {
       "type": "local",
       "command": [
         "node",
-        "C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"
+        "<repo-root>/playwright-mcp/dist/index.js"
       ],
       "enabled": true,
       "env": {
@@ -36,7 +36,7 @@
         "PWMCP_DEFAULT_BROWSER": "chromium",
         "PWMCP_DEFAULT_CHANNEL": "chrome",
         "PWMCP_STRICT": "true",
-        "PWMCP_ALLOWED_PROFILE_ROOTS": "C:/Workspace/MCP Servers/playwright-mcp/local-private/profiles"
+        "PWMCP_ALLOWED_PROFILE_ROOTS": "<repo-root>/playwright-mcp/local-private/profiles"
       }
     },
     "azure-mcp": {
@@ -45,7 +45,7 @@
         "powershell",
         "-NoProfile",
         "-File",
-        "C:/Workspace/MCP Servers/azure-mcp/scripts/start-server.ps1"
+        "<repo-root>/azure-mcp/scripts/start-server.ps1"
       ],
       "enabled": true
     },
@@ -53,7 +53,7 @@
       "type": "local",
       "command": [
         "node",
-        "C:/Workspace/MCP Servers/oci-mcp/oci-extras-mcp/index.js"
+        "<repo-root>/oci-mcp/oci-extras-mcp/index.js"
       ],
       "enabled": false,
       "env": {
@@ -69,13 +69,13 @@
       "type": "local",
       "command": [
         "node",
-        "C:/Workspace/MCP Servers/meta-ads-mcp/dist/server.js"
+        "<repo-root>/meta-ads-mcp/dist/server.js"
       ],
       "enabled": false,
       "env": {
-        "ACCOUNTS_CONFIG_PATH": "C:/Workspace/MCP Servers/meta-ads-mcp/config/accounts.json",
-        "AUDIT_LOG_PATH": "C:/Workspace/MCP Servers/meta-ads-mcp/data/audit.log",
-        "STORAGE_PATH": "C:/Workspace/MCP Servers/meta-ads-mcp/data/storage.json",
+        "ACCOUNTS_CONFIG_PATH": "<repo-root>/meta-ads-mcp/config/accounts.json",
+        "AUDIT_LOG_PATH": "<repo-root>/meta-ads-mcp/data/audit.log",
+        "STORAGE_PATH": "<repo-root>/meta-ads-mcp/data/storage.json",
         "META_GRAPH_API_VERSION": "v25.0",
         "READ_ONLY": "true",
         "DRY_RUN": "true",

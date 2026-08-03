@@ -59,12 +59,16 @@ function normalizeAlias(value) {
     .replace(/^_+|_+$/g, "");
 }
 
-function positiveInteger(value, fallback, label, max = Number.MAX_SAFE_INTEGER) {
+function integerInRange(value, fallback, label, min, max = Number.MAX_SAFE_INTEGER) {
   const parsed = Number(value ?? fallback);
-  if (!Number.isSafeInteger(parsed) || parsed <= 0 || parsed > max) {
-    throw new Error(`${label} deve ser um inteiro positivo menor ou igual a ${max}.`);
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+    throw new Error(`${label} deve ser um inteiro entre ${min} e ${max}.`);
   }
   return parsed;
+}
+
+function positiveInteger(value, fallback, label, max = Number.MAX_SAFE_INTEGER) {
+  return integerInRange(value, fallback, label, 1, max);
 }
 
 const DEFAULT_LOCAL_CONFIG_FILE = path.join(__dirname, "../local-private/config/tfs.json");
@@ -209,6 +213,43 @@ export const MCP_HTTP_MAX_SESSIONS = positiveInteger(
   process.env.MCP_HTTP_MAX_SESSIONS,
   50,
   "MCP_HTTP_MAX_SESSIONS"
+);
+export const TFS_REQUEST_TIMEOUT_MS = positiveInteger(
+  process.env.TFS_REQUEST_TIMEOUT_MS,
+  30_000,
+  "TFS_REQUEST_TIMEOUT_MS",
+  300_000
+);
+export const TFS_MAX_RETRIES = integerInRange(
+  process.env.TFS_MAX_RETRIES,
+  3,
+  "TFS_MAX_RETRIES",
+  0,
+  5
+);
+export const TFS_RETRY_MAX_DELAY_MS = positiveInteger(
+  process.env.TFS_RETRY_MAX_DELAY_MS,
+  8_000,
+  "TFS_RETRY_MAX_DELAY_MS",
+  60_000
+);
+export const TFS_MCP_MAX_INPUT_ITEMS = positiveInteger(
+  process.env.TFS_MCP_MAX_INPUT_ITEMS,
+  500,
+  "TFS_MCP_MAX_INPUT_ITEMS",
+  10_000
+);
+export const TFS_MCP_MAX_INPUT_STRING_CHARS = positiveInteger(
+  process.env.TFS_MCP_MAX_INPUT_STRING_CHARS,
+  250_000,
+  "TFS_MCP_MAX_INPUT_STRING_CHARS",
+  1_000_000
+);
+export const TFS_MCP_MAX_RESPONSE_BYTES = positiveInteger(
+  process.env.TFS_MCP_MAX_RESPONSE_BYTES,
+  2_000_000,
+  "TFS_MCP_MAX_RESPONSE_BYTES",
+  20_000_000
 );
 
 /** Base URL de todos os endpoints _apis do projeto. */

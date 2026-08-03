@@ -36,7 +36,7 @@ Originally built against a real enterprise TFS installation. The public docs in 
 ## Install
 
 ```powershell
-cd "C:\Workspace\MCP Servers\tfs-mcp"
+cd "<repo-root>/tfs-mcp"
 npm install
 copy .env.example .env
 notepad .env   # fill TFS_URL, TFS_PROJECT, TFS_REPOS, TFS_PAT_*
@@ -75,10 +75,10 @@ npm run validate:premium
   "mcp": {
     "tfs-mcp": {
       "type": "local",
-      "command": ["node", "C:/Workspace/MCP Servers/tfs-mcp/index.js"],
+      "command": ["node", "<repo-root>/tfs-mcp/index.js"],
       "enabled": true,
       "env": {
-        "TFS_MCP_CONFIG_FILE": "C:/Workspace/MCP Servers/tfs-mcp/local-private/config/tfs.json"
+        "TFS_MCP_CONFIG_FILE": "<repo-root>/tfs-mcp/local-private/config/tfs.json"
       }
     }
   }
@@ -92,7 +92,7 @@ npm run validate:premium
   "mcpServers": {
     "tfs-mcp": {
       "command": "node",
-      "args": ["C:/Workspace/MCP Servers/tfs-mcp/index.js"],
+      "args": ["<repo-root>/tfs-mcp/index.js"],
       "env": {
         "TFS_URL": "https://tfs.example.com",
         "TFS_PAT": "your-pat"
@@ -105,7 +105,7 @@ npm run validate:premium
 ### Claude Code (CLI)
 
 ```bash
-claude mcp add tfs-mcp node "C:/Workspace/MCP Servers/tfs-mcp/index.js" \
+claude mcp add tfs-mcp node "<repo-root>/tfs-mcp/index.js" \
   --env TFS_URL=https://tfs.example.com \
   --env TFS_PAT=your-pat
 ```
@@ -137,6 +137,12 @@ See the [root README](../README.md#%EF%B8%8F-install-in-your-mcp-client) for rea
 | `MCP_HTTP_BODY_LIMIT_BYTES` | `1048576` | Maximum HTTP request size |
 | `MCP_HTTP_SESSION_TTL_MS` | `1800000` | Idle HTTP session lifetime |
 | `MCP_HTTP_MAX_SESSIONS` | `50` | Concurrent HTTP session cap |
+| `TFS_REQUEST_TIMEOUT_MS` | `30000` | Per-request timeout for TFS/Azure DevOps calls |
+| `TFS_MAX_RETRIES` | `3` | Retry count for safe/idempotent requests only |
+| `TFS_RETRY_MAX_DELAY_MS` | `8000` | Maximum backoff; honors `Retry-After` within this cap |
+| `TFS_MCP_MAX_INPUT_ITEMS` | `500` | Default hard limit for array inputs |
+| `TFS_MCP_MAX_INPUT_STRING_CHARS` | `250000` | Default hard limit for string inputs, including rich text |
+| `TFS_MCP_MAX_RESPONSE_BYTES` | `2000000` | Maximum inline MCP result before a truncated envelope is returned |
 | `TFS_AUDIT_LOG_PATH` | `./data/audit.log` | Append-only JSONL audit log for mutation attempts |
 | `TFS_DEFAULT_QUARTER` | _(current quarter)_ | Value available as `{{currentQuarter}}` inside profile defaults |
 | `TFS_WORK_ITEM_PROFILES_JSON` | `{}` | Per-type rich-text fields and required/default fields, indexed by work item type |
@@ -412,7 +418,7 @@ Originalmente construído contra uma instalação enterprise real de TFS. A docu
 ### Instalação
 
 ```powershell
-cd "C:\Workspace\MCP Servers\tfs-mcp"
+cd "<repo-root>/tfs-mcp"
 npm install
 copy .env.example .env
 notepad .env

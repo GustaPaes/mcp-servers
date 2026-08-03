@@ -9,7 +9,7 @@ function daysBetween(from, to) {
 export async function toolDailyBrief(args) {
   const { dueWithinDays } = z.object({
     dueWithinDays: z.number().int().min(1).max(90).default(14),
-  }).parse(args);
+  }).strict().parse(args);
   const [pdis, goals, evidenceLog, onlineState] = await Promise.all([
     listPdis(),
     listGoals(),

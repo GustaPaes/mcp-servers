@@ -122,7 +122,7 @@ export async function toolWorkItemHandoff(args) {
     include_pull_requests = true,
     include_related = true,
   } = z
-    .object({
+    .strictObject({
       id: z.union([z.number(), z.string()]),
       target_role: z
         .enum(["developer", "qa", "product_owner", "scrum_master", "tech_lead"])
@@ -214,7 +214,7 @@ export async function toolPrepareRefinement(args) {
     include_wiki = true,
     wiki_search,
   } = z
-    .object({
+    .strictObject({
       id: z.union([z.number(), z.string()]),
       include_wiki: z.boolean().default(true),
       wiki_search: z.string().optional(),

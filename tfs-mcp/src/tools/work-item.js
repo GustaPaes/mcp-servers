@@ -49,7 +49,7 @@ import {
 
 const zId = z.union([z.number(), z.string()]);
 
-const QueryArgs = z.object({
+const QueryArgs = z.strictObject({
   preset: z.enum(["sprint", "my_tasks", "active_pbis", "bugs", "user_stories", "active_tasks"]).optional(),
   saved_query: z.string().min(1).optional(),
   wiql: z.string().optional(),
@@ -63,7 +63,7 @@ const QueryArgs = z.object({
   top: z.number().int().min(1).max(200).default(30),
 });
 
-const UpdateArgs = z.object({
+const UpdateArgs = z.strictObject({
   id: z.number().int().positive(),
   state: z.string().optional(),
   assigned_to: z.string().optional(),
@@ -83,7 +83,7 @@ const UpdateArgs = z.object({
   confirm_high_impact: z.string().optional(),
 });
 
-const IssueAnalysisArgs = z.object({
+const IssueAnalysisArgs = z.strictObject({
   id: z.number().int().positive(),
   development_analysis: z.string().trim().min(1),
   correction_and_impacts: z.string().optional(),
@@ -132,7 +132,7 @@ export function buildIssueAnalysisPatch(
   return ops;
 }
 
-const CreateArgs = z.object({
+const CreateArgs = z.strictObject({
   work_item_type: z.string().min(1),
   title: z.string().min(1),
   description: z.string().optional(),
@@ -154,7 +154,7 @@ const CreateArgs = z.object({
   confirm_high_impact: z.string().optional(),
 });
 
-const TemplateArgs = z.object({
+const TemplateArgs = z.strictObject({
   title: z.string().optional(),
   work_item_type: z.string().optional(),
   actor: z.string().optional(),
@@ -169,7 +169,7 @@ const TemplateArgs = z.object({
   detail_level: z.enum(["auto", "specific", "summary"]).default("auto"),
 });
 
-const TemplateFromItemsArgs = z.object({
+const TemplateFromItemsArgs = z.strictObject({
   ids: z.array(z.union([z.number(), z.string()])).min(1),
   include_wiki: z.boolean().default(false),
   wiki_search: z.string().optional(),
@@ -412,7 +412,7 @@ function buildChecklist({ description, acceptanceCriteria, relatedItems }) {
 
 export async function toolWorkItem(args) {
   const { id, include_fields } = z
-    .object({
+    .strictObject({
       id: zId,
       include_fields: z.boolean().default(false),
     })
@@ -424,7 +424,7 @@ export async function toolWorkItem(args) {
 
 export async function toolAnalyzeWorkItem(args) {
   const { id, include_related = true } = z
-    .object({ id: zId, include_related: z.boolean().default(true) })
+    .strictObject({ id: zId, include_related: z.boolean().default(true) })
     .parse(args);
 
   const workItem = await fetchWorkItemById(id, "all");
@@ -474,7 +474,7 @@ export async function toolWorkItemContext(args) {
     include_wiki = true,
     wiki_search,
   } = z
-    .object({
+    .strictObject({
       id: zId,
       include_related: z.boolean().default(true),
       include_pull_requests: z.boolean().default(true),

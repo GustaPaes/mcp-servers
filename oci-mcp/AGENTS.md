@@ -14,22 +14,30 @@ This toolkit combines official Oracle MCP servers with the local `oci-extras-mcp
 - Never mutate or delete a resource not created by this MCP unless the user confirms the exact resource name or OCID.
 - Treat production compartments, OKE clusters, Vault/KMS keys, IAM policies and networking changes as high impact.
 
-## Tool Groups
+## Tool risk manifest
 
-### READ
-List, get, describe, recommend, health, log-tail and status tools are read oriented. They may still expose sensitive metadata, so summarize results when possible.
+Every exported tool must have exactly one policy in `src/tool-manifest.js` using
+the canonical classes `READ`, `LOCAL_STATE`, `EXECUTION`, `REMOTE_WRITE`,
+`DESTRUCTIVE` or `SECRET_READ`. Startup and tests fail when a definition,
+handler or policy drifts. MCP annotations are derived from this manifest.
 
-### WRITE
-Create, update, apply, sync, rotate, invoke and scale tools should be called first with the effective dry-run behavior.
+- `READ` tools may be invoked without confirmation. Metadata can still be sensitive, so return only what is needed.
+- `LOCAL_STATE` covers kubeconfig/session state and ownership-ledger updates. It requires clear user intent, not a redundant confirmation prompt.
+- `EXECUTION` and `REMOTE_WRITE` use dry-run when supported. Non-idempotent execution must not be retried without a provider idempotency token.
+- `SECRET_READ` is read-only for MCP annotations but remains disclosure-sensitive and must satisfy the secret-reveal guard.
+- `DESTRUCTIVE` requires the environment gate, exact target confirmation and third-party acknowledgement where applicable.
 
-### DESTRUCTIVE
-Delete, terminate, schedule deletion and third-party mutation require the server guardrails plus explicit human acknowledgement.
+Every tool returns the strict `{ ok, data, errors, meta }` envelope with an
+`outputSchema`. Inputs are parsed strictly and reject unknown fields.
 
 ## Defaults
 
 - Check active profile, region and compartment before mutating resources.
 - Prefer `oci-extras-mcp` for OKE/Vault/Kubernetes workflows and official Oracle MCP servers for generic OCI service coverage.
 - Keep audit logs, ownership ledger, kubeconfig and `.env` files out of Git.
+- Keep audit redaction enabled; the server refuses to start when an environment override attempts to disable it.
+- Bound request timeouts, retries, polling duration, pagination, HTTP body size, session TTL and active-session count.
+- HTTP activity refreshes session TTL. Session expiry and server shutdown must close both the MCP transport and its server instance.
 
 ## Public/private boundary
 

@@ -29,6 +29,11 @@ model Draft {
   @@index([kind])
 }
 
+model StorageMetadata {
+  key   String @id
+  value Int
+}
+
 enum DraftKind {
   campaign
   adset

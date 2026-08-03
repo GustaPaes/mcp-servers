@@ -1,5 +1,5 @@
 import http from "http";
-import { randomUUID } from "crypto";
+import { createHash, randomUUID, timingSafeEqual } from "crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { buildMcpServer, TOTAL_TOOLS } from "./server.js";
 import {
@@ -16,6 +16,12 @@ const sessions = new Map();
 
 function isLoopback(host) {
   return ["127.0.0.1", "localhost", "::1"].includes(String(host ?? "").toLowerCase());
+}
+
+function constantTimeEqual(left, right) {
+  const leftDigest = createHash("sha256").update(String(left)).digest();
+  const rightDigest = createHash("sha256").update(String(right)).digest();
+  return timingSafeEqual(leftDigest, rightDigest);
 }
 
 async function closeSession(sessionId) {
@@ -53,14 +59,19 @@ export async function startHttpStreamable(port, host = MCP_HTTP_HOST) {
   const httpServer = http.createServer(async (req, res) => {
     try {
       if ((req.url === "/health" || req.url === "/healthz") && req.method === "GET") {
-        const body = JSON.stringify({
+        const health = {
           status: "ok",
           transport: "streamable-http",
-          endpoint: `http://${host}:${port}/mcp`,
-          tools: TOTAL_TOOLS,
-          version: SERVER_VERSION,
-          activeSessions: sessions.size,
-        });
+        };
+        if (isLoopback(host)) {
+          Object.assign(health, {
+            endpoint: `http://${host}:${port}/mcp`,
+            tools: TOTAL_TOOLS,
+            version: SERVER_VERSION,
+            activeSessions: sessions.size,
+          });
+        }
+        const body = JSON.stringify(health);
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(body);
         return;
@@ -68,7 +79,7 @@ export async function startHttpStreamable(port, host = MCP_HTTP_HOST) {
 
       if (MCP_HTTP_TOKEN) {
         const authHeader = (req.headers.authorization ?? "").trim();
-        if (authHeader !== `Bearer ${MCP_HTTP_TOKEN}`) {
+        if (!constantTimeEqual(authHeader, `Bearer ${MCP_HTTP_TOKEN}`)) {
           res.writeHead(401, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: "unauthorized" }));
           return;
@@ -136,11 +147,11 @@ export async function startHttpStreamable(port, host = MCP_HTTP_HOST) {
           sessionIdGenerator: () => randomUUID(),
           onsessioninitialized: (sid) => {
             registerSession(sid, transport, mcpServer);
-            logger.debug({ sessionId: sid }, "MCP session initialized");
+            logger.debug({ activeSessions: sessions.size }, "MCP session initialized");
           },
           onsessionclosed: (sid) => {
             void closeSession(sid);
-            logger.debug({ sessionId: sid }, "MCP session closed");
+            logger.debug({ activeSessions: sessions.size }, "MCP session closed");
           },
         });
         mcpServer = buildMcpServer();

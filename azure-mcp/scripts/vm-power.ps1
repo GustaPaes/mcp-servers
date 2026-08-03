@@ -22,7 +22,7 @@
     .\vm-power.ps1 -Action Deallocate -Subscription <sub-id> -ResourceGroup rg -Name vm01
 #>
 
-[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
+[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
 param(
     [Parameter(Mandatory)]
     [ValidateSet('Status', 'Start', 'Deallocate')]

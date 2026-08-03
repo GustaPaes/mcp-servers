@@ -14,7 +14,6 @@ export const listAdSetsTool = defineTool({
     })
     .strict(),
   async handler(input, ctx) {
-    ctx.audit.record({ action: 'tool.invoked', tool: 'list_ad_sets', accountId: input.accountId });
     try {
       const res = await ctx.meta.listAdSets(input.accountId, {
         campaignId: input.campaignId,
@@ -47,7 +46,6 @@ export const createAdSetDraftTool = defineTool({
         });
         return fail('Targeting blocked by policy', { errors: policy.findings.map((f) => f.message) });
       }
-      const state = await ctx.storage.read();
       const draft = {
         id: `adraft_${randomUUID()}`,
         accountId: input.accountId,
@@ -55,8 +53,9 @@ export const createAdSetDraftTool = defineTool({
         updatedAt: new Date().toISOString(),
         data: input,
       };
-      state.adSetDrafts.push(draft);
-      await ctx.storage.write(state);
+      await ctx.storage.update((state) => {
+        state.adSetDrafts.push(draft);
+      });
       return ok(
         { draft, policyFindings: policy.findings, note: 'Rascunho local, não publicado.' },
         { warnings: policy.findings.filter((f) => f.level !== 'low').map((f) => f.message) },

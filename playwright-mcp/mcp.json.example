@@ -5,7 +5,7 @@
     "mcpServers": {
       "playwright-mcp": {
         "command": "node",
-        "args": ["C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"],
+        "args": ["<repo-root>/playwright-mcp/dist/index.js"],
         "env": {
           "PWMCP_DEFAULT_HEADLESS": "false",
           "PWMCP_DEFAULT_CHANNEL": "chrome"
@@ -19,7 +19,7 @@
     "mcp": {
       "playwright-mcp": {
         "type": "local",
-        "command": ["node", "C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"],
+        "command": ["node", "<repo-root>/playwright-mcp/dist/index.js"],
         "enabled": true
       }
     }
@@ -30,7 +30,7 @@
       "playwright-mcp": {
         "type": "stdio",
         "command": "node",
-        "args": ["C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"],
+        "args": ["<repo-root>/playwright-mcp/dist/index.js"],
         "disabled": false,
         "timeout": 60
       }

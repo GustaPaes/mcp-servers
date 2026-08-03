@@ -7,6 +7,9 @@
 *.log
 logs/
 
+# Local operational material (never version)
+local-private/
+
 # Cache npm/npx
 node_modules/
 .npm/

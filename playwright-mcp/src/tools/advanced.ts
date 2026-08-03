@@ -6,7 +6,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { sessionManager } from "../session-manager.js";
 import type { ToolModule } from "../types.js";
-import { checkSafeEval, evalTimeoutMs, withTimeout } from "../safety/safe-eval.js";
+import { assertEvalEnabled, checkSafeEval, evalTimeoutMs, withTimeout } from "../safety/safe-eval.js";
 import { applyStealth } from "../lib/stealth.js";
 import { config } from "../config.js";
 
@@ -112,6 +112,7 @@ export const advancedTools: ToolModule = {
 
   handlers: {
     async page_eval_in_frame(args) {
+      assertEvalEnabled();
       const source = String(args.function);
       const check = checkSafeEval(source);
       if (!check.ok) throw new Error(`page_eval_in_frame rejected: ${check.reason}`);
@@ -189,7 +190,11 @@ export const advancedTools: ToolModule = {
           default_channel: config.defaultChannel || null,
           headless_default: config.defaultHeadless,
           strict: config.strict,
+          allow_eval: config.allowEval,
+          block_private_networks: config.blockPrivateNetworks,
+          allowed_hosts: config.allowedHosts,
           output_dir: config.outputDir,
+          max_output_bytes: config.maxOutputBytes,
         },
         browsers_installed: installed,
       };

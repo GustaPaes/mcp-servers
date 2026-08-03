@@ -18,7 +18,11 @@ function isLoopback(host) {
 
 function isAuthorized(req) {
   if (!config.httpToken) return true;
-  return String(req.headers.authorization ?? "") === `Bearer ${config.httpToken}`;
+  const supplied = String(req.headers.authorization ?? "");
+  const expected = `Bearer ${config.httpToken}`;
+  const suppliedDigest = crypto.createHash("sha256").update(supplied).digest();
+  const expectedDigest = crypto.createHash("sha256").update(expected).digest();
+  return crypto.timingSafeEqual(suppliedDigest, expectedDigest);
 }
 
 async function readJsonBody(req, limitBytes) {
@@ -48,14 +52,35 @@ export async function startHttpStreamable({ port, host }) {
   if (!isLoopback(host) && !config.httpToken) {
     throw new Error("MCP_HTTP_TOKEN is required when binding oci-extras-mcp HTTP outside loopback");
   }
-  const sessions = new Map(); // sessionId -> { server, transport, timer }
+  const sessions = new Map(); // sessionId -> { server, transport, timer, activeRequests }
 
-  function closeSession(sessionId) {
+  async function closeSession(sessionId) {
     const entry = sessions.get(sessionId);
-    if (!entry) return;
+    if (!entry || entry.closing) return;
+    entry.closing = true;
     clearTimeout(entry.timer);
     sessions.delete(sessionId);
-    entry.transport?.close?.().catch?.(() => {});
+    await Promise.allSettled([
+      entry.transport?.close?.(),
+      entry.server?.close?.(),
+    ]);
+  }
+
+  function scheduleExpiry(sessionId, entry) {
+    clearTimeout(entry.timer);
+    if (entry.closing || entry.activeRequests > 0) return;
+    entry.timer = setTimeout(() => void closeSession(sessionId), config.httpSessionTtlMs);
+    entry.timer.unref?.();
+  }
+
+  function beginRequest(entry) {
+    clearTimeout(entry.timer);
+    entry.activeRequests += 1;
+  }
+
+  function endRequest(sessionId, entry) {
+    entry.activeRequests = Math.max(0, entry.activeRequests - 1);
+    scheduleExpiry(sessionId, entry);
   }
 
   const server = http.createServer(async (req, res) => {
@@ -91,9 +116,19 @@ export async function startHttpStreamable({ port, host }) {
         ? await readJsonBody(req, config.httpBodyLimitBytes)
         : undefined;
       let sessionId = req.headers["mcp-session-id"];
+      if (Array.isArray(sessionId)) sessionId = sessionId[0];
       let entry = sessionId ? sessions.get(sessionId) : null;
 
       if (!entry) {
+        const method = requestBody && typeof requestBody === "object" && !Array.isArray(requestBody)
+          ? requestBody.method
+          : undefined;
+        if (req.method !== "POST" || method !== "initialize") {
+          res.statusCode = 400;
+          res.setHeader("content-type", "application/json");
+          res.end(JSON.stringify({ error: "missing_or_invalid_session; initialize first" }));
+          return;
+        }
         if (sessions.size >= config.httpMaxSessions) {
           res.statusCode = 503;
           res.setHeader("content-type", "application/json");
@@ -106,17 +141,24 @@ export async function startHttpStreamable({ port, host }) {
           sessionIdGenerator: () => sessionId,
         });
         await mcp.connect(transport);
-        const timer = setTimeout(() => closeSession(sessionId), config.httpSessionTtlMs);
-        timer.unref?.();
-        entry = { server: mcp, transport, timer };
+        entry = { server: mcp, transport, timer: undefined, activeRequests: 0, closing: false };
         sessions.set(sessionId, entry);
+        transport.onclose = () => void closeSession(sessionId);
         res.setHeader("mcp-session-id", sessionId);
         logger.info({ sessionId }, "new MCP session");
       }
 
-      await entry.transport.handleRequest(req, res, requestBody);
+      beginRequest(entry);
+      try {
+        await entry.transport.handleRequest(req, res, requestBody);
+      } finally {
+        endRequest(sessionId, entry);
+      }
     } catch (err) {
-      logger.error({ err }, "transport error");
+      logger.error(
+        { error: { message: err instanceof Error ? err.message : String(err) } },
+        "transport error"
+      );
       if (!res.headersSent) {
         res.statusCode = err.statusCode ?? 500;
         res.setHeader("content-type", "application/json");
@@ -125,6 +167,10 @@ export async function startHttpStreamable({ port, host }) {
         }));
       }
     }
+  });
+
+  server.on("close", () => {
+    void Promise.allSettled([...sessions.keys()].map((sessionId) => closeSession(sessionId)));
   });
 
   await new Promise((resolve, reject) => {

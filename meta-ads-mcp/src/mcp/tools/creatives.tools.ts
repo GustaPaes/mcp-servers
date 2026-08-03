@@ -14,7 +14,6 @@ export const createAdCreativeDraftTool = defineTool({
   async handler(input, ctx) {
     try {
       const account = ctx.accounts.get(input.accountId);
-      const state = await ctx.storage.read();
       const draft = {
         id: `crdraft_${randomUUID()}`,
         accountId: input.accountId,
@@ -22,8 +21,9 @@ export const createAdCreativeDraftTool = defineTool({
         updatedAt: new Date().toISOString(),
         data: input,
       };
-      state.creativeDrafts.push(draft);
-      await ctx.storage.write(state);
+      await ctx.storage.update((state) => {
+        state.creativeDrafts.push(draft);
+      });
 
       const analysis = ctx.engines.creative.analyze(
         {

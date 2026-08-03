@@ -38,7 +38,7 @@ const ExecutionInput = {
   dry_run: z.boolean().default(false),
 };
 
-const UpsertPipelineArgs = z.object({
+const UpsertPipelineArgs = z.strictObject({
   name: z.string().trim().min(1),
   yaml_path: z.string().trim().min(1),
   repository: z.string().trim().min(1).optional(),
@@ -54,7 +54,7 @@ const UpsertPipelineArgs = z.object({
   ...MutationInput,
 });
 
-const QueuePipelineArgs = z.object({
+const QueuePipelineArgs = z.strictObject({
   definition_id: z.number().int().positive().optional(),
   definition_name: z.string().trim().min(1).optional(),
   branch: z.string().trim().min(1).optional(),

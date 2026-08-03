@@ -6,13 +6,13 @@
   "description": "MCP server for Oracle Cloud Infrastructure — OKE, Vault/Secrets, Functions and streaming logs. Complements oracle/mcp upstream.",
   "license": "UPL-1.0",
   "engines": {
-    "node": ">=20"
+    "node": ">=20.19.0"
   },
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
     "start:http": "node index.js --http",
-    "test": "node tests/auth-resolver.test.mjs && node tests/smoke-stdio.mjs && node tests/smoke-http.mjs",
+    "test": "node tests/auth-resolver.test.mjs && node tests/safety-contracts.test.mjs && node tests/smoke-stdio.mjs && node tests/smoke-http.mjs",
     "test:http": "node tests/smoke-http.mjs",
     "test:auth": "node tests/auth-resolver.test.mjs",
     "lint": "node tests/check-syntax.mjs"

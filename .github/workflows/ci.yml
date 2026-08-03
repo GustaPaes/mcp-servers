@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   node-mcps:
     runs-on: ubuntu-latest
@@ -39,7 +43,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 20.19.0
+          node-version-file: .node-version
           cache: npm
           cache-dependency-path: ${{ matrix.dir }}/package-lock.json
       - name: Install dependencies
@@ -58,16 +62,39 @@ jobs:
         working-directory: ${{ matrix.dir }}
         run: npm audit --omit=dev --audit-level=high
 
-  portfolio-contract:
+  azure-wrapper:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: azure-mcp/package-lock.json
+      - name: Install locked Azure MCP package
+        working-directory: azure-mcp
+        run: npm ci --workspaces=false
+      - name: Install PowerShell analyzer
+        shell: powershell
+        run: Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
+      - name: Validate launcher and PowerShell scripts
+        working-directory: azure-mcp
+        run: npm test && npm run lint:powershell
+      - name: Audit production dependencies
+        working-directory: azure-mcp
+        run: npm audit --omit=dev --audit-level=high
+
+  repository-contract:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 20.19.0
-      - name: Validate public/private boundary
-        run: node scripts/portfolio-doctor.mjs
+          node-version-file: .node-version
+      - name: Validate repository policy and shared packages
+        run: npm run validate:fast
 
   secrets:
     runs-on: ubuntu-latest

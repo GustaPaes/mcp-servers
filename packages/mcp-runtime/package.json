@@ -11,9 +11,17 @@
     }
   },
   "files": [
-    "src"
+    "src",
+    "bin"
   ],
+  "bin": {
+    "mcp-node-test": "bin/run-node-tests.js"
+  },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "lint": "node --check src/index.js && node --check bin/run-node-tests.js",
+    "test": "node --test"
   }
 }

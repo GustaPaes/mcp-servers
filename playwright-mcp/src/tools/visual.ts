@@ -5,7 +5,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { sessionManager } from "../session-manager.js";
 import type { ToolModule } from "../types.js";
-import { outputPath, timestamp } from "../output-dir.js";
+import { assertOutputQuotaAvailable, enforceArtifactFileLimit, outputPath, timestamp } from "../output-dir.js";
 import { config } from "../config.js";
 
 export const visualTools: ToolModule = {
@@ -151,6 +151,7 @@ export const visualTools: ToolModule = {
       };
     },
     async page_screenshot(args) {
+      assertOutputQuotaAvailable();
       const rec = sessionManager.resolvePage(args.page_id as string | undefined);
       const type = (args.type as "png" | "jpeg" | undefined) ?? "png";
       const fileName =
@@ -171,6 +172,7 @@ export const visualTools: ToolModule = {
       } else {
         buf = await rec.page.screenshot(opts);
       }
+      enforceArtifactFileLimit(filePath);
       const result: Record<string, unknown> = { path: filePath, bytes: buf.byteLength, type };
       if (args.return_base64) {
         if (buf.byteLength <= config.maxArtifactBytes) {
@@ -183,6 +185,7 @@ export const visualTools: ToolModule = {
       return result;
     },
     async page_pdf(args) {
+      assertOutputQuotaAvailable();
       const rec = sessionManager.resolvePage(args.page_id as string | undefined);
       const fileName = (args.filename as string | undefined) ?? `page-${rec.id}-${timestamp()}.pdf`;
       const filePath = outputPath("pdf", fileName);
@@ -198,7 +201,7 @@ export const visualTools: ToolModule = {
       } catch (err) {
         throw new Error(`page_pdf failed (note: requires Chromium, ideally headless): ${(err as Error).message}`);
       }
-      return { path: filePath };
+      return { path: filePath, bytes: enforceArtifactFileLimit(filePath) };
     },
     async page_video_start(args) {
       const { ctx } = sessionManager.requireContext(String(args.context_id));
@@ -235,12 +238,14 @@ export const visualTools: ToolModule = {
         ...settledPaths.filter((item): item is string => Boolean(item)),
         ...discovered.map((file) => path.join(dir, file)),
       ];
+      const boundedVideos = [...new Set(videos)].map((file) => ({ file, bytes: enforceArtifactFileLimit(file) }));
       return {
         active: false,
-        videos: [...new Set(videos)],
+        videos: boundedVideos,
       };
     },
     async tracing_start(args) {
+      assertOutputQuotaAvailable();
       const { ctx } = sessionManager.requireContext(String(args.context_id));
       const fileName = `trace-${ctx.id}-${timestamp()}.zip`;
       const outPath = outputPath("traces", fileName);
@@ -262,7 +267,7 @@ export const visualTools: ToolModule = {
           : ctx.recording.tracing.outputPath!;
       await ctx.context.tracing.stop({ path: outPath });
       ctx.recording.tracing = { active: false };
-      return { active: false, path: outPath, viewer: "https://trace.playwright.dev/" };
+      return { active: false, path: outPath, bytes: enforceArtifactFileLimit(outPath), viewer: "https://trace.playwright.dev/" };
     },
   },
 };

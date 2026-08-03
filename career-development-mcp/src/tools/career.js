@@ -3,9 +3,10 @@ import { loadProfile, loadCompetencies, listPdis, listGoals } from "../storage.j
 import { analyzeCompetencyGap } from "../analytics/competency-gap.js";
 import { computePdiProgress } from "../analytics/progress-tracker.js";
 import { getCareerRole } from "../frameworks/career-ladder.js";
+import { shortTextSchema } from "../models/common.js";
 
 export async function toolCareerReadiness(args) {
-  const { targetRole } = z.object({ targetRole: z.string().optional() }).parse(args);
+  const { targetRole } = z.object({ targetRole: shortTextSchema.optional() }).strict().parse(args);
   const [profile, competencies] = await Promise.all([loadProfile(), loadCompetencies()]);
   const gap = analyzeCompetencyGap(competencies, targetRole ?? profile.targetRole);
   return {
@@ -19,7 +20,7 @@ export async function toolCareerReadiness(args) {
 }
 
 export async function toolCareerRoadmap(args) {
-  const { targetRole } = z.object({ targetRole: z.string().optional() }).parse(args);
+  const { targetRole } = z.object({ targetRole: shortTextSchema.optional() }).strict().parse(args);
   const [profile, competencies, pdis, goals] = await Promise.all([loadProfile(), loadCompetencies(), listPdis(), listGoals()]);
   const desiredRole = targetRole ?? profile.targetRole;
   const gap = analyzeCompetencyGap(competencies, desiredRole);

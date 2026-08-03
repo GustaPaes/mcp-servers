@@ -1,0 +1,6 @@
+{
+  "forbiddenTerms": [
+    "ExampleOrganization",
+    "employee.example"
+  ]
+}

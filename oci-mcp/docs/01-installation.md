@@ -5,7 +5,7 @@
 Run an elevated PowerShell:
 
 ```powershell
-cd 'C:\Workspace\MCP Servers\oci-mcp'
+cd '<repo-root>/oci-mcp'
 .\scripts\install-prereqs.ps1
 ```
 
@@ -37,7 +37,7 @@ This writes `~/.oci/config` with `security_token_file` pointing at a token cache
 ## 3. Install the custom MCP server (`oci-extras-mcp`)
 
 ```powershell
-cd 'C:\Workspace\MCP Servers\oci-mcp\oci-extras-mcp'
+cd '<repo-root>/oci-mcp/oci-extras-mcp'
 copy .env.example .env
 npm install
 npm run smoke
@@ -72,7 +72,7 @@ Restart your client. The toolkit registers two families of servers:
 ## 5. (Optional) HTTP transport
 
 ```powershell
-cd 'C:\Workspace\MCP Servers\oci-mcp\oci-extras-mcp'
+cd '<repo-root>/oci-mcp/oci-extras-mcp'
 $env:MCP_HTTP_PORT = 3020
 npm run start:http
 ```

@@ -52,12 +52,21 @@ test("publishes the complete safe tool contract", async () => {
     }
     assert.equal(pipelineQueue.annotations.readOnlyHint, false);
     assert.equal(pipelineQueue.annotations.idempotentHint, false);
+    assert.equal(pipelineQueue.annotations.destructiveHint, false);
     for (const tool of tools) {
       assert.equal(tool.inputSchema?.additionalProperties, false, `${tool.name} input must be strict`);
+      assert.equal(tool.outputSchema?.type, "object", `${tool.name} output must be structured`);
       assert.equal(typeof tool.annotations?.readOnlyHint, "boolean", `${tool.name} readOnlyHint`);
       assert.equal(typeof tool.annotations?.destructiveHint, "boolean", `${tool.name} destructiveHint`);
       assert.equal(typeof tool.annotations?.idempotentHint, "boolean", `${tool.name} idempotentHint`);
     }
+
+    const strictResult = await client.callTool({
+      name: "tfs_saved_queries",
+      arguments: { unexpected: true },
+    });
+    assert.equal(strictResult.isError, true);
+    assert.match(strictResult.content[0].text, /unexpected.*nao e permitido/i);
   } finally {
     await client.close().catch(() => {});
   }

@@ -63,6 +63,68 @@ domínio e permanece útil sem acesso ao ambiente de origem.
 - Evite dependências ou abstrações novas quando a capacidade puder ser entregue
   de forma simples com os padrões já adotados no projeto.
 
+## Contrato canônico das tools
+
+Cada servidor deve manter uma única fonte de verdade, em código ou manifesto,
+para nome, descrição, schemas, annotations, handler e classe de risco de cada
+tool. Inventários em documentação ou em `AGENTS.md` devem ser gerados ou
+validados por teste contra esse contrato; listas manuais não podem ser a única
+proteção contra divergência.
+
+- Classifique cada tool explicitamente como `READ`, `LOCAL_STATE`, `EXECUTION`,
+  `REMOTE_WRITE`, `DESTRUCTIVE` ou `SECRET_READ`. Não deduza a classe pela
+  ausência em outra lista.
+- Faça `readOnlyHint`, `destructiveHint`, `idempotentHint` e `openWorldHint`
+  refletirem o comportamento real. Annotations são dicas para clientes, não
+  substituem validações e proteções no servidor.
+- Rejeite propriedades desconhecidas nas entradas públicas, exceto quando o
+  contrato documentar intencionalmente um mapa extensível.
+- Para respostas estáveis, exponha `outputSchema` e valide `structuredContent`.
+  Prefira o envelope `data`, `meta`, `warnings` e `nextCursor`, omitindo campos
+  que não se apliquem.
+- Mudanças incompatíveis de nome ou schema exigem versão nova ou período de
+  depreciação documentado e testado.
+
+## Risco, confirmação e idempotência
+
+- Confirme pelo impacto real, não apenas pelo fato de existir escrita. Leituras,
+  estado local reversível e execuções explicitamente solicitadas podem seguir
+  sem confirmação adicional quando não alterarem definição, permissão, custo
+  configurado ou dados duráveis de terceiros.
+- Edição remota deve apresentar alvo e resumo `antes/depois`; exclusão deve
+  apresentar identidade e alcance exatos. A confirmação deve vincular-se à
+  prévia exibida e expirar quando o contexto mudar.
+- Proteções de alto impacto devem existir no servidor. Instruções ao agente não
+  são um mecanismo de autorização.
+- Operações não idempotentes não devem receber retry automático sem chave de
+  idempotência, deduplicação ou comprovação de que a solicitação não chegou ao
+  provedor.
+- Use `expectedRevision`, ETag ou equivalente quando duas execuções puderem
+  sobrescrever o mesmo estado. Leitura-modificação-gravação local deve ser
+  serializada ou transacional.
+
+## Limites, rede e observabilidade
+
+- Toda chamada externa deve ter timeout, cancelamento e orçamento total de
+  retries. Respeite `Retry-After`, aplique jitter e limite concorrência por
+  provedor ou conta.
+- Toda coleção, texto, payload e artefato deve ter padrão e máximo explícitos.
+  Use paginação ou truncamento sinalizado; nunca carregue ou devolva conteúdo
+  potencialmente ilimitado por padrão.
+- Ao encaminhar credenciais, restrinja protocolo, host e origem. Servidores que
+  navegam ou buscam URLs devem considerar redes privadas, metadata de nuvem,
+  redirecionamentos e DNS rebinding em sua política de egress.
+- Valide raízes de arquivos depois de resolver links simbólicos. Uploads e
+  artefatos devem usar diretórios dedicados, quotas e retenção; negue arquivos
+  de segredo mesmo quando estiverem dentro de uma raiz permitida.
+- Centralize auditoria, correlation ID, duração e normalização de erros. Redija
+  segredos antes de persistir ou responder. Se a auditoria de uma mutação
+  crítica falhar, aborte a operação ou devolva falha explícita conforme a
+  política documentada.
+- Transporte HTTP deve iniciar em loopback, autenticar exposição remota, limitar
+  corpo e sessões, renovar TTL por atividade e encerrar servidor e transports
+  graciosamente.
+
 ## Documentação, exemplos e testes
 
 - Documente a finalidade técnica, instalação, configuração, segurança e uso do
@@ -75,6 +137,13 @@ domínio e permanece útil sem acesso ao ambiente de origem.
   classes de risco, requisitos de confirmação ou diretórios de dados privados.
 - Evite repetir neste arquivo local as diretrizes globais; registre apenas as
   regras adicionais do servidor.
+- Mantenha testes de contrato que enumerem todas as tools e verifiquem schema
+  estrito, annotations, handler, classe de risco e contrato de saída.
+- Cubra caminhos negativos de segurança, concorrência, timeout, retry,
+  idempotência, confinamento de arquivos, redação e encerramento HTTP.
+- Valide na inicialização números, enums e caminhos de configuração. Mantenha um
+  teste de paridade entre variáveis consumidas e `.env.example`, avisando sobre
+  chaves desconhecidas para detectar erros de digitação.
 
 ## Verificação antes do commit
 

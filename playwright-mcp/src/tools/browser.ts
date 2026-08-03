@@ -10,9 +10,26 @@ import type { BrowserChannel, BrowserName, ToolModule } from "../types.js";
 import { outputPath } from "../output-dir.js";
 import { config } from "../config.js";
 import { logger } from "../logger.js";
+import { assertUrlAllowed } from "../safety/selectors.js";
 
 const browserEnum = ["chromium", "firefox", "webkit"];
 const channelEnum = ["", "chrome", "chrome-beta", "chrome-dev", "chrome-canary", "msedge", "msedge-beta", "msedge-dev", "msedge-canary"];
+const FORBIDDEN_STRICT_ARGS = [
+  "--disable-web-security",
+  "--host-resolver-rules",
+  "--load-extension",
+  "--proxy-server",
+  "--remote-debugging-address",
+  "--remote-debugging-port",
+  "--remote-debugging-pipe",
+  "--user-data-dir",
+];
+
+export function assertLaunchArgsAllowed(args: string[]): void {
+  if (!config.strict) return;
+  const blocked = args.find((arg) => FORBIDDEN_STRICT_ARGS.some((prefix) => arg.toLowerCase().startsWith(prefix)));
+  if (blocked) throw new Error(`browser argument is blocked in strict mode: ${blocked.split("=")[0]}`);
+}
 
 function storagePath(input: string): string {
   return outputPath("storage", input);
@@ -157,6 +174,10 @@ export const browserTools: ToolModule = {
 
   handlers: {
     async browser_launch(args) {
+      const launchArgs = args.args as string[] | undefined;
+      assertLaunchArgsAllowed(launchArgs ?? []);
+      const proxy = args.proxy as { server: string } | undefined;
+      if (proxy?.server) await assertUrlAllowed(proxy.server);
       const session = await sessionManager.launch({
         browser: args.browser as BrowserName | undefined,
         channel: args.channel as BrowserChannel | undefined,
@@ -165,8 +186,8 @@ export const browserTools: ToolModule = {
         viewport: args.viewport as { width: number; height: number } | undefined,
         locale: args.locale as string | undefined,
         timezoneId: args.timezone_id as string | undefined,
-        proxy: args.proxy as { server: string } | undefined,
-        args: args.args as string[] | undefined,
+        proxy,
+        args: launchArgs,
         ignoreHttpsErrors: args.ignore_https_errors as boolean | undefined,
         extraHttpHeaders: args.extra_http_headers as Record<string, string> | undefined,
         stealth: args.stealth as boolean | undefined,

@@ -5,7 +5,7 @@
 .DESCRIPTION
     1. Confirma az login (tenant, subscription, usuario).
     2. Lista subscriptions disponiveis.
-    3. Executa `npx -y @azure/mcp@<versao>` tools list para validar o server.
+    3. Executa a instalação local travada do Azure MCP para listar as tools.
     4. Retorna exit code != 0 se algo falhar.
 
 .EXAMPLE
@@ -96,24 +96,28 @@ try {
 
 # ---------- 4. Azure MCP Server ----------
 $pkg = "@azure/mcp@$Version"
+$pinnedVersion = Get-AzureMcpVersion
+if ($Version -ne $pinnedVersion) {
+    throw "A versao solicitada ($Version) nao esta instalada localmente. Promova-a com update-server.ps1 -Pin '$Version' -Promote."
+}
+$command = Get-AzureMcpCommand
 
-Write-Section "4/4  Azure MCP Server (npx $pkg tools list)"
-Write-Host "  (na primeira execucao pode demorar 5-10s para baixar o pacote)" -ForegroundColor DarkGray
+Write-Section "4/4  Azure MCP Server local ($pkg tools list)"
 Write-Host ""
 
 try {
-    $output = & npx -y $pkg tools list 2>&1
+    $output = & $command tools list 2>&1
     if ($LASTEXITCODE -ne 0) {
-        Write-Err "Falha ao executar `npx @azure/mcp tools list`."
+        Write-Err "Falha ao executar a instalacao local do Azure MCP."
         Write-Host $output
         $exitCode = 1
     } else {
         # tenta parsear como JSON, mas tolera texto puro
         try {
             $tools = $output | ConvertFrom-Json
-            if ($tools.tools) {
-                Write-Ok "Tools carregadas: $($tools.tools.Count)"
-                $sample = $tools.tools | Select-Object -First 5 -ExpandProperty name
+            if ($tools.results) {
+                Write-Ok "Tools carregadas: $($tools.results.Count)"
+                $sample = $tools.results | Select-Object -First 5 -ExpandProperty command
                 Write-Host "  Exemplos: $($sample -join ', ')..." -ForegroundColor DarkGray
             } else {
                 Write-Ok "Servidor respondeu (formato textual)."

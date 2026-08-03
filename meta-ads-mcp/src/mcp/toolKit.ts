@@ -1,4 +1,5 @@
-import type { z, ZodTypeAny } from 'zod';
+import { z, type ZodTypeAny } from 'zod';
+import type { ToolRisk as RuntimeToolRisk } from '@gustapaes/mcp-runtime';
 import type { ToolContext } from './context.js';
 
 /**
@@ -21,6 +22,17 @@ export interface McpTool<TInput extends ZodTypeAny, TOutput> {
   openWorld?: boolean;
 }
 
+export type ToolRisk = RuntimeToolRisk;
+
+export interface ToolPolicy {
+  risk: ToolRisk;
+  idempotent: boolean;
+  openWorld: boolean;
+}
+
+export type RegisteredMcpTool<TInput extends ZodTypeAny = ZodTypeAny, TOutput = unknown> =
+  McpTool<TInput, TOutput> & { policy: ToolPolicy };
+
 export function defineTool<TInput extends ZodTypeAny, TOutput>(
   tool: McpTool<TInput, TOutput>,
 ): McpTool<TInput, TOutput> {
@@ -35,6 +47,17 @@ export interface ToolEnvelope<T> {
   errors?: string[];
   meta?: Record<string, unknown>;
 }
+
+/** Stable MCP output contract shared by every registered tool. */
+export const ToolEnvelopeSchema = z
+  .object({
+    ok: z.boolean(),
+    data: z.unknown().optional(),
+    warnings: z.array(z.string()).optional(),
+    errors: z.array(z.string()).optional(),
+    meta: z.record(z.string(), z.unknown()).optional(),
+  })
+  .strict();
 
 export function ok<T>(data: T, extra: Partial<ToolEnvelope<T>> = {}): ToolEnvelope<T> {
   return { ok: true, data, ...extra };

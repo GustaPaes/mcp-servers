@@ -3,7 +3,7 @@ import { getConfigurationSummary, TFS_SAVED_QUERIES } from "../config.js";
 import { checkTfsConnectivity } from "../tfs-client.js";
 
 export async function toolTfsDoctor(args) {
-  const { check_connectivity } = z.object({
+  const { check_connectivity } = z.strictObject({
     check_connectivity: z.boolean().default(false),
   }).parse(args);
   const configuration = getConfigurationSummary();

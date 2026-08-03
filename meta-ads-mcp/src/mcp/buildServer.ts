@@ -18,6 +18,8 @@ import { AudienceStrategyEngine } from '../optimization/AudienceStrategyEngine.j
 import { PolicyRiskEngine } from '../optimization/PolicyRiskEngine.js';
 import { BudgetEngine } from '../optimization/BudgetEngine.js';
 import { ALL_TOOLS } from './registry.js';
+import { ToolEnvelopeSchema } from './toolKit.js';
+import { annotationsForRisk } from '@gustapaes/mcp-runtime';
 import { registerPrompts } from './prompts.js';
 import { registerResources } from './resources.js';
 import type { ToolContext } from './context.js';
@@ -26,6 +28,34 @@ export interface BuiltServer {
   server: McpServer;
   ctx: ToolContext;
   toolCount: number;
+}
+
+function auditInvocationMeta(args: unknown, risk: string): Record<string, unknown> {
+  if (!args || typeof args !== 'object' || Array.isArray(args)) {
+    return { risk, inputType: typeof args };
+  }
+  const input = args as Record<string, unknown>;
+  return {
+    risk,
+    inputKeys: Object.keys(input).sort(),
+    dryRun: typeof input.dryRun === 'boolean' ? input.dryRun : undefined,
+    confirmed: input.confirm === true,
+  };
+}
+
+function auditResultMeta(result: unknown): Record<string, unknown> {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) {
+    return { resultType: typeof result };
+  }
+  const value = result as Record<string, unknown>;
+  return {
+    ok: value.ok,
+    resultKeys: Object.keys(value).sort(),
+    dataKeys:
+      value.data && typeof value.data === 'object' && !Array.isArray(value.data)
+        ? Object.keys(value.data as Record<string, unknown>).sort()
+        : undefined,
+  };
 }
 
 export async function buildMcpServer(): Promise<BuiltServer> {
@@ -72,18 +102,43 @@ export async function buildMcpServer(): Promise<BuiltServer> {
         description: tool.description,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         inputSchema: (tool.inputSchema as any).shape ?? undefined,
-        annotations: {
+        outputSchema: ToolEnvelopeSchema.shape,
+        annotations: annotationsForRisk(tool.policy.risk, {
           title: tool.name,
-          readOnlyHint: !tool.mutating,
-          destructiveHint: tool.destructive ?? false,
-          idempotentHint: tool.idempotent ?? !tool.mutating,
-          openWorldHint: tool.openWorld ?? true,
-        },
+          idempotent: tool.policy.idempotent,
+          openWorld: tool.policy.openWorld,
+        }),
       },
       async (args: unknown) => {
         try {
+          const rawArgs = args ?? {};
+          const accountId =
+            rawArgs && typeof rawArgs === 'object' && 'accountId' in rawArgs
+              ? String((rawArgs as { accountId?: unknown }).accountId ?? '') || undefined
+              : undefined;
+          audit.record(
+            {
+              action: 'tool.invoked',
+              tool: tool.name,
+              accountId,
+              meta: auditInvocationMeta(rawArgs, tool.policy.risk),
+            },
+            { required: tool.policy.risk === 'REMOTE_WRITE' || tool.policy.risk === 'DESTRUCTIVE' },
+          );
           const parsed = tool.inputSchema.parse(args ?? {});
           const result = await tool.handler(parsed, ctx);
+          const failed = Boolean(
+            result &&
+              typeof result === 'object' &&
+              'ok' in result &&
+              (result as { ok?: boolean }).ok === false,
+          );
+          audit.record({
+            action: failed ? 'tool.failed' : 'tool.completed',
+            tool: tool.name,
+            accountId,
+            meta: auditResultMeta(result),
+          });
           const structuredContent: Record<string, unknown> | undefined =
             result && typeof result === 'object'
               ? Array.isArray(result)
@@ -93,13 +148,7 @@ export async function buildMcpServer(): Promise<BuiltServer> {
           return {
             content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
             ...(structuredContent ? { structuredContent } : {}),
-            isError:
-              Boolean(
-                result &&
-                  typeof result === 'object' &&
-                  'ok' in result &&
-                  (result as { ok?: boolean }).ok === false,
-              ),
+            isError: failed,
           };
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
@@ -109,14 +158,16 @@ export async function buildMcpServer(): Promise<BuiltServer> {
             tool: tool.name,
             error: message,
           });
+          const errorResult = { ok: false, errors: [message] };
           return {
             isError: true,
             content: [
               {
                 type: 'text' as const,
-                text: JSON.stringify({ ok: false, errors: [message] }, null, 2),
+                text: JSON.stringify(errorResult, null, 2),
               },
             ],
+            structuredContent: errorResult,
           };
         }
       },

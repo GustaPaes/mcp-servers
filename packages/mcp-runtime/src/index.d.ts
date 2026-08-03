@@ -1,3 +1,29 @@
+export const TOOL_RISK: Readonly<{
+  READ: "READ";
+  LOCAL_STATE: "LOCAL_STATE";
+  EXECUTION: "EXECUTION";
+  REMOTE_WRITE: "REMOTE_WRITE";
+  DESTRUCTIVE: "DESTRUCTIVE";
+  SECRET_READ: "SECRET_READ";
+}>;
+export type ToolRisk = (typeof TOOL_RISK)[keyof typeof TOOL_RISK];
+export type ToolAnnotations = {
+  title?: string;
+  readOnlyHint: boolean;
+  destructiveHint: boolean;
+  idempotentHint: boolean;
+  openWorldHint: boolean;
+};
+export function annotationsForRisk(
+  risk: ToolRisk,
+  options?: { idempotent?: boolean; openWorld?: boolean; title?: string },
+): ToolAnnotations;
+export function assertToolManifest<T>(options: {
+  definitions: readonly (T & { name: string })[];
+  handlers: Record<string, unknown>;
+  policies: Record<string, { risk: ToolRisk }>;
+  label?: string;
+}): readonly T[];
 export function assertSafeIdentifier(value: unknown, label?: string): string;
 export function resolveInside(root: string, ...segments: string[]): string;
 export function resolveInsideAny(

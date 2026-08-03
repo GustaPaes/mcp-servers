@@ -9,6 +9,7 @@ import {
 import {
   DATA_DIR,
   ONLINE_DIR,
+  BACKUPS_DIR,
   PDIS_DIR,
   GOALS_DIR,
   SNAPSHOTS_DIR,
@@ -17,6 +18,7 @@ import {
   EVIDENCE_LOG_PATH,
   ONLINE_STATE_PATH,
   ONLINE_APPROVED_CHANGES_PATH,
+  CAREER_MCP_BACKUP_RETENTION,
 } from "./config.js";
 
 const runStorageMutation = createSerialExecutor();
@@ -29,6 +31,7 @@ export async function ensureStorageReady() {
   await Promise.all([
     ensureDir(DATA_DIR),
     ensureDir(ONLINE_DIR),
+    ensureDir(BACKUPS_DIR),
     ensureDir(PDIS_DIR),
     ensureDir(GOALS_DIR),
     ensureDir(SNAPSHOTS_DIR),
@@ -46,7 +49,40 @@ async function readJsonFile(filePath, fallback) {
 }
 
 async function writeJsonFile(filePath, value) {
+  await backupExistingFile(filePath);
   await atomicWriteJson(filePath, value);
+}
+
+function backupDirectoryFor(filePath) {
+  const relative = path.relative(DATA_DIR, filePath);
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error("O arquivo de dados está fora de CAREER_MCP_DATA_DIR.");
+  }
+  return resolveInside(BACKUPS_DIR, path.dirname(relative));
+}
+
+async function backupExistingFile(filePath) {
+  let raw;
+  try {
+    raw = await fs.readFile(filePath, "utf8");
+  } catch (error) {
+    if (error && typeof error === "object" && error.code === "ENOENT") return;
+    throw error;
+  }
+
+  const backupDir = backupDirectoryFor(filePath);
+  await ensureDir(backupDir);
+  const baseName = path.basename(filePath, ".json");
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const backupPath = resolveInside(backupDir, `${baseName}.${stamp}.${process.pid}.json`);
+  await atomicWriteJson(backupPath, JSON.parse(raw));
+
+  const entries = (await fs.readdir(backupDir, { withFileTypes: true }))
+    .filter((entry) => entry.isFile() && entry.name.startsWith(`${baseName}.`) && entry.name.endsWith(".json"))
+    .map((entry) => entry.name)
+    .sort()
+    .reverse();
+  await Promise.all(entries.slice(CAREER_MCP_BACKUP_RETENTION).map((name) => fs.rm(resolveInside(backupDir, name), { force: true })));
 }
 
 function entityPath(root, id) {

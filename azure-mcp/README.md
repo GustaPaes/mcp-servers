@@ -12,7 +12,7 @@
 ## English overview
 
 - **Server**: `microsoft/mcp` → `Azure.Mcp.Server` (GA 1.0)
-- **Distribution**: NPM `@azure/mcp@3.0.0-beta.30` via `npx` (pinned for reproducibility)
+- **Distribution**: local NPM install of `@azure/mcp@3.0.0-beta.30`, locked by `package-lock.json`
 - **Single version source**: [`server-version.json`](./server-version.json), consumed by the launcher and validation/update scripts
 - **Auth**: `DefaultAzureCredential` — inherits the Azure CLI session you already have
 - **Multi-tenant / multi-subscription**: `scripts/switch-context.ps1`
@@ -30,7 +30,7 @@
   "mcp": {
     "azure-mcp": {
       "type": "local",
-      "command": ["powershell", "-NoProfile", "-File", "C:/Workspace/MCP Servers/azure-mcp/scripts/start-server.ps1"],
+      "command": ["powershell", "-NoProfile", "-File", "<repo-root>/azure-mcp/scripts/start-server.ps1"],
       "enabled": true
     }
   }
@@ -43,7 +43,7 @@
   "mcpServers": {
     "azure-mcp": {
       "command": "powershell",
-      "args": ["-NoProfile", "-File", "C:/Workspace/MCP Servers/azure-mcp/scripts/start-server.ps1"]
+      "args": ["-NoProfile", "-File", "<repo-root>/azure-mcp/scripts/start-server.ps1"]
     }
   }
 }
@@ -51,7 +51,7 @@
 
 ```bash
 # Claude Code (CLI)
-claude mcp add azure-mcp -- powershell -NoProfile -File "C:/Workspace/MCP Servers/azure-mcp/scripts/start-server.ps1"
+claude mcp add azure-mcp -- powershell -NoProfile -File "<repo-root>/azure-mcp/scripts/start-server.ps1"
 ```
 
 For Cursor / Cline / Codex CLI / Continue snippets, see the [root README](../README.md#%EF%B8%8F-install-in-your-mcp-client).
@@ -65,7 +65,7 @@ For Cursor / Cline / Codex CLI / Continue snippets, see the [root README](../REA
 | Item | Valor |
 |---|---|
 | Servidor | [`microsoft/mcp` → `servers/Azure.Mcp.Server`](https://github.com/microsoft/mcp/tree/main/servers/Azure.Mcp.Server) |
-| Distribuição usada | NPM `@azure/mcp@3.0.0-beta.30` via `npx` |
+| Distribuição usada | NPM `@azure/mcp@3.0.0-beta.30`, instalação local travada |
 | Status do produto | **GA 1.0** ([anúncio](https://aka.ms/azmcp/announcement/ga)) |
 | Mantenedor | Microsoft (Azure SDK Team) |
 | Licença | MIT |
@@ -106,37 +106,40 @@ Os dois MCP Servers vivem juntos no workspace e **se complementam**:
 
 ## Pré-requisitos
 
-Validados no ambiente atual:
+Requisitos reproduzíveis:
 
-- **Node.js** ≥ 20 LTS (instalado: `v20.18.0`)
-- **npm** ≥ 10 (instalado: `10.8.2`)
-- **Azure CLI** ≥ 2.70 (instalado: `2.85.0`)
+- **Node.js 22 LTS** (a versão recomendada está em [`.node-version`](./.node-version))
+- **npm** ≥ 10
+- **Azure CLI** ≥ 2.70
 - Sessão Azure ativa (`az login` realizado — perfil em `%USERPROFILE%\.azure\`)
 - **VS Code** + extensão **GitHub Copilot Chat** (modo Agent)
 
-Opcional (recomendado para performance):
-- `npm install -g @azure/mcp@3.0.0-beta.30` para evitar download via `npx` em cada start.
+O pacote oficial declara Node.js ≥ 22. Use o gerenciador de versões de sua
+preferência antes de executar `npm ci`.
 
 ---
 
 ## Instalação no workspace
 
-A instalação **já está feita** neste repositório:
+A instalação é local ao clone e não depende do cache global:
 
-1. Pasta dedicada: `C:\Workspace\MCP Servers\azure-mcp\`
-2. Registro em `C:\Workspace\.vscode\mcp.json` (server `azure-mcp`)
-3. Documentação, política de uso e scripts incluídos
+```powershell
+Set-Location "<repo-root>\azure-mcp"
+npm ci --workspaces=false
+npm test
+npm run verify
+```
 
-Se precisar reinstalar do zero, basta garantir o bloco no `mcp.json` do workspace:
+Depois, registre o launcher no arquivo MCP do cliente:
 
 ```json
 {
   "servers": {
     "azure-mcp": {
       "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "@azure/mcp@3.0.0-beta.30", "server", "start"],
-      "envFile": "C:\\Workspace\\MCP Servers\\azure-mcp\\.env"
+      "command": "powershell",
+      "args": ["-NoProfile", "-File", "<repo-root>/azure-mcp/scripts/start-server.ps1"],
+      "envFile": "<repo-root>/azure-mcp/.env"
     }
   }
 }
@@ -146,9 +149,9 @@ Se precisar reinstalar do zero, basta garantir o bloco no `mcp.json` do workspac
 
 ## Como o VS Code carrega o servidor
 
-1. VS Code lê `C:\Workspace\.vscode\mcp.json` ao abrir o workspace.
+1. O cliente lê seu arquivo de configuração MCP ao abrir o workspace.
 2. Para cada server `stdio`, faz spawn do `command + args`.
-3. O `azure-mcp` chama `npx -y @azure/mcp@3.0.0-beta.30 server start`, que baixa (na primeira vez) e inicia o servidor.
+3. `start-server.ps1` resolve `node_modules/.bin/azmcp` e inicia exatamente a versão do lockfile, sem rede no startup.
 4. As variáveis de `.env` (se existir) são injetadas no processo.
 5. As tools `azmcp_*` ficam disponíveis em **GitHub Copilot → Agent mode → 🛠 (refresh)**.
 
@@ -158,13 +161,13 @@ Se precisar reinstalar do zero, basta garantir o bloco no `mcp.json` do workspac
 
 ```powershell
 # Validar autenticação Azure + listar tools do MCP
-& "C:\Workspace\MCP Servers\azure-mcp\scripts\verify-auth.ps1"
+& ".\scripts\verify-auth.ps1"
 ```
 
 O script:
 - Roda `az account show` (confirma tenant/subscription ativos)
 - Lista as subscriptions disponíveis
-- Executa `npx -y @azure/mcp@3.0.0-beta.30 tools list` e mostra a contagem de tools carregadas
+- Executa a instalação local com `tools list` e mostra a contagem de tools carregadas
 
 ---
 
@@ -177,10 +180,10 @@ Você opera com **múltiplos tenants/subscriptions**. Para alternar contexto:
 az account list --output table
 
 # Trocar de subscription
-& "C:\Workspace\MCP Servers\azure-mcp\scripts\switch-context.ps1" -Subscription "MinhaSubProd"
+& ".\scripts\switch-context.ps1" -Subscription "ExampleSubscription"
 
 # Trocar de tenant (forca novo login no tenant alvo)
-& "C:\Workspace\MCP Servers\azure-mcp\scripts\switch-context.ps1" -Tenant "<tenant-guid>"
+& ".\scripts\switch-context.ps1" -Tenant "<tenant-guid>"
 ```
 
 > **Importante:** o `azure-mcp` usa `DefaultAzureCredential`, que herda o contexto da Azure CLI. Trocar com `az account set` reflete no MCP **na próxima chamada de tool** — não precisa reiniciar o server.
@@ -194,27 +197,31 @@ az account list --output table
 Resumo das regras críticas:
 
 1. Operações **destrutivas** (delete, purge) → confirmação textual explícita.
-2. Operações **mutativas** (update, create, deploy, scale) → mostrar plano + pedir OK.
-3. Detecção automática de **produção** (regex em nome/tag) → dupla confirmação.
-4. Sempre exibir **tenant + subscription** ativos antes de mutar recursos.
-5. Operações em **massa** → quebrar em batches confirmáveis.
+2. Execuções reversíveis explicitamente pedidas (por exemplo, `start`) não recebem confirmação duplicada.
+3. Alterações persistentes mostram prévia/diff e usam confirmação proporcional ao impacto.
+4. Detecção automática de **produção** eleva a proteção de disponibilidade.
+5. Reutilizar contexto confirmado por até 30 minutos e invalidá-lo após qualquer troca.
+6. Operações em **massa** → quebrar em batches confirmáveis.
 
 ---
 
 ## Atualização
 
 ```powershell
-& "C:\Workspace\MCP Servers\azure-mcp\scripts\update-server.ps1"
+& ".\scripts\update-server.ps1"
 ```
 
-Sem parâmetros, o script limpa apenas o cache relacionado e baixa novamente a
-versão validada em `server-version.json`. Use `-Pin "<versao>"` para testar
-outra versão sem alterar automaticamente o pin público.
+Sem parâmetros, o script executa `npm ci` e restaura a versão exata do lockfile.
+Ele nunca remove o cache compartilhado do npm/npx. Para promover um pin novo,
+use `-Pin "<versao>" -Promote`, revise todos os manifestos e atualize o snapshot
+de tools.
 
-> Para promover uma versão nova, teste com `update-server.ps1 -Pin "<versao>"`,
-> rode `verify-auth.ps1 -Version "<versao>"` e então altere
-> `server-version.json`. Todos os clientes que usam `start-server.ps1` passam a
-> consumir o mesmo pin.
+> Após promover, rode `npm run verify:tools` e revise `tool-inventory.json`.
+> Todos os clientes que usam `start-server.ps1` consomem o mesmo pin local.
+
+`tool-inventory.json` fixa a contagem, os comandos essenciais e a distribuição
+de metadados de risco da versão aprovada. Uma divergência exige revisão explícita,
+mesmo quando o nome do pacote não mudou.
 
 ---
 
@@ -243,7 +250,7 @@ publicados.
 Exemplo de uso manual:
 
 ```powershell
-& "C:\Workspace\MCP Servers\azure-mcp\scripts\vm-power.ps1" `
+& ".\scripts\vm-power.ps1" `
   -Action Deallocate `
   -Subscription "<sub-id>" `
   -ResourceGroup "<rg>" `
@@ -253,7 +260,7 @@ Exemplo de uso manual:
 Exemplo de agendamento:
 
 ```powershell
-& "C:\Workspace\MCP Servers\azure-mcp\scripts\register-vm-schedule.ps1" `
+& ".\scripts\register-vm-schedule.ps1" `
   -Subscription "<sub-id>" `
   -ResourceGroup "<rg>" `
   -Name "<vm>" `
@@ -281,15 +288,15 @@ npm config set https-proxy http://<proxy>:<porta>
 ### Erro TLS / certificado corporativo
 Adicione o cert da empresa ao truststore do Node:
 ```powershell
-$env:NODE_EXTRA_CA_CERTS = "C:\caminho\para\corp-ca.pem"
+$env:NODE_EXTRA_CA_CERTS = "<certificate-path>"
 ```
 
-### npx lento no startup
-Instale globalmente para eliminar o download em cada start:
+### Dependência local ausente
+Restaure a instalação exata:
 ```powershell
-npm install -g @azure/mcp@3.0.0-beta.30
+npm ci --workspaces=false
+npm run verify
 ```
-E altere `mcp.json` para `"command": "azmcp"`, `"args": ["server", "start"]`.
 
 ### Logs do server
 - Windows: `%LOCALAPPDATA%\azmcp\logs\`

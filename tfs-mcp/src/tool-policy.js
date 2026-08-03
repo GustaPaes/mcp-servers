@@ -1,0 +1,44 @@
+import { TOOL_RISK } from "@gustapaes/mcp-runtime";
+
+const READ = (overrides = {}) => ({ risk: TOOL_RISK.READ, idempotent: true, openWorld: true, ...overrides });
+const WRITE = (overrides = {}) => ({ risk: TOOL_RISK.REMOTE_WRITE, idempotent: true, openWorld: true, ...overrides });
+
+export const TOOL_POLICY = Object.freeze({
+  tfs_doctor: READ(),
+  tfs_saved_queries: READ(),
+  tfs_analyze_work_item: READ(),
+  tfs_work_item_context: READ(),
+  tfs_specialist_review: READ(),
+  tfs_prepare_refinement: READ(),
+  tfs_work_item: READ(),
+  tfs_generate_activity_template: READ(),
+  tfs_generate_activity_template_from_items: READ(),
+  tfs_query_work_items: READ(),
+  tfs_list_prs: READ(),
+  tfs_prepare_pr_review: READ(),
+  tfs_release_readiness: READ(),
+  tfs_team_focus_report: READ(),
+  tfs_work_item_handoff: READ(),
+  tfs_delivery_risk_report: READ(),
+  tfs_get_pr: READ(),
+  tfs_review_pr: READ(),
+  tfs_pipeline_status: READ(),
+  tfs_wiki: READ(),
+  tfs_sprint_info: READ(),
+  tfs_list_repos: READ(),
+  tfs_build_artifact_inventory: READ(),
+  tfs_compare_build_artifacts: READ(),
+  tfs_work_item_create: WRITE({ idempotent: false }),
+  tfs_create_pr: WRITE({ idempotent: false }),
+  tfs_update_pr: WRITE({ risk: TOOL_RISK.DESTRUCTIVE }),
+  tfs_pipeline_upsert: WRITE({ risk: TOOL_RISK.DESTRUCTIVE }),
+  tfs_update_work_item: WRITE({ risk: TOOL_RISK.DESTRUCTIVE }),
+  tfs_update_issue_analysis: WRITE({ risk: TOOL_RISK.DESTRUCTIVE }),
+  tfs_add_pr_comment: WRITE({ idempotent: false }),
+  tfs_comment_review_findings: WRITE({ idempotent: false }),
+  tfs_pipeline_queue: {
+    risk: TOOL_RISK.EXECUTION,
+    idempotent: false,
+    openWorld: true,
+  },
+});

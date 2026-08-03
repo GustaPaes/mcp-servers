@@ -1,6 +1,15 @@
 import { z } from "zod";
 import { goalSchema, milestoneSchema } from "../models/goal.js";
-import { safeIdSchema } from "../models/common.js";
+import {
+  dateTextSchema,
+  idListSchema,
+  optionalLongTextSchema,
+  paginate,
+  paginationSchema,
+  shortTextListSchema,
+  shortTextSchema,
+  safeIdSchema,
+} from "../models/common.js";
 import { getGoal, listGoals, saveGoal, getPdi, savePdi, loadEvidenceLog, withStorageMutation } from "../storage.js";
 import { analyzeSmartGoal } from "../frameworks/smart-goals.js";
 import { projectGoalStatus } from "../analytics/progress-tracker.js";
@@ -33,37 +42,38 @@ function toSummary(goal) {
 }
 
 export async function toolGoalList(args) {
-  const { pdiId, status, category } = z.object({
-    pdiId: z.string().optional(),
-    status: z.string().optional(),
-    category: z.string().optional(),
-  }).parse(args);
+  const { pdiId, status, category, offset, limit } = paginationSchema.extend({
+    pdiId: safeIdSchema.optional(),
+    status: shortTextSchema.optional(),
+    category: shortTextSchema.optional(),
+  }).strict().parse(args);
   const goals = await listGoals();
-  return goals
+  const items = goals
     .filter((goal) => !pdiId || goal.pdiId === pdiId)
     .filter((goal) => !status || goal.status === status)
     .filter((goal) => !category || goal.category === category)
     .map(toSummary);
+  return paginate(items, { offset, limit });
 }
 
 export async function toolGoalCreate(args) {
   const input = z.object({
     pdiId: safeIdSchema,
-    title: z.string().min(1),
+    title: shortTextSchema,
     category: z.enum(["technical", "leadership", "soft_skill", "business", "quality"]),
     weight: z.number().min(0).max(100),
-    dueDate: z.string().nullable().default(null),
-    linkedCompetencies: z.array(z.string()).default([]),
+    dueDate: dateTextSchema.nullable().default(null),
+    linkedCompetencies: idListSchema.default([]),
     smart: z.object({
-      specific: z.string().default(""),
-      measurable: z.string().default(""),
-      achievable: z.string().default(""),
-      relevant: z.string().default(""),
-      timeBound: z.string().default(""),
-    }),
-    milestones: z.array(milestoneSchema).default([]),
-    notes: z.array(z.string()).default([]),
-  }).parse(args);
+      specific: optionalLongTextSchema.default(""),
+      measurable: optionalLongTextSchema.default(""),
+      achievable: optionalLongTextSchema.default(""),
+      relevant: optionalLongTextSchema.default(""),
+      timeBound: optionalLongTextSchema.default(""),
+    }).strict(),
+    milestones: z.array(milestoneSchema).max(100).default([]),
+    notes: shortTextListSchema.default([]),
+  }).strict().parse(args);
 
   return withStorageMutation(async () => {
     const pdi = await getPdi(input.pdiId);
@@ -83,6 +93,7 @@ export async function toolGoalCreate(args) {
       smart: input.smart,
       milestones: input.milestones,
       notes: input.notes,
+      revision: 1,
       createdAt: timestamp,
       updatedAt: timestamp,
     });
@@ -95,24 +106,29 @@ export async function toolGoalCreate(args) {
 export async function toolGoalUpdate(args) {
   const input = z.object({
     id: safeIdSchema,
-    title: z.string().optional(),
+    expectedRevision: z.number().int().min(1).optional(),
+    title: shortTextSchema.optional(),
     progress: z.number().min(0).max(100).optional(),
     status: z.enum(["not_started", "in_progress", "completed", "blocked", "cancelled"]).optional(),
-    dueDate: z.string().nullable().optional(),
-    milestones: z.array(milestoneSchema).optional(),
-    notes: z.array(z.string()).optional(),
+    dueDate: dateTextSchema.nullable().optional(),
+    milestones: z.array(milestoneSchema).max(100).optional(),
+    notes: shortTextListSchema.optional(),
     smart: z.object({
-      specific: z.string().default(""),
-      measurable: z.string().default(""),
-      achievable: z.string().default(""),
-      relevant: z.string().default(""),
-      timeBound: z.string().default(""),
-    }).optional(),
-  }).parse(args);
+      specific: optionalLongTextSchema.default(""),
+      measurable: optionalLongTextSchema.default(""),
+      achievable: optionalLongTextSchema.default(""),
+      relevant: optionalLongTextSchema.default(""),
+      timeBound: optionalLongTextSchema.default(""),
+    }).strict().optional(),
+  }).strict().parse(args);
 
   return withStorageMutation(async () => {
     const current = await getGoal(input.id);
     if (!current) throw new Error(`Meta nao encontrada: ${input.id}`);
+    const currentRevision = current.revision ?? 1;
+    if (input.expectedRevision !== undefined && input.expectedRevision !== currentRevision) {
+      throw new Error(`Conflito de revisão da meta ${input.id}: esperado ${input.expectedRevision}, atual ${currentRevision}. Recarregue o registro antes de atualizar.`);
+    }
     const updated = goalSchema.parse({
       ...current,
       ...(input.title ? { title: input.title } : {}),
@@ -122,6 +138,7 @@ export async function toolGoalUpdate(args) {
       ...(input.milestones ? { milestones: input.milestones } : {}),
       ...(input.notes ? { notes: input.notes } : {}),
       ...(input.smart ? { smart: input.smart } : {}),
+      revision: currentRevision + 1,
       updatedAt: nowIso(),
     });
     await saveGoal(updated);
@@ -130,7 +147,7 @@ export async function toolGoalUpdate(args) {
 }
 
 export async function toolGoalAnalyze(args) {
-  const { id } = z.object({ id: safeIdSchema }).parse(args);
+  const { id } = z.object({ id: safeIdSchema }).strict().parse(args);
   const goal = await getGoal(id);
   if (!goal) throw new Error(`Meta nao encontrada: ${id}`);
   return {
@@ -140,7 +157,7 @@ export async function toolGoalAnalyze(args) {
 }
 
 export async function toolGoalProgress(args) {
-  const { id } = z.object({ id: safeIdSchema }).parse(args);
+  const { id } = z.object({ id: safeIdSchema }).strict().parse(args);
   const [goal, evidenceLog] = await Promise.all([getGoal(id), loadEvidenceLog()]);
   if (!goal) throw new Error(`Meta nao encontrada: ${id}`);
   const evidenceCount = evidenceLog.evidences.filter((evidence) => evidence.linkedGoalIds.includes(id)).length;

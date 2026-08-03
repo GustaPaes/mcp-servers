@@ -16,16 +16,16 @@
 .EXAMPLE
     .\register-vm-schedule.ps1 `
       -Subscription <sub-id> `
-      -ResourceGroup BuildPullRequest01 `
-      -Name BuildPullRequest01 `
+      -ResourceGroup ExampleGroup `
+      -Name example-vm `
       -StartTimeLocal 08:00 `
       -ShutdownTimeUtc 2100
 
 .EXAMPLE
     .\register-vm-schedule.ps1 `
       -Subscription <sub-id> `
-      -ResourceGroup BuildPullRequest01 `
-      -Name BuildPullRequest01 `
+      -ResourceGroup ExampleGroup `
+      -Name example-vm `
       -StartTimeLocal 08:30 `
       -ShutdownTimeUtc 2130 `
       -StartDays Monday,Tuesday,Wednesday,Thursday,Friday

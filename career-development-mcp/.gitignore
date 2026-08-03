@@ -14,6 +14,7 @@ logs/
 # Local data store (state file with PDIs/goals/evidences)
 data/
 !data/.gitkeep
+local-private/
 
 # Captured external career platform browser session
 browser/state/

@@ -9,7 +9,6 @@ export const listAdAccountsTool = defineTool({
     'Lista todas as contas de anúncio configuradas no servidor. Retorna apenas dados não sensíveis (jamais tokens).',
   inputSchema: z.object({}).strict(),
   async handler(_input, ctx) {
-    ctx.audit.record({ action: 'tool.invoked', tool: 'list_ad_accounts' });
     const accounts = ctx.accounts.list().map((a) => ({
       id: a.id,
       name: a.name,
@@ -33,7 +32,6 @@ export const getAccountProfileTool = defineTool({
     'Retorna o perfil estratégico da conta: nicho, persona, objetivos, restrições, limites de orçamento e eventos prioritários.',
   inputSchema: z.object({ accountId: z.string() }).strict(),
   async handler(input, ctx) {
-    ctx.audit.record({ action: 'tool.invoked', tool: 'get_account_profile', accountId: input.accountId });
     try {
       const a = ctx.accounts.get(input.accountId);
       const { tokenEnvVar: ignoredTokenEnvVar, ...safe } = a;

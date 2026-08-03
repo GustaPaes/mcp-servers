@@ -28,17 +28,20 @@ export const MCP_HTTP_HOST = firstNonEmpty(process.env.MCP_HTTP_HOST, "127.0.0.1
 export const MCP_HTTP_BODY_LIMIT_BYTES = positiveInteger(
   process.env.MCP_HTTP_BODY_LIMIT_BYTES,
   1_048_576,
-  "MCP_HTTP_BODY_LIMIT_BYTES"
+  "MCP_HTTP_BODY_LIMIT_BYTES",
+  10_485_760
 );
 export const MCP_HTTP_SESSION_TTL_MS = positiveInteger(
   process.env.MCP_HTTP_SESSION_TTL_MS,
   30 * 60_000,
-  "MCP_HTTP_SESSION_TTL_MS"
+  "MCP_HTTP_SESSION_TTL_MS",
+  86_400_000
 );
 export const MCP_HTTP_MAX_SESSIONS = positiveInteger(
   process.env.MCP_HTTP_MAX_SESSIONS,
   50,
-  "MCP_HTTP_MAX_SESSIONS"
+  "MCP_HTTP_MAX_SESSIONS",
+  1_000
 );
 export const ROOT_DIR = path.join(__dirname, "..");
 const configuredDataDir = firstNonEmpty(process.env.CAREER_MCP_DATA_DIR);
@@ -53,7 +56,26 @@ export const CAREER_MCP_IMPORT_ROOTS = firstNonEmpty(
   .map((entry) => entry.trim())
   .filter(Boolean)
   .map((entry) => path.resolve(ROOT_DIR, entry));
+export const CAREER_MCP_IMPORT_MAX_BYTES = positiveInteger(
+  process.env.CAREER_MCP_IMPORT_MAX_BYTES,
+  1_048_576,
+  "CAREER_MCP_IMPORT_MAX_BYTES",
+  10_485_760
+);
+export const CAREER_MCP_BACKUP_RETENTION = positiveInteger(
+  process.env.CAREER_MCP_BACKUP_RETENTION,
+  20,
+  "CAREER_MCP_BACKUP_RETENTION",
+  500
+);
+export const CAREER_MCP_TFS_TIMEOUT_MS = positiveInteger(
+  process.env.CAREER_MCP_TFS_TIMEOUT_MS,
+  30_000,
+  "CAREER_MCP_TFS_TIMEOUT_MS",
+  120_000
+);
 export const ONLINE_DIR = path.join(DATA_DIR, "online");
+export const BACKUPS_DIR = path.join(DATA_DIR, "backups");
 export const PDIS_DIR = path.join(DATA_DIR, "pdis");
 export const GOALS_DIR = path.join(DATA_DIR, "goals");
 export const SNAPSHOTS_DIR = path.join(DATA_DIR, "snapshots");

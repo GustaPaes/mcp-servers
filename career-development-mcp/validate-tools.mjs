@@ -186,6 +186,24 @@ async function main() {
       if (!available.has(toolName)) throw new Error(`Tool obrigatoria ausente: ${toolName}`);
     }
 
+    const agentInstructions = await fs.readFile(path.join(process.cwd(), "AGENTS.md"), "utf8");
+    const undocumentedTools = tools.tools
+      .map((tool) => tool.name)
+      .filter((toolName) => !agentInstructions.includes(`\`${toolName}\``));
+    if (undocumentedTools.length > 0) {
+      throw new Error(`Tools ausentes do AGENTS.md: ${undocumentedTools.join(", ")}`);
+    }
+    for (const tool of tools.tools) {
+      if (tool.inputSchema?.additionalProperties !== false) {
+        throw new Error(`Tool sem rejeicao explicita de campos desconhecidos: ${tool.name}`);
+      }
+      for (const annotation of ["readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"]) {
+        if (typeof tool.annotations?.[annotation] !== "boolean") {
+          throw new Error(`Annotation ${annotation} ausente em ${tool.name}`);
+        }
+      }
+    }
+
     const pdis = await client.callTool({ name: "guide_pdi_list", arguments: {} });
     const firstPdi = pdis.structuredContent?.items?.[0] ?? pdis.structuredContent?.[0];
     if (!firstPdi?.id) throw new Error("Nenhum PDI inicial encontrado para validacao.");

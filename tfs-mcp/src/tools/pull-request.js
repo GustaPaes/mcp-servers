@@ -2,7 +2,7 @@
  * tools/pull-request.js — PR tools: list, get, review, add comment, prepare PR review.
  */
 import { z } from "zod";
-import { tfsGet, tfsPost, tfsPatch, buildHeaders } from "../tfs-client.js";
+import { tfsGet, tfsGetAbsoluteText, tfsPost, tfsPatch } from "../tfs-client.js";
 import {
   buildProjectUrl,
   getConfiguredRepositories,
@@ -257,9 +257,7 @@ async function fetchFileContentAtBranch(repository, branchName, filePath) {
     `/_apis/git/repositories/${repository}/items?path=${encodeURIComponent(filePath)}` +
     `&versionDescriptor.versionType=branch&versionDescriptor.version=${encodeURIComponent(branchName)}` +
     `&api-version=7.0&$format=text`;
-  const res = await fetch(url, { headers: buildHeaders() });
-  if (!res.ok) return "";
-  return await res.text();
+  return tfsGetAbsoluteText(url).catch(() => "");
 }
 
 function getLineNumber(content, regex) {
@@ -436,7 +434,7 @@ function buildPortuguesePRDescription({ resumo, alteracoes, validacoes, work_ite
 }
 
 function parsePortuguesePRInput(args, { includeBranches }) {
-  const schema = z.object({
+  const schema = z.strictObject({
     ...(includeBranches
       ? {
           source_branch: z.string().min(1),
@@ -551,7 +549,7 @@ export async function toolListPRs(args) {
     target_branch,
     top = 10,
   } = z
-    .object({
+    .strictObject({
       repo: z.string().optional(),
       status: z.enum(["active", "completed", "abandoned", "all"]).default("active"),
       created_by: z.string().optional(),
@@ -584,7 +582,9 @@ export async function toolListPRs(args) {
 }
 
 export async function toolGetPR(args) {
-  const { id, repo } = z.object({ id: z.union([z.number(), z.string()]), repo: z.string().optional() }).parse(args);
+  const { id, repo } = z
+    .strictObject({ id: z.union([z.number(), z.string()]), repo: z.string().optional() })
+    .parse(args);
   const { pr } = await resolvePullRequestTarget(id, repo);
   return formatPR(pr);
 }
@@ -597,7 +597,7 @@ export async function toolReviewPR(args) {
     include_threads = true,
     run_pattern_checks = true,
   } = z
-    .object({
+    .strictObject({
       id: z.union([z.number(), z.string()]),
       repo: z.string().optional(),
       include_diff: z.boolean().default(true),
@@ -639,11 +639,7 @@ export async function toolReviewPR(args) {
           try {
             const encPath = encodeURIComponent(cf.path);
             const url = `${buildProjectUrl()}/_apis/git/repositories/${repository}/items?path=${encPath}&versionDescriptor.versionType=branch&versionDescriptor.version=${encodeURIComponent(sourceBranch)}&api-version=7.0&$format=text`;
-            const res = await fetch(url, {
-              headers: buildHeaders(),
-            });
-            if (!res.ok) return null;
-            const text = await res.text();
+            const text = await tfsGetAbsoluteText(url);
             return { path: cf.path, content: text };
           } catch {
             return null;
@@ -697,7 +693,7 @@ export async function toolReviewPR(args) {
 
 export async function toolAddPRComment(args) {
   const { id, repo, comment, file_path, line, dry_run, confirm, reason, requestedBy, requested_by, confirm_high_impact } = z
-    .object({
+    .strictObject({
       id: z.union([z.number(), z.string()]),
       repo: z.string().optional(),
       comment: z.string().min(1),
@@ -790,7 +786,7 @@ export async function toolCommentReviewFindings(args) {
     requested_by,
     confirm_high_impact,
   } = z
-    .object({
+    .strictObject({
       id: z.union([z.number(), z.string()]),
       repo: z.string().optional(),
       dry_run: z.boolean().default(true),
@@ -924,7 +920,7 @@ function buildPRReviewChecklist({ pr, workItems, changedFiles, fileSummary, crit
 
 export async function toolPreparePRReview(args) {
   const { id, repo, include_code_review = true, include_pipeline = true } = z
-    .object({
+    .strictObject({
       id: z.union([z.number(), z.string()]),
       repo: z.string().optional(),
       include_code_review: z.boolean().default(true),

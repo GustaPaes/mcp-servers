@@ -23,9 +23,11 @@ const FORBIDDEN_PATTERNS: ReadonlyArray<RegExp> = [
 ];
 const STRICT_FORBIDDEN_PATTERNS: ReadonlyArray<RegExp> = [
   /\bdocument\s*\.\s*cookie\b/i,
+  /\bdocument\s*\[\s*['"`]cookie['"`]\s*\]/i,
   /\blocalStorage\b/i,
   /\bsessionStorage\b/i,
   /\bindexedDB\b/i,
+  /\b(?:window|globalThis|self)\s*\[\s*['"`](?:localStorage|sessionStorage|indexedDB)['"`]\s*\]/i,
 ];
 
 export interface SafeEvalCheck {
@@ -61,6 +63,12 @@ export function checkSafeEval(source: string): SafeEvalCheck {
 }
 
 export const evalTimeoutMs = (): number => config.evalTimeoutMs;
+
+export function assertEvalEnabled(): void {
+  if (!config.allowEval) {
+    throw new Error("page evaluation is disabled by default; set PWMCP_ALLOW_EVAL=true only for a trusted local client");
+  }
+}
 
 /** Race a promise against a timeout, rejecting if the timeout wins. */
 export function withTimeout<T>(p: Promise<T>, ms: number, label = "operation"): Promise<T> {

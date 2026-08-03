@@ -20,7 +20,7 @@ Administrative web panel for `meta-ads-mcp`. It is intentionally **MCP-first**: 
 - MCP server built and running in HTTP mode:
 
 ```powershell
-cd "C:\Workspace\MCP Servers\meta-ads-mcp"
+cd "<repo-root>/meta-ads-mcp"
 npm run build
 $env:MCP_TRANSPORT="http"
 $env:MCP_HTTP_BEARER_TOKENS="dev-panel-token"
@@ -30,7 +30,7 @@ npm start
 ## Configure
 
 ```powershell
-cd "C:\Workspace\MCP Servers\meta-ads-mcp\web-panel"
+cd "<repo-root>/meta-ads-mcp/web-panel"
 copy .env.example .env.local
 ```
 

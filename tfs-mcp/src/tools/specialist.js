@@ -7,7 +7,7 @@ import { formatWorkItem } from "../formatters.js";
 import { fetchWorkItemById } from "./work-item.js";
 import { toolReviewPR } from "./pull-request.js";
 
-const SpecialistReviewArgs = z.object({
+const SpecialistReviewArgs = z.strictObject({
   work_item_id: z.union([z.number(), z.string()]).optional(),
   pr_id: z.union([z.number(), z.string()]).optional(),
   repo: z.string().optional(),

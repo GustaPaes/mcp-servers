@@ -54,7 +54,7 @@ Motivo:
 ## Uso manual
 
 ```powershell
-& "C:\Workspace\MCP Servers\azure-mcp\scripts\vm-power.ps1" `
+& ".\scripts\vm-power.ps1" `
   -Action Status `
   -Subscription "<sub-id>" `
   -ResourceGroup "<rg>" `
@@ -62,7 +62,7 @@ Motivo:
 ```
 
 ```powershell
-& "C:\Workspace\MCP Servers\azure-mcp\scripts\vm-power.ps1" `
+& ".\scripts\vm-power.ps1" `
   -Action Start `
   -Subscription "<sub-id>" `
   -ResourceGroup "<rg>" `
@@ -70,7 +70,7 @@ Motivo:
 ```
 
 ```powershell
-& "C:\Workspace\MCP Servers\azure-mcp\scripts\vm-power.ps1" `
+& ".\scripts\vm-power.ps1" `
   -Action Deallocate `
   -Subscription "<sub-id>" `
   -ResourceGroup "<rg>" `
@@ -80,7 +80,7 @@ Motivo:
 ## Uso agendado
 
 ```powershell
-& "C:\Workspace\MCP Servers\azure-mcp\scripts\register-vm-schedule.ps1" `
+& ".\scripts\register-vm-schedule.ps1" `
   -Subscription "<sub-id>" `
   -ResourceGroup "<rg>" `
   -Name "<vm>" `
