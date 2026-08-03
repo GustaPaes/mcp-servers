@@ -32,15 +32,16 @@ export class AccountRegistry {
       raw = readFileSync(filePath, 'utf8');
     } catch (err) {
       throw new Error(
-        `Cannot read accounts config at "${filePath}". ` +
-          `Copy config/accounts.example.json to that location. Cause: ${(err as Error).message}`,
+        'Cannot read accounts config. Verify ACCOUNTS_CONFIG_PATH and copy ' +
+          'config/accounts.example.json to the configured location.',
+        { cause: err },
       );
     }
     let parsedJson: unknown;
     try {
       parsedJson = JSON.parse(raw);
     } catch (err) {
-      throw new Error(`Invalid JSON in accounts config: ${(err as Error).message}`);
+      throw new Error('Invalid JSON in accounts config.', { cause: err });
     }
     const parsed = AccountsFileSchema.safeParse(parsedJson);
     if (!parsed.success) {
