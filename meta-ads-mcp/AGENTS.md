@@ -11,7 +11,10 @@ This MCP operates **real ad accounts with real money**. Treat every 🟡/🔴 to
 
 ## Tool safety classification
 
-Each tool is tagged 🟢 READ / 🟡 WRITE / 🔴 DESTRUCTIVE. Match the user's intent against this list and confirm before invoking 🟡/🔴.
+Every tool is classified by the runtime manifest as `READ`, `LOCAL_STATE`,
+`REMOTE_WRITE`, `DESTRUCTIVE` or `SECRET_READ`. Match the user's intent to the
+manifest. `LOCAL_STATE` requires clear user intent but no redundant approval;
+`REMOTE_WRITE` and `DESTRUCTIVE` must satisfy their server-enforced guards.
 
 ### 🟢 READ (no side effects on Meta)
 
@@ -96,7 +99,7 @@ Confirm or escalate when:
 
 > **About to:** publish campaign **"Black Friday — Conversions"** in account **`acme-fashion`** (`act_123456789`) with daily budget **R$ 200**, objective **OUTCOME_SALES**, status **PAUSED** (will require a second call to activate).
 >
-> **Side effect:** creates the campaign object in Meta. No spend will happen until you call `pause_campaign` with status=ACTIVE… (which v0.1 does NOT expose — activate in Ads Manager).
+> **Side effect:** creates the campaign object in Meta with status `PAUSED`. This server does not expose activation; review and activate it separately in Meta Ads Manager.
 >
 > **Limits checked:** R$ 200/day ≤ account cap R$ 250/day ≤ global cap R$ 500/day ✅.
 >
@@ -120,9 +123,20 @@ For **dry-run**, prefer:
 
 ## Logging & privacy
 
+- Every invocation, completion and rejection is audited centrally; domain events add before/after details where applicable.
+- A remote mutation is blocked before contacting Meta when its mandatory invocation audit cannot be persisted.
+
 - The MCP writes structured logs to stderr and an **append-only JSONL audit log** to `AUDIT_LOG_PATH`. Audit entries pass through `redactSecrets` — tokens are masked.
 - Drafts in storage may contain ad copy and targeting. Treat the storage file as sensitive.
 - HTTP transport without `MCP_HTTP_BEARER_TOKENS` is ONLY safe on `127.0.0.1`. The server logs a warning if you bind to a non-local host without auth.
+
+## Contract and storage discipline
+
+- Add every tool to the explicit policy manifest. Startup and contract tests must fail when a definition, handler or policy is missing or duplicated.
+- Derive MCP annotations from the canonical risk class; never maintain annotations as an independent list.
+- Return the shared strict `{ ok, data, warnings, errors, meta }` envelope and expose its `outputSchema`.
+- Change drafts only through `storage.update()`. It serializes read-modify-write, persists a monotonic revision and prevents lost updates.
+- Bound inputs, page sizes, network timeouts, HTTP bodies, session counts and session TTLs. A new unbounded field requires a documented reason and a focused test.
 
 ## Public/private boundary
 

@@ -7,28 +7,72 @@
 
 ## Tool safety classification
 
-Each tool below is tagged 🟢 READ / 🟡 WRITE / 🔴 DESTRUCTIVE. Match the user's intent against this list and confirm before invoking 🟡/🔴 in production-adjacent contexts.
+[`src/tool-policy.ts`](./src/tool-policy.ts) is the executable source of truth.
+The server refuses to start when a definition, handler or risk policy is missing,
+and contract tests verify annotations and schemas. Do not maintain a second
+ad-hoc classification in code.
 
-### 🟢 READ (no side effects on remote systems)
-`browser_list`, `page_list`, `page_console_messages`, `page_text_content`, `page_inner_text`, `page_inner_html`, `page_get_attribute`, `page_query_selector_all`, `page_accessibility_snapshot`, `page_get_url`, `page_get_title`, `page_get_cookies`, `page_screenshot`, `page_pdf`, `mcp_status`.
+### READ
 
-(Note: these still cost local CPU/RAM and may write artifacts to `./output/`.)
+`browser_list`, `page_list`, `page_wait_for_url`, `page_wait_for_selector`,
+`page_wait_for_load_state`, `page_console_messages`, `page_text_content`,
+`page_inner_text`, `page_inner_html`, `page_get_attribute`,
+`page_query_selector_all`, `page_accessibility_snapshot`, `page_get_url`,
+`page_get_title`, `context_recording_status`, `page_video_start`,
+`network_log_status`, `network_log_start` (deprecated status alias), `mcp_status`.
 
-### 🟡 WRITE (state changes — local sessions or remote sites)
-`browser_launch`, `context_new`, `context_storage_state`, `page_new`, `page_goto`, `page_reload`, `page_back`, `page_forward`, `page_wait_*`, `page_click`, `page_dblclick`, `page_hover`, `page_focus`, `page_blur`, `page_fill`, `page_type`, `page_press`, `page_select_option`, `page_check`, `page_uncheck`, `page_set_checked`, `page_drag_and_drop`, `page_set_input_files`, `page_evaluate`, `page_eval_in_frame`, `page_handle_dialog`, `page_route`, `page_unroute`, `page_wait_for_request`, `page_wait_for_response`, `network_log_start`, `tracing_start`, `tracing_stop`, `page_video_start`, `page_video_stop`, `browser_stealth`, `browser_install`.
+### SECRET_READ
 
-These can submit forms, place orders, change settings on the target site. They CAN have real-world consequences. Always confirm intent.
+`page_get_cookies`, `page_wait_for_request`, `page_wait_for_response`.
 
-### 🔴 DESTRUCTIVE (closes / discards in-memory state)
-`browser_close`, `context_close`, `page_close`, `network_log_stop` (when `close_context=true`).
+Values remain redacted unless both the runtime opt-in and the user's current,
+specific intent allow disclosure. Never infer permission from a previous call.
+
+### LOCAL_STATE
+
+`browser_launch`, `context_new`, `context_storage_state`, `browser_install`,
+`page_new`, `page_screenshot`, `page_pdf`, `tracing_start`, `tracing_stop`,
+`page_unroute`, `browser_stealth`.
+
+These change only the local host/session by design. Routine session and artifact
+operations do not need confirmation when explicitly requested. `browser_install`
+still requires `PWMCP_ALLOW_BROWSER_INSTALL=true` because it changes the host.
+
+### EXECUTION
+
+`page_goto`, `page_reload`, `page_back`, `page_forward`, `page_hover`,
+`page_focus`, `page_blur`, `page_fill`, `page_type`, `page_select_option`,
+`page_check`, `page_uncheck`, `page_set_checked`, `page_evaluate`,
+`page_eval_in_frame`, `page_handle_dialog`, `page_route`.
+
+Execution does not automatically require a confirmation. Confirm only when the
+actual target/action can create an external consequence. Evaluation tools are
+disabled by default and require `PWMCP_ALLOW_EVAL=true` for a trusted client.
+
+### REMOTE_WRITE
+
+`page_click`, `page_dblclick`, `page_press`, `page_drag_and_drop`,
+`page_set_input_files`.
+
+An ordinary, explicitly requested UI action may run directly. Immediately before
+payment, submission, publication, deletion, permission/settings changes or other
+consequential actions, show the exact page, selector/control and expected effect.
+
+### DESTRUCTIVE
+
+`browser_close`, `context_close`, `page_close`, `page_video_stop`,
+`network_log_stop`.
+
+These discard local runtime state. Confirm only when unsaved session state or an
+unfinished artifact could be lost; they do not inherently mutate the remote site.
 
 ## Default-deny patterns
 
 The LLM should refuse — or escalate — when:
 
 1. The user asks to **target a financial / banking / government** portal AND the request includes form submissions or transfers without an explicit user confirmation in the same turn.
-2. The user requests `page_evaluate` with code that touches `localStorage`, `sessionStorage`, `IndexedDB`, or `document.cookie` for a third-party origin without explanation.
-3. The user requests `page_set_input_files` pointing at files **outside the workspace**.
+2. The user requests evaluation while `PWMCP_ALLOW_EVAL` is disabled, or code touches browser credential stores.
+3. The user requests `page_set_input_files` outside `PWMCP_ALLOWED_FILE_ROOTS`, which defaults to `local-private/uploads/`, or targets a secret-like file.
 4. The user requests a `page_goto` to `file://`, `chrome://`, `about:` or `view-source:` URLs (these are blocked when `PWMCP_STRICT=true`).
 5. The user wants to scrape a site whose ToS visibly forbids automation (the LLM should warn, not silently comply).
 
@@ -48,7 +92,9 @@ For **dry-run**, prefer:
 - Always pair a `browser_launch` with an eventual `browser_close`. Idle TTL (`PWMCP_SESSION_TTL_MINUTES`) is a backstop, not a strategy.
 - For batch work, prefer **one session, multiple contexts** (`context_new`) over many sessions.
 - HAR / video / tracing files grow fast — sweep `./output/` periodically.
+- Respect per-file and total quotas. An artifact exceeding the configured cap is removed instead of being returned as a partial success.
 - `page_evaluate` is bounded by `PWMCP_EVAL_TIMEOUT_MS` (default 5 s). For long-running scripts, split into smaller steps that the LLM can supervise.
+- Keep `PWMCP_BLOCK_PRIVATE_NETWORKS=true`. A private hostname/IP is usable only when explicitly present in `PWMCP_ALLOWED_HOSTS`. DNS prechecks reduce SSRF exposure but are not a complete DNS-rebinding sandbox, so keep the allowlist narrow and trusted.
 
 ## Logging & privacy
 

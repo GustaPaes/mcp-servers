@@ -24,7 +24,24 @@
 **/build/
 **/.turbo/
 **/.next/
+**/.cache/
+**/.eslintcache
 **/*.tsbuildinfo
+**/coverage/
+**/.nyc_output/
+**/test-results/
+**/playwright-report/
+**/blob-report/
+**/*.lcov
+
+# Interrupted writes and local package artifacts
+**/*.tmp
+**/*.tmp-*
+**/*.bak
+**/*.bak-*
+**/*.pid
+**/*.pid.lock
+**/*.tgz
 
 # Logs / runtime artifacts
 **/logs/

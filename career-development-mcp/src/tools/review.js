@@ -27,8 +27,8 @@ export async function toolReviewPrepare() {
     ...gap.priorities.slice(0, 2),
   ];
   const asks = [
-    "Validar com a coordenacao quais evidencias contam mais para maturidade Senior.",
-    "Alinhar espaco para executar o PDI de reducao de custo com testes E2E no backend.",
+    "Validar com a liderança quais evidências demonstram melhor a maturidade esperada para o papel-alvo.",
+    "Alinhar tempo e suporte necessários para executar as próximas ações prioritárias do plano.",
   ];
 
   return {

@@ -34,7 +34,6 @@ const REDACT_KEY_PATTERNS = [
   /kubeconfig/i,
   /^data$/i,
   /cert(ificate)?/i,
-  /^message$/i,
 ];
 
 function shouldRedactKey(key) {
@@ -42,7 +41,6 @@ function shouldRedactKey(key) {
 }
 
 export function redact(obj) {
-  if (!config.redactSecrets) return obj;
   if (obj === null || obj === undefined) return obj;
   if (Array.isArray(obj)) return obj.map(redact);
   if (typeof obj === "object") {
@@ -57,6 +55,12 @@ export function redact(obj) {
   }
   if (typeof obj === "string" && /\bBearer\s+[A-Za-z0-9._~+/=-]+/i.test(obj)) {
     return obj.replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer ***REDACTED***");
+  }
+  if (typeof obj === "string" && /\b(access_token|client_secret|refresh_token|api_key)=/i.test(obj)) {
+    return obj.replace(
+      /\b(access_token|client_secret|refresh_token|api_key)=([^&\s"']+)/gi,
+      "$1=***REDACTED***"
+    );
   }
   if (typeof obj === "string" && /\b[A-Za-z0-9+/]{80,}={0,2}\b/.test(obj)) {
     return "***REDACTED-LONG-TOKEN***";
@@ -84,13 +88,29 @@ export const logger = pino(
   pino.destination(2) // stderr
 );
 
+auditStream.on("error", (error) => {
+  logger.error({ error: { message: error.message, code: error.code } }, "audit stream error");
+});
+
+export function normaliseError(error) {
+  return redact({
+    message: error instanceof Error ? error.message : String(error),
+    code: error?.code,
+    statusCode: error?.statusCode ?? error?.status,
+    opcRequestId: error?.opcRequestId,
+  });
+}
+
 export function audit(event) {
+  const safeEvent = redact(event);
   const line = JSON.stringify({
     ts: new Date().toISOString(),
-    ...event,
-    input: redact(event.input),
-    output: redact(event.output),
+    ...safeEvent,
   });
   auditStream.write(line + "\n");
-  logger.debug(redact(event), "audit");
+  logger.debug(safeEvent, "audit");
+}
+
+export function closeAuditStream() {
+  return new Promise((resolve) => auditStream.end(resolve));
 }

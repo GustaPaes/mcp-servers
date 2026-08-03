@@ -189,6 +189,7 @@ export function registerResources(server: McpServer, ctx: ToolContext): void {
       };
       return jsonResource(uri, {
         accountId,
+        revision: state.revision,
         counts: {
           campaigns: filtered.campaignDrafts.length,
           adSets: filtered.adSetDrafts.length,

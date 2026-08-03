@@ -8,6 +8,7 @@
  * may host multiple BrowserContexts, each with multiple Pages.
  */
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
 import path from "node:path";
 import {
   chromium,
@@ -30,7 +31,8 @@ import type {
   SessionRecord,
 } from "./types.js";
 import { applyStealth, stealthContextOptions } from "./lib/stealth.js";
-import { ensureOutputDir, outputPath, timestamp } from "./output-dir.js";
+import { assertOutputQuotaAvailable, enforceArtifactFileLimit, ensureOutputDir, outputPath, timestamp } from "./output-dir.js";
+import { assertUrlAllowed } from "./safety/selectors.js";
 
 const ENGINES = { chromium, firefox, webkit } as const;
 
@@ -201,6 +203,7 @@ class SessionManager {
         } catch {}
         try {
           await ctx.context.close();
+          this.enforceCompletedArtifactLimits(ctx);
         } catch {}
       }
       try {
@@ -259,10 +262,12 @@ class SessionManager {
       ignoreHTTPSErrors: spec.ignoreHttpsErrors,
     };
     if (spec.recordVideo) {
+      assertOutputQuotaAvailable();
       ensureOutputDir();
       opts.recordVideo = { dir: outputPath("videos", session.id) };
     }
     if (spec.recordHar) {
+      assertOutputQuotaAvailable();
       ensureOutputDir();
       const harPath = outputPath("har", `${session.id}-${timestamp()}.har`);
       opts.recordHar = { path: harPath, content: "embed" };
@@ -289,6 +294,7 @@ class SessionManager {
         await ctx.context.tracing.stop({ path: ctx.recording.tracing.outputPath }).catch(() => {});
       }
       await ctx.context.close();
+      this.enforceCompletedArtifactLimits(ctx);
     } finally {
       session.contexts.delete(contextId);
     }
@@ -406,6 +412,19 @@ class SessionManager {
   }
 
   // --------------------------------------------------------- internals
+  private enforceCompletedArtifactLimits(ctx: ContextRecord): void {
+    const candidates = [ctx.recording.har?.path];
+    if (ctx.recording.video?.dir) {
+      const files = fs.readdirSync(ctx.recording.video.dir, { withFileTypes: true });
+      candidates.push(...files.filter((entry) => entry.isFile()).map((entry) => path.join(ctx.recording.video!.dir, entry.name)));
+    }
+    for (const file of candidates.filter((value): value is string => Boolean(value))) {
+      if (!fs.existsSync(file)) continue;
+      try { enforceArtifactFileLimit(file); }
+      catch (error) { logger.warn({ file: path.basename(file), reason: (error as Error).message }, "artifact quota enforced"); }
+    }
+  }
+
   private async registerContext(session: SessionRecord, context: BrowserContext): Promise<ContextRecord> {
     const id = `c_${randomUUID().slice(0, 8)}`;
     const rec: ContextRecord = {
@@ -418,6 +437,22 @@ class SessionManager {
       recording: {},
     };
     session.contexts.set(id, rec);
+    if (config.strict) {
+      await context.route("**/*", async (route) => {
+        try {
+          await assertUrlAllowed(route.request().url());
+          await route.fallback();
+        } catch (error) {
+          const requested = route.request().url();
+          const safeUrl = (() => {
+            try { const parsed = new URL(requested); return `${parsed.origin}${parsed.pathname}`; }
+            catch { return "<invalid-url>"; }
+          })();
+          logger.warn({ url: safeUrl, reason: (error as Error).message }, "blocked browser request");
+          await route.abort("blockedbyclient");
+        }
+      });
+    }
     context.on("page", (page: Page) => {
       // Auto-register pages opened by clicks/window.open
       if (![...rec.pages.values()].some((pr) => pr.page === page)) {

@@ -8,6 +8,8 @@ test("strict evaluation blocks browser credential stores", () => {
     "() => localStorage.getItem('token')",
     "() => sessionStorage.clear()",
     "() => indexedDB.databases()",
+    "() => document['cookie']",
+    "() => window[`localStorage`].getItem('token')",
   ]) {
     assert.equal(checkSafeEval(source).ok, false);
   }

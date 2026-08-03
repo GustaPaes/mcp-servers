@@ -33,7 +33,7 @@ const EnvSchema = z.object({
     .string()
     .default('30000')
     .transform((v) => Number(v))
-    .pipe(z.number().int().positive()),
+    .pipe(z.number().int().min(1_000).max(120_000)),
   HTTP_MAX_RETRIES: z
     .string()
     .default('4')
@@ -43,7 +43,7 @@ const EnvSchema = z.object({
     .string()
     .default('500')
     .transform((v) => Number(v))
-    .pipe(z.number().int().positive()),
+    .pipe(z.number().int().min(50).max(30_000)),
 
   // ---- Transport ----------------------------------------------------------
   // stdio (default) for Claude Desktop / Cursor / opencode style integrations.
@@ -67,12 +67,12 @@ const EnvSchema = z.object({
     .string()
     .default('1048576')
     .transform((v) => Number(v))
-    .pipe(z.number().int().positive()),
+    .pipe(z.number().int().min(1_024).max(16 * 1024 * 1024)),
   MCP_HTTP_SESSION_TTL_MS: z
     .string()
     .default('1800000')
     .transform((v) => Number(v))
-    .pipe(z.number().int().positive()),
+    .pipe(z.number().int().min(10_000).max(24 * 60 * 60_000)),
   MCP_HTTP_MAX_SESSIONS: z
     .string()
     .default('50')

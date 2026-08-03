@@ -5,6 +5,8 @@ import { getLogger, redactSecrets } from '../utils/logger.js';
 
 export type AuditAction =
   | 'tool.invoked'
+  | 'tool.completed'
+  | 'tool.failed'
   | 'tool.rejected'
   | 'recommendation.generated'
   | 'recommendation.approved'
@@ -29,6 +31,11 @@ export interface AuditEntry {
   meta?: Record<string, unknown>;
 }
 
+export interface AuditRecordOptions {
+  /** Fail before a consequential operation when its audit trail is unavailable. */
+  required?: boolean;
+}
+
 /**
  * Append-only audit log. Writes a JSON line per entry. In production this
  * should be shipped to a centralized log store (CloudWatch, BigQuery, etc.).
@@ -41,13 +48,14 @@ export class AuditLog {
     this.path = path ?? getEnv().AUDIT_LOG_PATH;
   }
 
-  record(entry: Omit<AuditEntry, 'ts'>): void {
+  record(entry: Omit<AuditEntry, 'ts'>, options: AuditRecordOptions = {}): void {
     const full: AuditEntry = {
       ts: new Date().toISOString(),
       ...entry,
       before: redactSecrets(entry.before),
       after: redactSecrets(entry.after),
       result: redactSecrets(entry.result),
+      error: redactSecrets(entry.error) as string | undefined,
       meta: redactSecrets(entry.meta) as Record<string, unknown> | undefined,
     };
     try {
@@ -57,7 +65,11 @@ export class AuditLog {
       }
       appendFileSync(this.path, JSON.stringify(full) + '\n', 'utf8');
     } catch (err) {
-      getLogger().error({ err }, 'failed to write audit log');
+      const message = err instanceof Error ? err.message : String(err);
+      getLogger().error({ err: redactSecrets(message) }, 'failed to write audit log');
+      if (options.required) {
+        throw new Error(`Required audit write failed: ${message}`);
+      }
     }
     getLogger().info({ audit: full }, `audit:${full.action}`);
   }

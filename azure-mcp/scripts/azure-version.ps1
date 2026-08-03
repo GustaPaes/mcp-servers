@@ -1,5 +1,9 @@
-function Get-AzureMcpPackage {
-    $manifestPath = Join-Path $PSScriptRoot "..\server-version.json"
+function Get-AzureMcpProjectRoot {
+    return [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
+}
+
+function Get-AzureMcpManifest {
+    $manifestPath = Join-Path (Get-AzureMcpProjectRoot) "server-version.json"
     if (-not (Test-Path -LiteralPath $manifestPath)) {
         throw "Manifesto de versao nao encontrado: $manifestPath"
     }
@@ -7,9 +11,30 @@ function Get-AzureMcpPackage {
     if (-not $manifest.package -or -not $manifest.version) {
         throw "server-version.json deve conter package e version."
     }
+    if ($manifest.package -ne "@azure/mcp") {
+        throw "server-version.json deve referenciar exclusivamente o pacote oficial @azure/mcp."
+    }
+    if ([string]($manifest.version) -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
+        throw "Versao invalida em server-version.json: $($manifest.version)"
+    }
+    return $manifest
+}
+
+function Get-AzureMcpPackage {
+    $manifest = Get-AzureMcpManifest
     return "$($manifest.package)@$($manifest.version)"
 }
 
 function Get-AzureMcpVersion {
-    return (Get-AzureMcpPackage).Split('@')[-1]
+    return (Get-AzureMcpManifest).version
+}
+
+function Get-AzureMcpCommand {
+    $projectRoot = Get-AzureMcpProjectRoot
+    $binaryName = if ($IsWindows -or $env:OS -eq 'Windows_NT') { 'azmcp.cmd' } else { 'azmcp' }
+    $binaryPath = Join-Path $projectRoot "node_modules\.bin\$binaryName"
+    if (-not (Test-Path -LiteralPath $binaryPath -PathType Leaf)) {
+        throw "Azure MCP local nao instalado. Execute 'npm ci --workspaces=false' em '$projectRoot'."
+    }
+    return [System.IO.Path]::GetFullPath($binaryPath)
 }

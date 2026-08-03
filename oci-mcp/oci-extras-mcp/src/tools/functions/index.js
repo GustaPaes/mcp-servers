@@ -2,6 +2,7 @@
  * OCI Functions (FaaS) tools — list, deploy (metadata), invoke, delete.
  */
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import {
   functionsManagementClient,
   functionsInvokeClient,
@@ -126,8 +127,9 @@ export const fn_create_application = {
       });
     }
     const c = await functionsManagementClient();
+    const opcRetryToken = randomUUID();
     const res = await withRetry(() =>
-      c.createApplication({ createApplicationDetails: payload })
+      c.createApplication({ createApplicationDetails: payload, opcRetryToken })
     );
     ownership.record({
       ocid: res.application.id,
@@ -180,8 +182,9 @@ export const fn_create_function = {
       });
     }
     const c = await functionsManagementClient();
+    const opcRetryToken = randomUUID();
     const res = await withRetry(() =>
-      c.createFunction({ createFunctionDetails: payload })
+      c.createFunction({ createFunctionDetails: payload, opcRetryToken })
     );
     ownership.record({
       ocid: res.function.id,

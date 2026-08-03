@@ -46,14 +46,14 @@ What we **don't** do, on purpose:
 
 ## Requirements
 
-- **Node.js ≥ 20** (≥ 20.19 recommended due to a transitive ESLint peer dep)
+- **Node.js >= 20.19.0**
 - A Meta **System User access token** with `ads_management` + `ads_read` scopes for each ad account you want to operate
 - The numeric Ad Account ID (the one starting with `act_`)
 
 ## Install
 
 ```powershell
-cd "C:\Workspace\MCP Servers\meta-ads-mcp"
+cd "<repo-root>/meta-ads-mcp"
 npm install
 npm run build
 ```
@@ -144,7 +144,7 @@ Minimal OpenCode snippet:
   "mcp": {
     "meta-ads-mcp": {
       "type": "local",
-      "command": ["node", "C:/Workspace/MCP Servers/meta-ads-mcp/dist/server.js"],
+      "command": ["node", "<repo-root>/meta-ads-mcp/dist/server.js"],
       "enabled": true,
       "env": {
         "READ_ONLY": "true",
@@ -398,14 +398,14 @@ Existem alguns servidores MCP públicos para Meta Ads (`pipeboard-co/meta-ads-mc
 
 ### Requisitos
 
-- **Node.js ≥ 20** (≥ 20.19 recomendado por uma dep transitiva do ESLint)
+- **Node.js >= 20.19.0**
 - **Token de System User** da Meta com escopos `ads_management` + `ads_read`
 - ID da Ad Account (formato `act_...`)
 
 ### Instalação
 
 ```powershell
-cd "C:\Workspace\MCP Servers\meta-ads-mcp"
+cd "<repo-root>/meta-ads-mcp"
 npm install
 npm run build
 ```

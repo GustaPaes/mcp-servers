@@ -7,6 +7,6 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot "azure-version.ps1")
 
-$package = Get-AzureMcpPackage
-& npx -y $package server start @ServerArgs
+$command = Get-AzureMcpCommand
+& $command server start @ServerArgs
 exit $LASTEXITCODE

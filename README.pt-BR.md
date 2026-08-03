@@ -6,7 +6,7 @@ Cada pasta e um projeto independente, com README, dependencias, configuracao e m
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![MCP](https://img.shields.io/badge/Model%20Context%20Protocol-1.x-6f42c1)](https://modelcontextprotocol.io)
-[![Node](https://img.shields.io/badge/Node-%E2%89%A520-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![Node](https://img.shields.io/badge/Node-%E2%89%A520.19-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 
 Idioma: [English](./README.en.md) | [Portugues](./README.pt-BR.md)
 
@@ -29,7 +29,7 @@ Ele ajuda a:
 
 | Pasta | Tipo | O Que Faz | Stack | Status |
 |---|---|---|---|---|
-| [`azure-mcp`](./azure-mcp) | Wrapper MCP | Opera recursos Azure usando o servidor oficial `@azure/mcp` da Microsoft e adiciona scripts locais + politica de seguranca para LLM. | `npx`, Azure CLI, PowerShell | Estavel |
+| [`azure-mcp`](./azure-mcp) | Wrapper MCP | Opera recursos Azure usando o servidor oficial `@azure/mcp` da Microsoft e adiciona scripts locais + politica de seguranca para LLM. | Node 22, Azure CLI, PowerShell | Estavel |
 | [`meta-ads-mcp`](./meta-ads-mcp) | MCP server | Servidor multi-conta para Meta Marketing API (Facebook Ads / Instagram Ads) com separacao estrita recomendar ↔ executar, dry-run, gate de mutacao, teto triplo de orcamento, auditoria e bloqueio de targeting por atributos protegidos. | TypeScript, Node 20, MCP SDK, undici, Zod | Beta |
 | [`tfs-mcp`](./tfs-mcp) | MCP server | Work items padrão e customizados, perfis de processo configuráveis, PRs, review, refinamento, release readiness e roteamento por especialistas para TFS / Azure DevOps Server. | Node 20, ESM, MCP SDK | Estável |
 | [`oci-mcp`](./oci-mcp) | Toolkit MCP | Combina servidores oficiais da Oracle com `oci-extras-mcp` para OKE, Vault/Secrets, Kubernetes, Functions e streaming de logs. | Node 20, OCI SDK, `uvx` | Estavel |
@@ -37,6 +37,9 @@ Ele ajuda a:
 | [`career-development-mcp`](./career-development-mcp) | MCP server | PDIs, metas SMART, competencias, evidencias, prontidao de carreira, preparo de 1:1 e importacao opcional de evidencias do TFS. | Node 20, ESM, JSON local | Beta |
 
 ## Baseline de Qualidade e Seguranca
+
+O contrato compartilhado de engenharia está documentado em
+[`docs/MCP_SERVER_STANDARD.md`](./docs/MCP_SERVER_STANDARD.md).
 
 - Tools expõem JSON schemas explicitos e rejeitam campos desconhecidos sempre que pratico.
 - Respostas estruturadas retornam `structuredContent` quando o server controla o formato da resposta MCP.
@@ -59,7 +62,8 @@ mcp-servers/
 │   ├── config-kit/
 │   └── mcp-runtime/
 ├── scripts/
-│   └── portfolio-doctor.mjs
+│   ├── repository-doctor.mjs
+│   └── repository-policy.mjs
 ├── config/
 │   └── opencode.example.json
 ├── azure-mcp/
@@ -75,13 +79,13 @@ mcp-servers/
 
 Requisitos gerais:
 
-- Node.js 20 ou superior.
+- Node.js 20.19 ou superior (o baseline exato está em `.node-version`).
 - npm 10 ou superior.
 - Um cliente compativel com MCP, como OpenCode, Claude Code, Claude Desktop, Cursor, Cline, Codex CLI, Continue ou VS Code Copilot Agent mode.
 
 Requisitos por projeto:
 
-- `azure-mcp`: Azure CLI e sessao autenticada com `az login`.
+- `azure-mcp`: Node.js 22 ou superior, Azure CLI e sessão autenticada com `az login`.
 - `oci-mcp`: OCI CLI / OCI config, `uv` ou `uvx`, e `kubectl` opcional para fluxos Kubernetes.
 - `playwright-mcp`: browsers do Playwright instalados com `npx playwright install chromium` ou pela tool `browser_install`.
 
@@ -101,9 +105,17 @@ npm install
 npm run validate
 ```
 
-Também é possível instalar e validar apenas um projeto pela própria pasta. Para
-`azure-mcp`, não há dependências locais: `scripts/start-server.ps1` lê a versão
-fixada em `server-version.json` e inicia o pacote oficial.
+Durante o desenvolvimento, `npm run validate:fast` executa a política do
+repositório e os contratos compartilhados; antes da PR, `npm run validate`
+continua sendo a validação completa e executa projetos independentes em
+paralelo. Ajuste `MCP_VALIDATE_CONCURRENCY` entre 1 e 6 se a máquina precisar de
+outro equilíbrio entre CPU e memória.
+
+Também é possível instalar e validar apenas um projeto pela própria pasta. O
+`azure-mcp` permanece intencionalmente fora do workspace Node 20 porque o pacote
+oficial exige Node 22; execute `npm ci` nessa pasta. O launcher valida o
+`server-version.json` contra o lockfile e inicia somente o binário instalado
+localmente.
 
 Para `oci-mcp`, siga [`oci-mcp/docs/01-installation.md`](./oci-mcp/docs/01-installation.md), pois ele combina Node, OCI CLI e servidores MCP Python da Oracle.
 
@@ -127,6 +139,12 @@ Antes de publicar, execute `npm run doctor`. O doctor inspeciona arquivos
 rastreados e novos não ignorados, e falha ao encontrar segredos, caminhos pessoais ou
 identificadores internos conhecidos.
 
+Para verificar termos privados sem publicá-los, copie
+`config/repository-policy.example.json` para
+`local-private/repository-policy.json` e mantenha ali a lista `forbiddenTerms`.
+Em CI ou verificações temporárias, `MCP_REPOSITORY_FORBIDDEN_TERMS` aceita uma
+lista adicional separada por vírgulas.
+
 ## Instalar no OpenCode
 
 O OpenCode le MCP servers de `~/.config/opencode/opencode.json` no Linux/macOS e `%USERPROFILE%\.config\opencode\opencode.json` no Windows.
@@ -139,12 +157,12 @@ Use [`config/opencode.example.json`](./config/opencode.example.json) como ponto 
   "mcp": {
     "playwright-mcp": {
       "type": "local",
-      "command": ["node", "C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"],
+      "command": ["node", "<repo-root>/playwright-mcp/dist/index.js"],
       "enabled": true
     },
     "azure-mcp": {
       "type": "local",
-      "command": ["powershell", "-NoProfile", "-File", "C:/Workspace/MCP Servers/azure-mcp/scripts/start-server.ps1"],
+      "command": ["powershell", "-NoProfile", "-File", "<repo-root>/azure-mcp/scripts/start-server.ps1"],
       "enabled": true
     }
   }
@@ -158,15 +176,15 @@ Reinicie o OpenCode depois de editar o arquivo. Ele nao recarrega configuracao M
 Use `claude mcp add`:
 
 ```bash
-claude mcp add playwright-mcp node "C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"
-claude mcp add azure-mcp -- powershell -NoProfile -File "C:/Workspace/MCP Servers/azure-mcp/scripts/start-server.ps1"
+claude mcp add playwright-mcp node "<repo-root>/playwright-mcp/dist/index.js"
+claude mcp add azure-mcp -- powershell -NoProfile -File "<repo-root>/azure-mcp/scripts/start-server.ps1"
 claude mcp list
 ```
 
 Para um server com variaveis de ambiente:
 
 ```bash
-claude mcp add tfs-mcp node "C:/Workspace/MCP Servers/tfs-mcp/index.js" \
+claude mcp add tfs-mcp node "<repo-root>/tfs-mcp/index.js" \
   --env TFS_URL=https://tfs.example.com \
   --env TFS_PAT=your-pat
 ```
@@ -180,11 +198,11 @@ Edite `%APPDATA%\Claude\claude_desktop_config.json` no Windows ou `~/Library/App
   "mcpServers": {
     "playwright-mcp": {
       "command": "node",
-      "args": ["C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"]
+      "args": ["<repo-root>/playwright-mcp/dist/index.js"]
     },
     "azure-mcp": {
       "command": "powershell",
-      "args": ["-NoProfile", "-File", "C:/Workspace/MCP Servers/azure-mcp/scripts/start-server.ps1"]
+      "args": ["-NoProfile", "-File", "<repo-root>/azure-mcp/scripts/start-server.ps1"]
     }
   }
 }
@@ -201,7 +219,7 @@ Cursor e Cline usam formato parecido com Claude Desktop. Exemplo:
   "mcpServers": {
     "playwright-mcp": {
       "command": "node",
-      "args": ["C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"]
+      "args": ["<repo-root>/playwright-mcp/dist/index.js"]
     }
   }
 }
@@ -216,11 +234,11 @@ Edite `~/.codex/config.toml`:
 ```toml
 [mcp_servers.playwright-mcp]
 command = "node"
-args = ["C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"]
+args = ["<repo-root>/playwright-mcp/dist/index.js"]
 
 [mcp_servers.azure-mcp]
 command = "powershell"
-args = ["-NoProfile", "-File", "C:/Workspace/MCP Servers/azure-mcp/scripts/start-server.ps1"]
+args = ["-NoProfile", "-File", "<repo-root>/azure-mcp/scripts/start-server.ps1"]
 ```
 
 ## Instalar no Continue
@@ -232,7 +250,7 @@ mcpServers:
   - name: playwright-mcp
     command: node
     args:
-      - "C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"
+      - "<repo-root>/playwright-mcp/dist/index.js"
 ```
 
 ## Instalar no VS Code Copilot Agent Mode
@@ -245,7 +263,7 @@ Adicione `.vscode/mcp.json` ao workspace:
     "playwright-mcp": {
       "type": "stdio",
       "command": "node",
-      "args": ["C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"]
+      "args": ["<repo-root>/playwright-mcp/dist/index.js"]
     }
   }
 }
@@ -257,9 +275,15 @@ Os servers que tocam cloud e gestao de trabalho sao conservadores por design.
 
 Regras operacionais comuns:
 
-- Tools de leitura como `list`, `get`, `show`, `query` e `status` podem rodar sem confirmacao.
-- Tools de escrita como `create`, `update`, `set`, `deploy`, `scale` e `comment` devem mostrar um plano e aguardar confirmacao explicita.
-- Tools destrutivas como `delete`, `purge`, `remove`, `terminate` e `revoke` exigem confirmacao reforcada.
+- Tools `READ` podem rodar sem confirmação.
+- Tools `LOCAL_STATE` e `EXECUTION` explicitamente solicitadas podem rodar sem
+  confirmação redundante quando não alterarem definições, permissões, custo
+  configurado ou dados duráveis de terceiros.
+- Tools `REMOTE_WRITE` mostram alvo e prévia. Execuções rotineiras e reversíveis
+  podem respeitar o pedido explícito; mudanças de definição, permissão e custo
+  exigem confirmação vinculada à prévia.
+- Tools `DESTRUCTIVE` e `SECRET_READ` exigem confirmação reforçada no servidor
+  para o alvo e alcance exatos.
 - Nomes com cara de producao, como `prod`, `prd`, `production`, `live`, `hml`, `homolog` e `preprod`, sao tratados como alto risco.
 - Artefatos de runtime como HAR, storage state, perfis de browser, logs e capturas do external career platform nao devem ser commitados.
 

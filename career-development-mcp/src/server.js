@@ -1,6 +1,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { TOOL_RISK, annotationsForRisk, assertToolManifest } from "@gustapaes/mcp-runtime";
 import {
   PDI_GET_OUTPUT_SCHEMA,
   PDI_ANALYZE_OUTPUT_SCHEMA,
@@ -8,9 +9,14 @@ import {
   REVIEW_PREPARE_OUTPUT_SCHEMA,
   GOAL_PROGRESS_OUTPUT_SCHEMA,
   DEVELOPMENT_AREA_SCHEMA,
+  DOCTOR_OUTPUT_SCHEMA,
+  EVIDENCE_LIST_OUTPUT_SCHEMA,
+  GOAL_LIST_OUTPUT_SCHEMA,
+  PDI_LIST_OUTPUT_SCHEMA,
+  SNAPSHOT_VALIDATE_OUTPUT_SCHEMA,
 } from "../schemas.js";
 import { SERVER_NAME, SERVER_VERSION } from "./config.js";
-import { ensureStorageReady, saveSnapshot } from "./storage.js";
+import { ensureStorageReady, saveSnapshot, withStorageMutation } from "./storage.js";
 import { toolPdiAnalyze, toolPdiCreate, toolPdiGet, toolPdiList, toolPdiSnapshot, toolPdiUpdate } from "./tools/pdi.js";
 import { toolGoalAnalyze, toolGoalCreate, toolGoalList, toolGoalProgress, toolGoalUpdate } from "./tools/goals.js";
 import { toolCompetencyAssess, toolCompetencyBenchmark, toolCompetencyEvolution, toolCompetencyGap } from "./tools/competencies.js";
@@ -22,27 +28,50 @@ import { toolSnapshotImport, toolSnapshotValidate } from "./tools/snapshots.js";
 import { toolDailyBrief } from "./tools/daily.js";
 import { toolCareerDoctor } from "./tools/doctor.js";
 
-const MUTATING_TOOLS = new Set([
-  "guide_pdi_create",
-  "guide_pdi_update",
-  "guide_pdi_snapshot",
-  "guide_goal_create",
-  "guide_goal_update",
-  "guide_competency_assess",
-  "guide_evidence_add",
-  "guide_evidence_from_tfs",
-  "guide_snapshot_import",
-]);
+export { TOOL_RISK };
+
+const TOOL_POLICIES = Object.freeze({
+  guide_doctor: { risk: TOOL_RISK.READ, idempotent: true },
+  guide_daily_brief: { risk: TOOL_RISK.READ, idempotent: true },
+  guide_snapshot_validate: { risk: TOOL_RISK.READ, idempotent: true },
+  guide_snapshot_import: { risk: TOOL_RISK.LOCAL_STATE, idempotent: false },
+  guide_online_state_get: { risk: TOOL_RISK.READ, idempotent: true },
+  guide_online_review_suggestions: { risk: TOOL_RISK.READ, idempotent: true },
+  guide_pdi_list: { risk: TOOL_RISK.READ, idempotent: true },
+  guide_pdi_get: { risk: TOOL_RISK.READ, idempotent: true },
+  guide_pdi_create: { risk: TOOL_RISK.LOCAL_STATE, idempotent: false },
+  guide_pdi_update: { risk: TOOL_RISK.LOCAL_STATE, idempotent: false },
+  guide_pdi_analyze: { risk: TOOL_RISK.READ, idempotent: true },
+  guide_pdi_snapshot: { risk: TOOL_RISK.LOCAL_STATE, idempotent: false },
+  guide_goal_list: { risk: TOOL_RISK.READ, idempotent: true },
+  guide_goal_create: { risk: TOOL_RISK.LOCAL_STATE, idempotent: false },
+  guide_goal_update: { risk: TOOL_RISK.LOCAL_STATE, idempotent: false },
+  guide_goal_analyze: { risk: TOOL_RISK.READ, idempotent: true },
+  guide_goal_progress: { risk: TOOL_RISK.READ, idempotent: true },
+  guide_competency_assess: { risk: TOOL_RISK.LOCAL_STATE, idempotent: false },
+  guide_competency_gap: { risk: TOOL_RISK.READ, idempotent: true },
+  guide_competency_evolution: { risk: TOOL_RISK.READ, idempotent: true },
+  guide_competency_benchmark: { risk: TOOL_RISK.READ, idempotent: true },
+  guide_evidence_add: { risk: TOOL_RISK.LOCAL_STATE, idempotent: false },
+  guide_evidence_list: { risk: TOOL_RISK.READ, idempotent: true },
+  guide_evidence_report: { risk: TOOL_RISK.READ, idempotent: true },
+  guide_evidence_from_tfs: { risk: TOOL_RISK.LOCAL_STATE, idempotent: false, openWorld: true },
+  guide_career_roadmap: { risk: TOOL_RISK.READ, idempotent: true },
+  guide_career_readiness: { risk: TOOL_RISK.READ, idempotent: true },
+  guide_review_prepare: { risk: TOOL_RISK.READ, idempotent: true },
+  guide_review_self_assessment: { risk: TOOL_RISK.READ, idempotent: true },
+});
 
 function withToolMetadata(tool) {
-  const readOnly = !MUTATING_TOOLS.has(tool.name);
+  const policy = TOOL_POLICIES[tool.name];
+  if (!policy) throw new Error(`Classificação de risco ausente para ${tool.name}.`);
   return {
     ...tool,
     annotations: {
-      readOnlyHint: readOnly,
-      destructiveHint: false,
-      idempotentHint: tool.name !== "guide_evidence_add" && tool.name !== "guide_evidence_from_tfs",
-      openWorldHint: tool.name === "guide_evidence_from_tfs",
+      ...annotationsForRisk(policy.risk, {
+        idempotent: policy.idempotent,
+        openWorld: policy.openWorld,
+      }),
       ...(tool.annotations ?? {}),
     },
     inputSchema: {
@@ -63,10 +92,10 @@ const CHECKPOINT_INPUT_SCHEMA = {
   type: "object",
   additionalProperties: false,
   properties: {
-    date: { type: "string" },
+    date: { type: "string", minLength: 1, maxLength: 64 },
     status: { type: "string", enum: ["scheduled", "completed"] },
-    notes: { type: "string" },
-    adjustments: { type: "array", items: { type: "string" } },
+    notes: { type: "string", maxLength: 8000 },
+    adjustments: { type: "array", maxItems: 100, items: { type: "string", minLength: 1, maxLength: 512 } },
   },
   required: ["date", "status"],
 };
@@ -75,8 +104,8 @@ const MILESTONE_INPUT_SCHEMA = {
   type: "object",
   additionalProperties: false,
   properties: {
-    title: { type: "string" },
-    dueDate: { type: ["string", "null"] },
+    title: { type: "string", minLength: 1, maxLength: 512 },
+    dueDate: { type: ["string", "null"], maxLength: 64 },
     completed: { type: "boolean" },
   },
   required: ["title"],
@@ -86,11 +115,11 @@ const SMART_INPUT_SCHEMA = {
   type: "object",
   additionalProperties: false,
   properties: {
-    specific: { type: "string" },
-    measurable: { type: "string" },
-    achievable: { type: "string" },
-    relevant: { type: "string" },
-    timeBound: { type: "string" },
+    specific: { type: "string", maxLength: 8000 },
+    measurable: { type: "string", maxLength: 8000 },
+    achievable: { type: "string", maxLength: 8000 },
+    relevant: { type: "string", maxLength: 8000 },
+    timeBound: { type: "string", maxLength: 8000 },
   },
 };
 
@@ -99,35 +128,37 @@ const EXTERNAL_SNAPSHOT_INPUT_SCHEMA = {
   additionalProperties: false,
   properties: {
     schemaVersion: { const: 1 },
-    capturedAt: { type: "string" },
+    capturedAt: { type: "string", minLength: 1, maxLength: 512 },
     url: { type: "string" },
-    pageTitle: { type: "string" },
+    pageTitle: { type: "string", maxLength: 512 },
     visiblePlanCards: {
       type: "array",
+      maxItems: 100,
       items: {
         type: "object",
         additionalProperties: false,
         properties: {
           sourceId: { type: ["string", "number"] },
-          title: { type: "string" },
-          status: { type: "string" },
+          title: { type: "string", minLength: 1, maxLength: 512 },
+          status: { type: "string", maxLength: 512 },
           progressPct: { type: "number", minimum: 0, maximum: 100 },
-          period: { type: "string" },
-          summary: { type: "string" },
+          period: { type: "string", maxLength: 512 },
+          summary: { type: "string", maxLength: 8000 },
         },
         required: ["title"],
       },
     },
     apiResponses: {
       type: "array",
+      maxItems: 100,
       items: {
         type: "object",
         additionalProperties: false,
         properties: {
           url: { type: "string" },
           status: { type: "number" },
-          contentType: { type: "string" },
-          detectedKeys: { type: "array", items: { type: "string" } },
+          contentType: { type: "string", maxLength: 512 },
+          detectedKeys: { type: "array", maxItems: 100, items: { type: "string", minLength: 1, maxLength: 512 } },
         },
         required: ["url", "status"],
       },
@@ -141,6 +172,7 @@ const TOOL_DEFS = [
     name: "guide_doctor",
     title: "Career MCP Doctor",
     description: "Valida armazenamento local, raízes de importação e disponibilidade da integração opcional com TFS sem expor caminhos privados.",
+    outputSchema: DOCTOR_OUTPUT_SCHEMA,
     inputSchema: { type: "object", properties: {} },
   },
   {
@@ -158,11 +190,12 @@ const TOOL_DEFS = [
     name: "guide_snapshot_validate",
     title: "Validate External Career Snapshot",
     description: "Valida um snapshot neutro e sanitizado sem persistir dados. O arquivo deve estar dentro de CAREER_MCP_IMPORT_ROOTS.",
+    outputSchema: SNAPSHOT_VALIDATE_OUTPUT_SCHEMA,
     annotations: { openWorldHint: false },
     inputSchema: {
       type: "object",
       properties: {
-        path: { type: "string" },
+        path: { type: "string", minLength: 1, maxLength: 4096 },
         snapshot: EXTERNAL_SNAPSHOT_INPUT_SCHEMA,
       },
     },
@@ -175,8 +208,10 @@ const TOOL_DEFS = [
     inputSchema: {
       type: "object",
       properties: {
-        path: { type: "string" },
+        path: { type: "string", minLength: 1, maxLength: 4096 },
         snapshot: EXTERNAL_SNAPSHOT_INPUT_SCHEMA,
+        dryRun: { type: "boolean", default: true },
+        expectedRevision: { type: "number", minimum: 0 },
       },
     },
   },
@@ -196,7 +231,14 @@ const TOOL_DEFS = [
     name: "guide_pdi_list",
     title: "List PDIs",
     description: "Lista os PDIs existentes com status, periodo e progresso consolidado.",
-    inputSchema: { type: "object", properties: {} },
+    outputSchema: PDI_LIST_OUTPUT_SCHEMA,
+    inputSchema: {
+      type: "object",
+      properties: {
+        offset: { type: "number", minimum: 0, maximum: 100000, default: 0 },
+        limit: { type: "number", minimum: 1, maximum: 100, default: 50 },
+      },
+    },
   },
   {
     name: "guide_pdi_get",
@@ -212,15 +254,15 @@ const TOOL_DEFS = [
     inputSchema: {
       type: "object",
       properties: {
-        title: { type: "string" },
-        currentRole: { type: "string" },
-        targetRole: { type: "string" },
-        vision: { type: "string" },
-        start: { type: "string" },
-        end: { type: "string" },
-        strengths: { type: "array", items: { type: "string" } },
-        tags: { type: "array", items: { type: "string" } },
-        developmentAreas: { type: "array", items: DEVELOPMENT_AREA_SCHEMA },
+        title: { type: "string", minLength: 1, maxLength: 512 },
+        currentRole: { type: "string", minLength: 1, maxLength: 512 },
+        targetRole: { type: "string", minLength: 1, maxLength: 512 },
+        vision: { type: "string", minLength: 1, maxLength: 8000 },
+        start: { type: "string", minLength: 1, maxLength: 64 },
+        end: { type: "string", minLength: 1, maxLength: 64 },
+        strengths: { type: "array", maxItems: 100, items: { type: "string", minLength: 1, maxLength: 512 } },
+        tags: { type: "array", maxItems: 100, items: { type: "string", minLength: 1, maxLength: 512 } },
+        developmentAreas: { type: "array", maxItems: 100, items: DEVELOPMENT_AREA_SCHEMA },
       },
       required: ["title", "vision", "start", "end"],
     },
@@ -233,12 +275,13 @@ const TOOL_DEFS = [
       type: "object",
       properties: {
         id: { type: "string" },
+        expectedRevision: { type: "number", minimum: 1 },
         status: { type: "string" },
         vision: { type: "string" },
-        tags: { type: "array", items: { type: "string" } },
-        strengths: { type: "array", items: { type: "string" } },
-        developmentAreas: { type: "array", items: DEVELOPMENT_AREA_SCHEMA },
-        checkpoints: { type: "array", items: CHECKPOINT_INPUT_SCHEMA },
+        tags: { type: "array", maxItems: 100, items: { type: "string", minLength: 1, maxLength: 512 } },
+        strengths: { type: "array", maxItems: 100, items: { type: "string", minLength: 1, maxLength: 512 } },
+        developmentAreas: { type: "array", maxItems: 100, items: DEVELOPMENT_AREA_SCHEMA },
+        checkpoints: { type: "array", maxItems: 100, items: CHECKPOINT_INPUT_SCHEMA },
       },
       required: ["id"],
     },
@@ -260,12 +303,15 @@ const TOOL_DEFS = [
     name: "guide_goal_list",
     title: "List Goals",
     description: "Lista metas com filtros por PDI, status e categoria.",
+    outputSchema: GOAL_LIST_OUTPUT_SCHEMA,
     inputSchema: {
       type: "object",
       properties: {
         pdiId: { type: "string" },
         status: { type: "string" },
         category: { type: "string" },
+        offset: { type: "number", minimum: 0, maximum: 100000, default: 0 },
+        limit: { type: "number", minimum: 1, maximum: 100, default: 50 },
       },
     },
   },
@@ -281,10 +327,10 @@ const TOOL_DEFS = [
         category: { type: "string" },
         weight: { type: "number" },
         dueDate: { type: ["string", "null"] },
-        linkedCompetencies: { type: "array", items: { type: "string" } },
+        linkedCompetencies: { type: "array", maxItems: 100, items: { type: "string", minLength: 1, maxLength: 128 } },
         smart: SMART_INPUT_SCHEMA,
-        milestones: { type: "array", items: MILESTONE_INPUT_SCHEMA },
-        notes: { type: "array", items: { type: "string" } },
+        milestones: { type: "array", maxItems: 100, items: MILESTONE_INPUT_SCHEMA },
+        notes: { type: "array", maxItems: 100, items: { type: "string", minLength: 1, maxLength: 512 } },
       },
       required: ["pdiId", "title", "category", "weight", "smart"],
     },
@@ -297,12 +343,13 @@ const TOOL_DEFS = [
       type: "object",
       properties: {
         id: { type: "string" },
+        expectedRevision: { type: "number", minimum: 1 },
         title: { type: "string" },
         progress: { type: "number" },
         status: { type: "string" },
         dueDate: { type: ["string", "null"] },
-        milestones: { type: "array", items: MILESTONE_INPUT_SCHEMA },
-        notes: { type: "array", items: { type: "string" } },
+        milestones: { type: "array", maxItems: 100, items: MILESTONE_INPUT_SCHEMA },
+        notes: { type: "array", maxItems: 100, items: { type: "string", minLength: 1, maxLength: 512 } },
         smart: SMART_INPUT_SCHEMA,
       },
       required: ["id"],
@@ -338,7 +385,7 @@ const TOOL_DEFS = [
     name: "guide_competency_evolution",
     title: "Competency Evolution",
     description: "Retorna o historico de autoavaliacoes de competencias.",
-    inputSchema: { type: "object", properties: {} },
+    inputSchema: { type: "object", properties: { offset: { type: "number", minimum: 0, maximum: 100000, default: 0 }, limit: { type: "number", minimum: 1, maximum: 100, default: 50 } } },
   },
   {
     name: "guide_competency_benchmark",
@@ -375,13 +422,14 @@ const TOOL_DEFS = [
     name: "guide_evidence_list",
     title: "List Evidence",
     description: "Lista evidencias por PDI, meta ou tipo.",
-    inputSchema: { type: "object", properties: { linkedGoalId: { type: "string" }, linkedPdiId: { type: "string" }, type: { type: "string" } } },
+    outputSchema: EVIDENCE_LIST_OUTPUT_SCHEMA,
+    inputSchema: { type: "object", properties: { linkedGoalId: { type: "string" }, linkedPdiId: { type: "string" }, type: { type: "string" }, offset: { type: "number", minimum: 0, maximum: 100000, default: 0 }, limit: { type: "number", minimum: 1, maximum: 100, default: 50 } } },
   },
   {
     name: "guide_evidence_report",
     title: "Evidence Report",
     description: "Gera um relatorio estruturado de evidencias e impactos para 1:1 ou avaliacao.",
-    inputSchema: { type: "object", properties: { pdiId: { type: "string" } } },
+    inputSchema: { type: "object", properties: { pdiId: { type: "string" }, offset: { type: "number", minimum: 0, maximum: 100000, default: 0 }, limit: { type: "number", minimum: 1, maximum: 100, default: 50 } } },
   },
   {
     name: "guide_evidence_from_tfs",
@@ -390,7 +438,7 @@ const TOOL_DEFS = [
     inputSchema: {
       type: "object",
       properties: {
-        workItemId: { type: ["string", "number"] },
+        workItemId: { type: ["string", "number"], maxLength: 15 },
         linkedPdiIds: { type: "array", items: { type: "string" } },
         linkedGoalIds: { type: "array", items: { type: "string" } },
         type: { type: "string" },
@@ -437,15 +485,17 @@ const TOOL_HANDLERS = {
   guide_snapshot_import: (args) => toolSnapshotImport(args),
   guide_online_state_get: () => toolOnlineStateGet(),
   guide_online_review_suggestions: () => toolOnlineReviewSuggestions(),
-  guide_pdi_list: () => toolPdiList(),
+  guide_pdi_list: (args) => toolPdiList(args),
   guide_pdi_get: (args) => toolPdiGet(args),
   guide_pdi_create: (args) => toolPdiCreate(args),
   guide_pdi_update: (args) => toolPdiUpdate(args),
   guide_pdi_analyze: (args) => toolPdiAnalyze(args),
   guide_pdi_snapshot: async (args) => {
-    const snapshot = await toolPdiSnapshot(args);
-    await saveSnapshot(snapshot);
-    return snapshot;
+    return withStorageMutation(async () => {
+      const snapshot = await toolPdiSnapshot(args);
+      await saveSnapshot(snapshot);
+      return snapshot;
+    });
   },
   guide_goal_list: (args) => toolGoalList(args),
   guide_goal_create: (args) => toolGoalCreate(args),
@@ -454,7 +504,7 @@ const TOOL_HANDLERS = {
   guide_goal_progress: (args) => toolGoalProgress(args),
   guide_competency_assess: (args) => toolCompetencyAssess(args),
   guide_competency_gap: (args) => toolCompetencyGap(args),
-  guide_competency_evolution: () => toolCompetencyEvolution(),
+  guide_competency_evolution: (args) => toolCompetencyEvolution(args),
   guide_competency_benchmark: (args) => toolCompetencyBenchmark(args),
   guide_evidence_add: (args) => toolEvidenceAdd(args),
   guide_evidence_list: (args) => toolEvidenceList(args),
@@ -466,7 +516,22 @@ const TOOL_HANDLERS = {
   guide_review_self_assessment: () => toolReviewSelfAssessment(),
 };
 
-export const TOTAL_TOOLS = TOOL_DEFS.length;
+assertToolManifest({
+  definitions: TOOL_DEFS,
+  handlers: TOOL_HANDLERS,
+  policies: TOOL_POLICIES,
+  label: SERVER_NAME,
+});
+
+export const TOOL_MANIFEST = Object.freeze(TOOL_DEFS.map((definition) => Object.freeze({
+  name: definition.name,
+  definition: withToolMetadata(definition),
+  handler: TOOL_HANDLERS[definition.name],
+  policy: Object.freeze({ ...TOOL_POLICIES[definition.name] }),
+})));
+const TOOL_BY_NAME = new Map(TOOL_MANIFEST.map((entry) => [entry.name, entry]));
+
+export const TOTAL_TOOLS = TOOL_MANIFEST.length;
 
 export function buildMcpServer() {
   const server = new Server(
@@ -478,16 +543,16 @@ export function buildMcpServer() {
     }
   );
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOL_DEFS.map(withToolMetadata) }));
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOL_MANIFEST.map((entry) => entry.definition) }));
 
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
     const { name, arguments: args } = req.params;
-    const handler = TOOL_HANDLERS[name];
-    if (!handler) {
+    const entry = TOOL_BY_NAME.get(name);
+    if (!entry) {
       return { content: [{ type: "text", text: `Tool desconhecida: ${name}` }], isError: true };
     }
     try {
-      const result = await handler(args ?? {});
+      const result = await entry.handler(args ?? {});
       return formatToolResult(result);
     } catch (error) {
       return { content: [{ type: "text", text: `Erro: ${error.message}` }], isError: true };

@@ -5,13 +5,13 @@
     "mcpServers": {
       "meta-ads-mcp": {
         "command": "node",
-        "args": ["C:/Workspace/MCP Servers/meta-ads-mcp/dist/server.js"],
+        "args": ["<repo-root>/meta-ads-mcp/dist/server.js"],
         "env": {
           "READ_ONLY": "true",
           "DRY_RUN": "true",
-          "ACCOUNTS_CONFIG_PATH": "C:/Workspace/MCP Servers/meta-ads-mcp/config/accounts.json",
-          "AUDIT_LOG_PATH": "C:/Workspace/MCP Servers/meta-ads-mcp/data/audit.log",
-          "STORAGE_PATH": "C:/Workspace/MCP Servers/meta-ads-mcp/data/storage.json",
+          "ACCOUNTS_CONFIG_PATH": "<repo-root>/meta-ads-mcp/config/accounts.json",
+          "AUDIT_LOG_PATH": "<repo-root>/meta-ads-mcp/data/audit.log",
+          "STORAGE_PATH": "<repo-root>/meta-ads-mcp/data/storage.json",
           "META_GRAPH_API_VERSION": "v25.0",
           "GLOBAL_MAX_DAILY_BUDGET": "500",
           "GLOBAL_MAX_BUDGET_CHANGE_PCT": "25",
@@ -26,12 +26,12 @@
     "mcp": {
       "meta-ads-mcp": {
         "type": "local",
-        "command": ["node", "C:/Workspace/MCP Servers/meta-ads-mcp/dist/server.js"],
+        "command": ["node", "<repo-root>/meta-ads-mcp/dist/server.js"],
         "enabled": true,
         "env": {
           "READ_ONLY": "true",
           "DRY_RUN": "true",
-          "ACCOUNTS_CONFIG_PATH": "C:/Workspace/MCP Servers/meta-ads-mcp/config/accounts.json",
+          "ACCOUNTS_CONFIG_PATH": "<repo-root>/meta-ads-mcp/config/accounts.json",
           "GLOBAL_MAX_DAILY_BUDGET": "500",
           "GLOBAL_MAX_BUDGET_CHANGE_PCT": "25"
         }
@@ -44,7 +44,7 @@
       "meta-ads-mcp": {
         "type": "stdio",
         "command": "node",
-        "args": ["C:/Workspace/MCP Servers/meta-ads-mcp/dist/server.js"],
+        "args": ["<repo-root>/meta-ads-mcp/dist/server.js"],
         "disabled": false,
         "timeout": 60,
         "env": {

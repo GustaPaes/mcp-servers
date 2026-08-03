@@ -2,6 +2,16 @@ import { z } from "zod";
 import { evidenceLogSchema, evidenceSchema } from "../models/evidence.js";
 import { loadEvidenceLog, saveEvidenceLog, listPdis, listGoals, saveGoal, withStorageMutation } from "../storage.js";
 import { importEvidenceFromWorkItem } from "../integrations/tfs-bridge.js";
+import {
+  dateTextSchema,
+  idListSchema,
+  longTextSchema,
+  paginate,
+  paginationSchema,
+  shortTextListSchema,
+  shortTextSchema,
+  safeIdSchema,
+} from "../models/common.js";
 
 function nowIso() {
   return new Date().toISOString();
@@ -13,20 +23,20 @@ function normalizeEvidence(log) {
 
 export async function toolEvidenceAdd(args) {
   const input = z.object({
-    date: z.string(),
+    date: dateTextSchema,
     type: z.enum(["delivery", "feedback", "certification", "presentation", "mentoring", "code_review", "leadership", "quality"]),
-    title: z.string().min(1),
-    description: z.string().min(1),
-    impact: z.string().min(1),
-    linkedPdiIds: z.array(z.string()).default([]),
-    linkedGoalIds: z.array(z.string()).default([]),
-    linkedWorkItems: z.array(z.string()).default([]),
-    linkedPRs: z.array(z.string()).default([]),
+    title: shortTextSchema,
+    description: longTextSchema,
+    impact: longTextSchema,
+    linkedPdiIds: idListSchema.default([]),
+    linkedGoalIds: idListSchema.default([]),
+    linkedWorkItems: idListSchema.default([]),
+    linkedPRs: idListSchema.default([]),
     visibility: z.enum(["self", "team", "org"]),
-    tags: z.array(z.string()).default([]),
+    tags: shortTextListSchema.default([]),
     source: z.enum(["manual", "tfs"]).default("manual"),
-    sourceMeta: z.record(z.unknown()).default({}),
-  }).parse(args);
+    sourceMeta: z.record(z.unknown()).refine((value) => JSON.stringify(value).length <= 16_384, "sourceMeta excede 16 KiB").default({}),
+  }).strict().parse(args);
 
   return withStorageMutation(async () => {
     const current = normalizeEvidence(await loadEvidenceLog());
@@ -54,26 +64,28 @@ export async function toolEvidenceAdd(args) {
 }
 
 export async function toolEvidenceList(args) {
-  const { linkedGoalId, linkedPdiId, type } = z.object({
-    linkedGoalId: z.string().optional(),
-    linkedPdiId: z.string().optional(),
-    type: z.string().optional(),
-  }).parse(args);
+  const { linkedGoalId, linkedPdiId, type, offset, limit } = paginationSchema.extend({
+    linkedGoalId: safeIdSchema.optional(),
+    linkedPdiId: safeIdSchema.optional(),
+    type: shortTextSchema.optional(),
+  }).strict().parse(args);
   const log = normalizeEvidence(await loadEvidenceLog());
-  return log.evidences
+  const items = log.evidences
     .filter((evidence) => !linkedGoalId || evidence.linkedGoalIds.includes(linkedGoalId))
     .filter((evidence) => !linkedPdiId || evidence.linkedPdiIds.includes(linkedPdiId))
     .filter((evidence) => !type || evidence.type === type)
     .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  return paginate(items, { offset, limit });
 }
 
 export async function toolEvidenceReport(args) {
-  const { pdiId } = z.object({ pdiId: z.string().optional() }).parse(args);
+  const { pdiId, offset, limit } = paginationSchema.extend({ pdiId: safeIdSchema.optional() }).strict().parse(args);
   const [log, pdis, goals] = await Promise.all([loadEvidenceLog(), listPdis(), listGoals()]);
   const evidences = normalizeEvidence(log).evidences.filter((evidence) => !pdiId || evidence.linkedPdiIds.includes(pdiId));
+  const page = paginate(evidences, { offset, limit });
   return {
     total: evidences.length,
-    items: evidences.map((evidence) => ({
+    items: page.items.map((evidence) => ({
       id: evidence.id,
       date: evidence.date,
       title: evidence.title,
@@ -82,6 +94,7 @@ export async function toolEvidenceReport(args) {
       linkedGoals: goals.filter((goal) => evidence.linkedGoalIds.includes(goal.id)).map((goal) => goal.title),
       linkedWorkItems: evidence.linkedWorkItems,
     })),
+    pagination: page.pagination,
   };
 }
 
@@ -97,14 +110,14 @@ export async function toolEvidenceFromTfs(args) {
     dryRun,
   } = z.object({
     workItemId: z.union([z.string(), z.number()]),
-    linkedPdiIds: z.array(z.string()).default([]),
-    linkedGoalIds: z.array(z.string()).default([]),
+    linkedPdiIds: idListSchema.default([]),
+    linkedGoalIds: idListSchema.default([]),
     type: z.enum(["delivery", "feedback", "certification", "presentation", "mentoring", "code_review", "leadership", "quality"]).default("delivery"),
     visibility: z.enum(["self", "team", "org"]).default("self"),
-    impact: z.string().min(1).default("Evidencia importada de um work item para conectar uma entrega real ao desenvolvimento profissional."),
-    tags: z.array(z.string()).default(["tfs"]),
+    impact: longTextSchema.default("Evidencia importada de um work item para conectar uma entrega real ao desenvolvimento profissional."),
+    tags: shortTextListSchema.default(["tfs"]),
     dryRun: z.boolean().default(true),
-  }).parse(args);
+  }).strict().parse(args);
   const imported = await importEvidenceFromWorkItem(workItemId);
   const existing = normalizeEvidence(await loadEvidenceLog()).evidences.find(
     (item) => item.source === "tfs" && item.linkedWorkItems.includes(String(imported.workItemId))

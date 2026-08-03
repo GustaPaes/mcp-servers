@@ -183,3 +183,15 @@ A copy of this prompt lives in `docs/prompts/`.
 2. **Object Storage** bucket replication for Velero backups + Terraform state.
 3. **KMS keys** replicated to DR region (Vault → Replication).
 4. Document runbook: how to recreate OKE cluster from Velero + IaC.
+
+---
+
+## 11. MCP contract and runtime discipline
+
+- Classify each tool in the canonical policy manifest and derive annotations from it. Registration must fail closed on missing, orphaned or invalid policies.
+- Parse inputs strictly and expose the standard output envelope with `outputSchema`. Reject unknown fields instead of silently dropping operator mistakes.
+- Use bounded request timeouts and retries. Respect `Retry-After`; reuse one OCI `opcRetryToken` across retries of create operations so an ambiguous response cannot duplicate a resource.
+- Keep polling duration, log tails, page sizes, HTTP bodies, session TTL and concurrent sessions within documented hard limits.
+- Refresh HTTP session TTL only while idle. Expiry and shutdown must close both transport and MCP server resources.
+- Keep audit redaction mandatory and normalize SDK errors before logging them. Test camelCase secret keys, bearer values, query-string credentials and long token-like payloads.
+- Validate OCID structure and expected resource type before making an SDK request. A generic OCID is appropriate only where the OCI API legitimately accepts multiple resource types.

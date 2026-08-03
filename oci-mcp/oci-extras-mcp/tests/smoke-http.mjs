@@ -35,6 +35,14 @@ async function main() {
 
   try {
     await waitForReady(`http://127.0.0.1:${PORT}/healthz`);
+    const invalidSessionResponse = await fetch(`http://127.0.0.1:${PORT}/mcp`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+    });
+    if (invalidSessionResponse.status !== 400) {
+      throw new Error(`expected pre-initialize request to fail with 400, got ${invalidSessionResponse.status}`);
+    }
     const transport = new StreamableHTTPClientTransport(
       new URL(`http://127.0.0.1:${PORT}/mcp`)
     );

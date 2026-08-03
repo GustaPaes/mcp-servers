@@ -16,11 +16,29 @@ Before every push:
 
 ```powershell
 git status --short
+npm run validate:fast
 gitleaks git --redact
 ```
 
 Do not bypass ignore rules with `git add -f` for private material. Examples must
 use reserved domains, placeholder IDs and synthetic tokens.
+
+## Runtime security baseline
+
+- Treat MCP annotations and agent instructions as usability metadata, not as an
+  authorization boundary. Enforce destructive, secret-reading and high-impact
+  guards inside the server.
+- Bind HTTP transports to loopback by default. Remote exposure requires
+  authentication, request/session limits, idle expiry and graceful shutdown.
+- Restrict file access after resolving symbolic links. Use dedicated ignored
+  roots for uploads, exports and generated artifacts, with quotas and retention.
+- When forwarding credentials, only call configured provider origins. Validate
+  redirects and block unintended private or cloud-metadata destinations.
+- Apply bounded timeouts and retry budgets. Never retry a non-idempotent mutation
+  unless it has a provider-supported idempotency or deduplication key.
+- Centralize structured audit and redact secrets before logs, errors and MCP
+  responses. Critical remote mutations must not silently continue when their
+  required audit record cannot be persisted.
 
 ## Reporting
 

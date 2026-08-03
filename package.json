@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Workspace for the reusable MCP servers in this repository.",
   "engines": {
-    "node": ">=20"
+    "node": ">=20.19.0"
   },
   "workspaces": [
     "packages/*",
@@ -17,12 +17,16 @@
     "tfs-mcp"
   ],
   "scripts": {
-    "doctor": "node scripts/portfolio-doctor.mjs",
+    "doctor": "node scripts/repository-doctor.mjs",
+    "test:policy": "node --test scripts/repository-policy.test.mjs",
+    "test:shared": "npm test --workspace @gustapaes/mcp-runtime --workspace @gustapaes/mcp-config-kit",
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "build": "npm run build --workspaces --if-present",
     "audit:production": "npm audit --omit=dev --workspaces",
-    "validate": "npm run doctor && npm run lint && npm test && npm run typecheck && npm run build"
+    "validate:fast": "npm run doctor && npm run test:policy && npm run test:shared",
+    "validate:full": "npm run validate:fast && node scripts/validate-workspaces.mjs",
+    "validate": "npm run validate:full"
   }
 }

@@ -4,10 +4,12 @@
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
 
 import { config, validateConfigForAuth } from "./config.js";
 import { logger } from "./safety/audit.js";
 import { withSafety } from "./safety/wrap.js";
+import { TOOL_POLICIES, annotationsFor, validateToolManifest } from "./tool-manifest.js";
 
 import * as okeTools from "./tools/oke/index.js";
 import * as vaultTools from "./tools/vault/index.js";
@@ -16,7 +18,7 @@ import * as fnTools from "./tools/functions/index.js";
 import * as streamingTools from "./tools/streaming/index.js";
 import * as metaTools from "./tools/meta/index.js";
 
-const ALL_TOOLS = {
+export const ALL_TOOLS = {
   ...okeTools,
   ...vaultTools,
   ...k8sTools,
@@ -25,65 +27,27 @@ const ALL_TOOLS = {
   ...metaTools,
 };
 
-const READ_ONLY_TOOLS = new Set([
-  "k8s_list_namespaces",
-  "k8s_list_pods",
-  "k8s_describe_pod",
-  "streaming_tail_oci_log",
-  "streaming_tail_pod_logs",
-  "fn_list_applications",
-  "fn_list_functions",
-  "fn_get_function",
-  "vault_list",
-  "vault_get",
-  "kms_key_list",
-  "secret_list",
-  "secret_get",
-  "oke_list_clusters",
-  "oke_get_cluster",
-  "oke_list_node_pools",
-  "oke_get_node_pool",
-  "oke_list_addons",
-  "oke_get_work_request",
-  "oke_recommend_setup",
-  "oke_get_kubeconfig",
-  "oke_list_owned",
-  "oci_whoami",
-  "oci_list_regions",
-  "oci_list_compartments",
-  "oci_list_availability_domains",
-  "oci_ledger_dump",
-]);
+validateToolManifest(ALL_TOOLS);
 
-const DESTRUCTIVE_TOOLS = new Set([
-  "k8s_delete_object",
-  "fn_delete_function",
-  "kms_key_disable",
-  "secret_schedule_deletion",
-  "oke_delete_cluster",
-  "oke_delete_node_pool",
-]);
+export const ToolOutputSchema = z.object({
+  ok: z.boolean(),
+  data: z.unknown().optional(),
+  errors: z.array(z.string()).optional(),
+  meta: z.record(z.unknown()).optional(),
+}).strict();
 
-const MUTATING_TOOLS = new Set(
-  Object.keys(ALL_TOOLS).filter((name) => !READ_ONLY_TOOLS.has(name))
-);
-
-for (const name of Object.keys(ALL_TOOLS)) {
-  if (!READ_ONLY_TOOLS.has(name) && !MUTATING_TOOLS.has(name)) {
-    throw new Error(`Missing explicit tool safety classification: ${name}`);
+function envelope(result, name) {
+  const policy = TOOL_POLICIES[name];
+  if (result?.ok === false) {
+    const message = result.error ?? result.reason ?? result.message ?? "Operation failed";
+    return {
+      ok: false,
+      errors: [String(message)],
+      data: result.requiresHumanAck ? result : undefined,
+      meta: { risk: policy.risk, code: result.code, statusCode: result.statusCode },
+    };
   }
-}
-
-function toolAnnotations(name) {
-  const readOnly = READ_ONLY_TOOLS.has(name);
-  const destructive = DESTRUCTIVE_TOOLS.has(name);
-  return {
-    title: name.replaceAll("_", " "),
-    readOnlyHint: readOnly,
-    destructiveHint: destructive,
-    idempotentHint: readOnly,
-    openWorldHint: true,
-  };
+  return { ok: true, data: result, meta: { risk: policy.risk } };
 }
 
 export function buildServer() {
@@ -99,17 +63,18 @@ export function buildServer() {
   );
 
   for (const [name, def] of Object.entries(ALL_TOOLS)) {
-    if (!def?.handler || !def?.input) continue;
+    const inputSchema = typeof def.input.strict === "function" ? def.input.strict() : def.input;
     server.registerTool(
       name,
       {
         description: def.description ?? name,
-        inputSchema: def.input.shape ?? def.input,
-        annotations: toolAnnotations(name),
+        inputSchema: inputSchema.shape ?? inputSchema,
+        outputSchema: ToolOutputSchema.shape,
+        annotations: annotationsFor(name),
       },
       async (args, ctx) => {
-        const wrapped = withSafety(name, (a) => def.handler(a, ctx));
-        const result = await wrapped(args ?? {});
+        const wrapped = withSafety(name, (a) => def.handler(inputSchema.parse(a), ctx));
+        const result = envelope(await wrapped(args ?? {}), name);
         const text = typeof result === "string" ? result : JSON.stringify(result, null, 2);
         return {
           content: [{ type: "text", text }],

@@ -18,6 +18,7 @@ export const GOAL_SUMMARY_SCHEMA = {
 
 export const ACTION_SCHEMA = {
   type: "object",
+  additionalProperties: false,
   properties: {
     id: { type: "string" },
     title: { type: "string" },
@@ -33,6 +34,7 @@ export const ACTION_SCHEMA = {
 
 export const DEVELOPMENT_AREA_SCHEMA = {
   type: "object",
+  additionalProperties: false,
   properties: {
     id: { type: "string" },
     area: { type: "string" },
@@ -196,4 +198,79 @@ export const GOAL_PROGRESS_OUTPUT_SCHEMA = {
     projectedStatus: { type: "string" },
   },
   required: ["goal", "smartAnalysis", "milestones", "evidenceCount", "projectedStatus"],
+};
+
+export const PAGINATION_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    offset: { type: "number" },
+    limit: { type: "number" },
+    total: { type: "number" },
+    hasMore: { type: "boolean" },
+    nextOffset: NULLABLE_NUMBER_SCHEMA,
+  },
+  required: ["offset", "limit", "total", "hasMore", "nextOffset"],
+};
+
+function paginatedOutput(itemSchema) {
+  return {
+    type: "object",
+    properties: {
+      items: { type: "array", items: itemSchema },
+      pagination: PAGINATION_OUTPUT_SCHEMA,
+    },
+    required: ["items", "pagination"],
+  };
+}
+
+export const PDI_LIST_OUTPUT_SCHEMA = paginatedOutput(PDI_SUMMARY_SCHEMA);
+export const GOAL_LIST_OUTPUT_SCHEMA = paginatedOutput(GOAL_SUMMARY_SCHEMA);
+export const EVIDENCE_LIST_OUTPUT_SCHEMA = paginatedOutput({
+  type: "object",
+  properties: {
+    id: { type: "string" },
+    date: { type: "string" },
+    type: { type: "string" },
+    title: { type: "string" },
+    description: { type: "string" },
+    impact: { type: "string" },
+    linkedPdiIds: { type: "array", items: { type: "string" } },
+    linkedGoalIds: { type: "array", items: { type: "string" } },
+    linkedWorkItems: { type: "array", items: { type: "string" } },
+    linkedPRs: { type: "array", items: { type: "string" } },
+    visibility: { type: "string" },
+    tags: { type: "array", items: { type: "string" } },
+    source: { type: "string" },
+    sourceMeta: { type: "object" },
+    createdAt: { type: "string" },
+  },
+  required: ["id", "date", "type", "title", "description", "impact", "linkedPdiIds", "linkedGoalIds", "linkedWorkItems", "linkedPRs", "visibility", "tags", "source", "sourceMeta", "createdAt"],
+});
+
+export const DOCTOR_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    ok: { type: "boolean" },
+    storageReady: { type: "boolean" },
+    importRoots: {
+      type: "object",
+      properties: { configured: { type: "number" }, available: { type: "number" } },
+      required: ["configured", "available"],
+    },
+    tfsBridgeAvailable: { type: "boolean" },
+    issues: { type: "array", items: { type: "string" } },
+  },
+  required: ["ok", "storageReady", "importRoots", "tfsBridgeAvailable", "issues"],
+};
+
+export const SNAPSHOT_VALIDATE_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    valid: { type: "boolean" },
+    schemaVersion: { type: "number" },
+    capturedAt: { type: "string" },
+    planCards: { type: "number" },
+    apiResponses: { type: "number" },
+  },
+  required: ["valid", "schemaVersion", "capturedAt", "planCards", "apiResponses"],
 };

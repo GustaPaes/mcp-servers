@@ -171,7 +171,7 @@ export const pageTools: ToolModule = {
     },
     async page_goto(args) {
       const url = String(args.url);
-      assertUrlAllowed(url);
+      await assertUrlAllowed(url);
       const rec = sessionManager.resolvePage(args.page_id as string | undefined);
       const resp = await rec.page.goto(url, {
         waitUntil: (args.wait_until as "load") ?? "load",

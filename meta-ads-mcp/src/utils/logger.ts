@@ -8,6 +8,7 @@ import { getEnv } from '../config/env.js';
 const SECRET_PATTERNS: RegExp[] = [
   /EAA[A-Za-z0-9_-]{20,}/g, // Facebook Graph API user/page tokens usually start with EAA
   /\baccess_token=([^&\s"]+)/gi,
+  /\b(client_secret|api_key|refresh_token)=([^&\s"]+)/gi,
   /"access_token"\s*:\s*"([^"]+)"/g,
   /\bBearer\s+[A-Za-z0-9._-]+/g,
 ];

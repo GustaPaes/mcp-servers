@@ -33,9 +33,13 @@ Every write tool obeys:
 3. Atomic ownership ledger (corruption fails closed; third-party resources need `humanAck` round-trip)
 4. Env flags: `OCI_MCP_ALLOW_DESTRUCTIVE`, `OCI_MCP_ALLOW_THIRD_PARTY_MUTATION`, `OCI_MCP_ALLOW_SECRET_REVEAL`
 
-The server declares MCP annotations from an explicit allowlist: the 51-tool
-contract marks every read-only operation as non-mutating and treats every other
-operation conservatively. `npm test` validates the complete tool catalog over
-both stdio and HTTP transports.
+The server derives MCP annotations from an explicit 51-tool policy manifest.
+Registration fails when a definition, handler or policy drifts. Inputs are
+strict, every result follows the documented output envelope, and `npm test`
+validates contracts plus stdio and HTTP transports.
+
+Outbound OCI calls have bounded timeouts and retries. Create operations reuse
+one provider `opcRetryToken` across attempts. HTTP sessions renew their idle TTL
+on activity and close both transport and MCP server resources on expiry.
 
 See [../BEST_PRACTICES.md](../BEST_PRACTICES.md#3-safety-guards-built-into-oci-extras-mcp).

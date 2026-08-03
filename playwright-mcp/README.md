@@ -47,7 +47,7 @@ What we **don't** have on purpose: `browser_run_code_unsafe` (RCE), `--cdp-endpo
 ## Install
 
 ```powershell
-cd "C:\Workspace\MCP Servers\playwright-mcp"
+cd "<repo-root>/playwright-mcp"
 npm install
 npm run build
 npx playwright install chromium       # at minimum; add firefox/webkit/msedge if you need them
@@ -69,11 +69,16 @@ PWMCP_MAX_SESSIONS=5
 PWMCP_SESSION_TTL_MINUTES=30
 PWMCP_OUTPUT_DIR=                       # defaults to <repo>/output
 PWMCP_MAX_ARTIFACT_BYTES=2000000        # large screenshots stay on disk instead of inline base64
+PWMCP_MAX_ARTIFACT_FILE_BYTES=50000000  # hard cap for each generated file
+PWMCP_MAX_OUTPUT_BYTES=500000000         # total local artifact quota
 PWMCP_MAX_NETWORK_BODY_BYTES=65536      # cap network bodies returned to the MCP client
 PWMCP_STRICT=true
+PWMCP_BLOCK_PRIVATE_NETWORKS=true        # block loopback, link-local and private IPs after DNS
+PWMCP_ALLOWED_HOSTS=                     # optional exact hosts or *.example.com, comma-separated
+PWMCP_ALLOW_EVAL=false                   # opt in only for a trusted local client
 PWMCP_ALLOW_SECRET_REVEAL=false         # headers, cookies and bodies stay redacted
 PWMCP_ALLOW_BROWSER_INSTALL=false       # opt in before browser_install may change the host
-PWMCP_ALLOWED_FILE_ROOTS=               # path-delimited upload roots
+PWMCP_ALLOWED_FILE_ROOTS=               # defaults to ./local-private/uploads
 PWMCP_ALLOWED_PROFILE_ROOTS=            # defaults to ./local-private/profiles
 PWMCP_EVAL_TIMEOUT_MS=5000
 PWMCP_ACTION_TIMEOUT_MS=10000
@@ -91,7 +96,7 @@ Minimal Claude Desktop snippet (`%APPDATA%\Claude\claude_desktop_config.json`):
   "mcpServers": {
     "playwright-mcp": {
       "command": "node",
-      "args": ["C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"],
+      "args": ["<repo-root>/playwright-mcp/dist/index.js"],
       "env": { "PWMCP_DEFAULT_CHANNEL": "chrome" }
     }
   }
@@ -106,7 +111,7 @@ OpenCode (`~/.config/opencode/opencode.json`):
   "mcp": {
     "playwright-mcp": {
       "type": "local",
-      "command": ["node", "C:/Workspace/MCP Servers/playwright-mcp/dist/index.js"],
+      "command": ["node", "<repo-root>/playwright-mcp/dist/index.js"],
       "enabled": true
     }
   }
@@ -176,7 +181,7 @@ All tools follow `<domain>_<verb>_<resource>` naming. Most accept an optional `p
 | `page_text_content` / `page_inner_text` / `page_inner_html` | Read element text/HTML. |
 | `page_get_attribute` | Read an HTML attribute. |
 | `page_console_messages` | Read captured console messages and page errors for frontend diagnostics. |
-| `page_evaluate` | Run a JS function in the page (sandboxed: blocks `eval`/`Function`/dynamic `import`/`chrome.webRequest`; 5 s default timeout). |
+| `page_evaluate` | Run an opt-in JS function in the page; disabled unless `PWMCP_ALLOW_EVAL=true`, filtered and time-bounded. |
 | `page_query_selector_all` | Up to N matches with tag/text/bbox — great for scanning. |
 | `page_accessibility_snapshot` | YAML ARIA snapshot in `mode:"ai"` with `[ref=eN]` refs (the LLM-friendly view of the page). |
 | `page_get_url` / `page_get_title` / `page_get_cookies` | Basic page state. |
@@ -197,7 +202,7 @@ All tools follow `<domain>_<verb>_<resource>` naming. Most accept an optional `p
 | `page_route` | Intercept requests by glob or `/regex/`. Action: `abort` / `fulfill` / `continue` (with overrides). |
 | `page_unroute` | Remove one route or all of them. |
 | `page_wait_for_request` / `page_wait_for_response` | Wait for a specific call; sensitive headers and bodies are redacted by default and size-capped. |
-| `network_log_start` / `network_log_stop` | HAR — enable via `record_har` on `context_new`; close the context to flush. |
+| `network_log_status` / `network_log_stop` | Inspect HAR state; enable via `record_har` on `context_new` and close the context to flush. `network_log_start` remains a deprecated status alias. |
 
 ### Advanced
 
@@ -274,8 +279,9 @@ playwright-mcp/
 ## Limitations / non-goals
 
 - **Anti-bot bypass**: `browser_stealth` is a light tweak (UA, `navigator.webdriver`, languages, `chrome.runtime`). For Cloudflare Turnstile, DataDome, PerimeterX, etc. use a dedicated stack — out of scope.
-- **`page_evaluate` is not a security sandbox.** Playwright executes the function in the **browser**, not Node. The text-level filter blocks obvious abuse but is not a substitute for client-level permissions.
-- **HAR / video are context-level features in Playwright.** You must enable them on `context_new`. The `network_log_start` / `page_video_start` tools just report status for an already-recording context.
+- **`page_evaluate` is not a security sandbox.** It is disabled by default and requires `PWMCP_ALLOW_EVAL=true`. Playwright executes the function in the browser; the filter is only defense in depth.
+- Main navigation and subresources are checked against `PWMCP_ALLOWED_HOSTS` and private-network rules after DNS resolution. A private destination is allowed only when its hostname/IP is explicitly listed. Keep the allowlist narrow; DNS prechecks reduce SSRF exposure but are not a complete sandbox against DNS rebinding.
+- **HAR / video are context-level features in Playwright.** Enable them on `context_new`. `network_log_status` and `page_video_start` report status for an already-recording context.
 - **No remote CDP attach** in v1 (`--cdp-endpoint` of MS MCP). Backlog.
 - **Persistent sessions can't host extra contexts** (Playwright limitation): a `user_data_dir` launch returns a single persistent context which IS the only context for that session.
 - Persistent profiles are confined to `PWMCP_ALLOWED_PROFILE_ROOTS`; use the ignored `local-private/profiles/` directory for real logins.
@@ -325,7 +331,7 @@ O `@playwright/mcp` oficial é excelente para sessão única com snapshot. **Est
 ### Instalação
 
 ```powershell
-cd "C:\Workspace\MCP Servers\playwright-mcp"
+cd "<repo-root>/playwright-mcp"
 npm install
 npm run build
 npx playwright install chromium       # mínimo; adicione firefox/webkit/msedge se quiser
@@ -337,7 +343,7 @@ Veja a seção [Wire it into your MCP client](#wire-it-into-your-mcp-client) aci
 
 ### Política operacional
 
-Leia [`AGENTS.md`](./AGENTS.md) — classifica todas as tools em 🟢 READ / 🟡 WRITE / 🔴 DESTRUCTIVE e define quando o LLM deve pedir confirmação (sites financeiros, governamentais, navegação `file://`, etc.).
+Leia [`AGENTS.md`](./AGENTS.md) — a política executável classifica as tools como `READ`, `SECRET_READ`, `LOCAL_STATE`, `EXECUTION`, `REMOTE_WRITE` ou `DESTRUCTIVE` e exige confirmação de acordo com a consequência real da ação.
 
 ### Licença
 

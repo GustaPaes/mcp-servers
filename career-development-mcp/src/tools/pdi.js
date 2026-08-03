@@ -1,7 +1,16 @@
 import { z } from "zod";
 import { checkpointSchema, developmentAreaSchema, pdiSchema } from "../models/pdi.js";
 import { profileSchema } from "../models/profile.js";
-import { safeIdSchema } from "../models/common.js";
+import {
+  dateTextSchema,
+  idListSchema,
+  longTextSchema,
+  paginate,
+  paginationSchema,
+  shortTextListSchema,
+  shortTextSchema,
+  safeIdSchema,
+} from "../models/common.js";
 import { getPdi, loadProfile, listPdis, savePdi, listGoals, loadEvidenceLog, withStorageMutation } from "../storage.js";
 import { computePdiProgress } from "../analytics/progress-tracker.js";
 import { scorePdiQuality } from "../analytics/pdi-scoring.js";
@@ -20,9 +29,10 @@ function slugify(value) {
     .slice(0, 50);
 }
 
-export async function toolPdiList() {
+export async function toolPdiList(args = {}) {
+  const pagination = paginationSchema.parse(args);
   const [pdis, goals] = await Promise.all([listPdis(), listGoals()]);
-  return pdis.map((pdi) => ({
+  const items = pdis.map((pdi) => ({
     id: pdi.id,
     title: pdi.title,
     status: pdi.status,
@@ -32,10 +42,11 @@ export async function toolPdiList() {
     period: pdi.period,
     tags: pdi.tags,
   }));
+  return paginate(items, pagination);
 }
 
 export async function toolPdiGet(args) {
-  const { id } = z.object({ id: safeIdSchema }).parse(args);
+  const { id } = z.object({ id: safeIdSchema }).strict().parse(args);
   const [pdis, goals, evidenceLog] = await Promise.all([listPdis(), listGoals(), loadEvidenceLog()]);
   const pdi = pdis.find((item) => item.id === id);
   if (!pdi) throw new Error(`PDI nao encontrado: ${id}`);
@@ -63,7 +74,7 @@ export async function toolPdiGet(args) {
 }
 
 export async function toolPdiAnalyze(args) {
-  const { id } = z.object({ id: safeIdSchema }).parse(args);
+  const { id } = z.object({ id: safeIdSchema }).strict().parse(args);
   const [pdis, goals, evidenceLog] = await Promise.all([listPdis(), listGoals(), loadEvidenceLog()]);
   const pdi = pdis.find((item) => item.id === id);
   if (!pdi) throw new Error(`PDI nao encontrado: ${id}`);
@@ -72,16 +83,16 @@ export async function toolPdiAnalyze(args) {
 
 export async function toolPdiCreate(args) {
   const input = z.object({
-    title: z.string().min(1),
-    currentRole: z.string().optional(),
-    targetRole: z.string().optional(),
-    vision: z.string().min(1),
-    start: z.string(),
-    end: z.string(),
-    strengths: z.array(z.string()).default([]),
-    tags: z.array(z.string()).default([]),
-    developmentAreas: z.array(developmentAreaSchema).default([]),
-  }).parse(args);
+    title: shortTextSchema,
+    currentRole: shortTextSchema.optional(),
+    targetRole: shortTextSchema.optional(),
+    vision: longTextSchema,
+    start: dateTextSchema,
+    end: dateTextSchema,
+    strengths: shortTextListSchema.default([]),
+    tags: shortTextListSchema.default([]),
+    developmentAreas: z.array(developmentAreaSchema).max(100).default([]),
+  }).strict().parse(args);
 
   return withStorageMutation(async () => {
     const profile = profileSchema.parse(await loadProfile());
@@ -101,6 +112,7 @@ export async function toolPdiCreate(args) {
       period: { start: input.start, end: input.end },
       developmentAreas: input.developmentAreas,
       checkpoints: [],
+      revision: 1,
       createdAt: timestamp,
       updatedAt: timestamp,
     });
@@ -112,16 +124,21 @@ export async function toolPdiCreate(args) {
 export async function toolPdiUpdate(args) {
   const input = z.object({
     id: safeIdSchema,
+    expectedRevision: z.number().int().min(1).optional(),
     status: z.enum(["draft", "active", "review", "completed", "archived"]).optional(),
-    vision: z.string().optional(),
-    tags: z.array(z.string()).optional(),
-    strengths: z.array(z.string()).optional(),
-    developmentAreas: z.array(developmentAreaSchema).optional(),
-    checkpoints: z.array(checkpointSchema).optional(),
-  }).parse(args);
+    vision: longTextSchema.optional(),
+    tags: shortTextListSchema.optional(),
+    strengths: shortTextListSchema.optional(),
+    developmentAreas: z.array(developmentAreaSchema).max(100).optional(),
+    checkpoints: z.array(checkpointSchema).max(100).optional(),
+  }).strict().parse(args);
 
   return withStorageMutation(async () => {
     const current = await toolPdiGet({ id: input.id });
+    const currentRevision = current.pdi.revision ?? 1;
+    if (input.expectedRevision !== undefined && input.expectedRevision !== currentRevision) {
+      throw new Error(`Conflito de revisão do PDI ${input.id}: esperado ${input.expectedRevision}, atual ${currentRevision}. Recarregue o registro antes de atualizar.`);
+    }
     const updated = pdiSchema.parse({
       ...current.pdi,
       ...(input.status ? { status: input.status } : {}),
@@ -130,6 +147,7 @@ export async function toolPdiUpdate(args) {
       ...(input.strengths ? { strengths: input.strengths } : {}),
       ...(input.developmentAreas ? { developmentAreas: input.developmentAreas } : {}),
       ...(input.checkpoints ? { checkpoints: input.checkpoints } : {}),
+      revision: currentRevision + 1,
       updatedAt: nowIso(),
     });
     await savePdi(updated);
@@ -138,7 +156,7 @@ export async function toolPdiUpdate(args) {
 }
 
 export async function toolPdiSnapshot(args) {
-  const { id, label = "manual" } = z.object({ id: safeIdSchema, label: z.string().default("manual") }).parse(args);
+  const { id, label = "manual" } = z.object({ id: safeIdSchema, label: shortTextSchema.default("manual") }).strict().parse(args);
   const detail = await toolPdiGet({ id });
   return {
     id: `${id}-${new Date().toISOString().slice(0, 10)}-${slugify(label)}`,

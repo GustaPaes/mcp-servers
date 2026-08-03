@@ -1,31 +1,39 @@
 import { z } from "zod";
+import {
+  dateTextSchema,
+  idListSchema,
+  optionalLongTextSchema,
+  shortTextListSchema,
+  shortTextSchema,
+} from "./common.js";
 
 export const milestoneSchema = z.object({
-  title: z.string().min(1),
-  dueDate: z.string().nullable().default(null),
+  title: shortTextSchema,
+  dueDate: dateTextSchema.nullable().default(null),
   completed: z.boolean().default(false),
-});
+}).strict();
 
 export const goalSchema = z.object({
-  id: z.string().min(1),
-  pdiId: z.string().min(1),
-  title: z.string().min(1),
+  id: shortTextSchema,
+  pdiId: shortTextSchema,
+  title: shortTextSchema,
   category: z.enum(["technical", "leadership", "soft_skill", "business", "quality"]),
   weight: z.number().min(0).max(100),
   progress: z.number().min(0).max(100),
-  dueDate: z.string().nullable().default(null),
+  dueDate: dateTextSchema.nullable().default(null),
   status: z.enum(["not_started", "in_progress", "completed", "blocked", "cancelled"]),
-  linkedCompetencies: z.array(z.string()).default([]),
-  evidenceIds: z.array(z.string()).default([]),
+  linkedCompetencies: idListSchema.default([]),
+  evidenceIds: idListSchema.default([]),
   smart: z.object({
-    specific: z.string().default(""),
-    measurable: z.string().default(""),
-    achievable: z.string().default(""),
-    relevant: z.string().default(""),
-    timeBound: z.string().default(""),
-  }),
-  milestones: z.array(milestoneSchema).default([]),
-  notes: z.array(z.string()).default([]),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-});
+    specific: optionalLongTextSchema.default(""),
+    measurable: optionalLongTextSchema.default(""),
+    achievable: optionalLongTextSchema.default(""),
+    relevant: optionalLongTextSchema.default(""),
+    timeBound: optionalLongTextSchema.default(""),
+  }).strict(),
+  milestones: z.array(milestoneSchema).max(100).default([]),
+  notes: shortTextListSchema.default([]),
+  revision: z.number().int().min(1).default(1),
+  createdAt: dateTextSchema,
+  updatedAt: dateTextSchema,
+}).strict();

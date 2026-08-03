@@ -14,7 +14,7 @@
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createServer } from 'node:http';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { getEnv } from '../config/env.js';
 import { getLogger } from '../utils/logger.js';
@@ -45,7 +45,11 @@ function isAuthorized(req: IncomingMessage, allowed: Set<string>): boolean {
   if (!header || Array.isArray(header)) return false;
   const match = /^Bearer\s+(.+)$/i.exec(header);
   if (!match || !match[1]) return false;
-  return allowed.has(match[1].trim());
+  const supplied = createHash('sha256').update(match[1].trim()).digest();
+  return [...allowed].some((token) => {
+    const expected = createHash('sha256').update(token).digest();
+    return timingSafeEqual(supplied, expected);
+  });
 }
 
 class HttpInputError extends Error {

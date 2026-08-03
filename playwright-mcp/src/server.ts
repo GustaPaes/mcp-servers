@@ -16,6 +16,14 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { logger } from "./logger.js";
 import type { ToolDef, ToolHandler, ToolModule } from "./types.js";
+import { annotationsForRisk, assertToolManifest } from "@gustapaes/mcp-runtime";
+import { TOOL_POLICY } from "./tool-policy.js";
+import {
+  applyContractLimits,
+  boundedToolResult,
+  OBJECT_OUTPUT_SCHEMA,
+  validateToolArguments,
+} from "./tool-contract.js";
 
 import { browserTools } from "./tools/browser.js";
 import { pageTools } from "./tools/page.js";
@@ -26,21 +34,20 @@ import { networkTools } from "./tools/network.js";
 import { advancedTools } from "./tools/advanced.js";
 
 function withToolMetadata(def: ToolDef): ToolDef {
-  // Force additionalProperties:false on input schemas (defense-in-depth).
-  const schema = def.inputSchema as { additionalProperties?: unknown };
-  if (schema && typeof schema === "object" && schema.additionalProperties == null) {
-    (schema as Record<string, unknown>).additionalProperties = false;
-  }
-  const readOnly = def.annotations?.readOnlyHint === true;
-  def.annotations = {
+  const policy = TOOL_POLICY[def.name];
+  if (!policy) throw new Error(`tool ${def.name} has no risk policy`);
+  const inputSchema = applyContractLimits(structuredClone(def.inputSchema));
+  return {
+    ...def,
+    inputSchema,
+    outputSchema: def.outputSchema ?? OBJECT_OUTPUT_SCHEMA,
+    annotations: {
     title: def.annotations?.title ?? def.name.replaceAll("_", " "),
-    readOnlyHint: readOnly,
-    destructiveHint: def.annotations?.destructiveHint ?? false,
-    idempotentHint: def.annotations?.idempotentHint ?? readOnly,
-    openWorldHint: true,
+    ...annotationsForRisk(policy.risk, policy),
     ...def.annotations,
+    ...annotationsForRisk(policy.risk, policy),
+    },
   };
-  return def;
 }
 
 const MODULES: ToolModule[] = [
@@ -53,18 +60,14 @@ const MODULES: ToolModule[] = [
   advancedTools,
 ];
 
-const TOOL_DEFS: ToolDef[] = MODULES.flatMap((m) => m.defs.map(withToolMetadata));
+const TOOL_DEFS: ToolDef[] = MODULES.flatMap((m) => m.defs);
 const TOOL_HANDLERS: Record<string, ToolHandler> = MODULES.reduce<Record<string, ToolHandler>>(
   (acc, m) => Object.assign(acc, m.handlers),
   {},
 );
 
-// Sanity check at module load: every def has a handler.
-for (const def of TOOL_DEFS) {
-  if (!TOOL_HANDLERS[def.name]) {
-    throw new Error(`tool ${def.name} declared without a handler`);
-  }
-}
+assertToolManifest({ definitions: TOOL_DEFS, handlers: TOOL_HANDLERS, policies: TOOL_POLICY, label: "Playwright MCP" });
+export const PUBLISHED_TOOL_DEFS: ToolDef[] = TOOL_DEFS.map(withToolMetadata);
 
 export function createServer(): Server {
   const server = new Server(
@@ -79,7 +82,7 @@ export function createServer(): Server {
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    return { tools: TOOL_DEFS };
+    return { tools: PUBLISHED_TOOL_DEFS };
   });
 
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
@@ -89,17 +92,18 @@ export function createServer(): Server {
     if (!handler) {
       throw new McpError(ErrorCode.MethodNotFound, `unknown tool: ${name}`);
     }
+    const definition = PUBLISHED_TOOL_DEFS.find((tool) => tool.name === name)!;
     const start = Date.now();
     try {
+      validateToolArguments(definition.inputSchema, args);
       const result = await handler(args);
+      const bounded = boundedToolResult(result);
       const elapsed = Date.now() - start;
       logger.info({ tool: name, ms: elapsed }, "tool ok");
-      const text = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+      const text = JSON.stringify(bounded, null, 2);
       return {
         content: [{ type: "text", text }],
-        ...(result && typeof result === "object"
-          ? { structuredContent: Array.isArray(result) ? { items: result } : result }
-          : {}),
+        structuredContent: bounded,
       };
     } catch (err) {
       const elapsed = Date.now() - start;
@@ -117,4 +121,4 @@ export function createServer(): Server {
   return server;
 }
 
-export const TOOL_NAMES = TOOL_DEFS.map((d) => d.name);
+export const TOOL_NAMES = PUBLISHED_TOOL_DEFS.map((d) => d.name);

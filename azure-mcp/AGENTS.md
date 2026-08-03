@@ -9,25 +9,48 @@
 
 ## 1. Princípio mestre
 
-> **Nunca cause efeito colateral em recursos Azure sem que o usuário tenha visto o plano e dito explicitamente "sim" / "confirmo" / "pode prosseguir".**
+> **Aplique confirmação proporcional ao impacto. Não repita uma confirmação para
+> uma ação operacional reversível que o usuário acabou de pedir explicitamente,
+> mas nunca execute alteração estrutural, exposição de segredo ou ação destrutiva
+> sem contexto e prévia suficientes.**
 
-O servidor opera em **modo completo** (sem `--read-only`). Toda a proteção é contratual via este arquivo.
+O servidor oficial opera em modo completo. Estas instruções orientam o agente,
+mas não substituem controles técnicos: use RBAC mínimo, Azure Policy, locks,
+soft-delete e identidades separadas para limitar o impacto.
 
 ---
 
 ## 2. Classificação de tools
 
-Sempre que invocar uma tool `azmcp_*`, classifique-a primeiro em uma das três categorias:
+Classifique cada comando/tool pela consequência real, usando a taxonomia global.
+Metadados do servidor são dicas e devem ser confrontados com comando, parâmetros,
+escopo e alvo.
 
 ### 🟢 READ (segura, sem aprovação)
 Padrões de nome: `*_list`, `*_get`, `*_show`, `*_query`, `*_describe`, `*_diagnose`, `*_check`, `*_status`, `*_recommendations`, `tools list`, `subscription list`, `group list`, `storage *_list`, `monitor logs query`.
 - Pode executar livremente.
 - Sempre que possível, **mostre o tenant + subscription resultantes** no início da resposta.
 
-### 🟡 WRITE (mutativa, exige confirmação)
-Padrões: `*_create`, `*_update`, `*_set`, `*_add`, `*_assign`, `*_deploy`, `*_scale`, `*_restart`, `*_start`, `*_stop`, `*_rotate`, `*_enable`, `*_disable`.
-- **Antes de executar:** apresente o bloco "Plano de mudança" (seção 5).
-- Aguarde "ok / sim / confirmo / pode" do usuário.
+### 🔵 EXECUTION (operacional e reversível)
+Padrões: `*_start`, `*_restart`, execução de diagnóstico, disparo pontual de job
+e outras ações sem alteração estrutural persistente.
+
+- Se o pedido atual já nomeia ação, escopo e alvo, ele serve como autorização;
+  mostre o contexto e execute sem pedir um segundo “sim”.
+- Se alvo, contexto ou impacto estiver ambíguo, apresente um plano curto e peça a
+  informação ausente.
+- `stop`/`deallocate`, failover, restart em massa ou ação que cause indisponibilidade
+  vira `REMOTE_WRITE` ou `DESTRUCTIVE`, conforme o impacto.
+
+### 🟡 REMOTE_WRITE (alteração persistente)
+Padrões: `*_create`, `*_update`, `*_set`, `*_add`, `*_assign`, `*_deploy`,
+`*_scale`, `*_rotate`, `*_enable` e `*_disable`.
+
+- Mostre o bloco “Plano de mudança” e a diferença esperada antes/depois.
+- Exija confirmação quando houver custo, acesso, rede, configuração persistente,
+  indisponibilidade ou quando o pedido não especificar exatamente a mudança.
+- Para uma alteração reversível já descrita de forma exata no pedido atual, uma
+  prévia curta seguida da execução é suficiente fora de produção.
 
 ### 🔴 DESTRUCTIVE (irreversível ou de alto impacto, exige confirmação reforçada)
 Padrões: `*_delete`, `*_remove`, `*_purge`, `*_destroy`, `*_force_delete`, `*_revoke`.
@@ -38,41 +61,65 @@ Também entram aqui (mesmo se nominalmente "update"):
 - Soft-delete bypass / disable de backup / disable de soft-delete em vault.
 - Operações em recursos com lock, mesmo que o lock será removido.
 - Comandos sobre `subscription`, `tenant`, `management group`.
-- Operações em **produção** (ver seção 4).
+- Operações destrutivas ou com risco de perda/downtime em **produção** (ver seção 4).
 
-Para 🔴: bloco de confirmação reforçada (seção 6).
+Para 🔴, sempre use o bloco de confirmação reforçada da seção 6.
+
+### 🟣 SECRET_READ
+Listar nomes, versões ou metadados sem o valor é `READ`. Revelar valor de secret,
+connection string, chave ou token é `SECRET_READ`: confirme contexto, exija pedido
+explícito pelo valor, retorne somente o necessário e nunca replique o segredo em
+logs, arquivos, commits ou resumos posteriores.
 
 ---
 
-## 3. Bootstrap obrigatório no início de qualquer sessão Azure
+## 3. Contexto Azure com cache de sessão
 
-Antes da primeira tool `azmcp_*`, execute e mostre ao usuário:
+Antes da primeira operação Azure da sessão, obtenha tenant, subscription e cloud
+ativos. Liste todas as subscriptions somente quando o usuário pedir, quando for
+necessário escolher uma ou quando o contexto atual não corresponder ao alvo.
 
-1. `azmcp_subscription_list` (ou equivalente) — para confirmar a quais subs ele tem acesso.
-2. `az account show` (via Bash) ou `azmcp_*_account_show` — para mostrar tenant + subscription **ativos**.
-3. Pergunte: *"Confirma operar no tenant `<X>` / subscription `<Y>`? Se quiser trocar, rode `scripts\switch-context.ps1`."*
+1. Use `az account show` ou a tool equivalente.
+2. Mostre tenant/subscription/cloud de forma concisa; masque IDs e identidade em
+   qualquer saída que possa ser compartilhada.
+3. Para `READ`, prossiga sem pedir confirmação do contexto.
+4. Para `EXECUTION`, o pedido explícito atual autoriza a ação após mostrar o
+   contexto, desde que o alvo seja inequívoco.
+5. Para `REMOTE_WRITE`, `DESTRUCTIVE` ou `SECRET_READ`, confirme o contexto se ele
+   ainda não tiver sido confirmado na sessão.
 
-> Este bootstrap pode ser **resumido** se o usuário já confirmou o contexto na mesma sessão recente.
+Considere o contexto confirmado por até 30 minutos na mesma conversa. Invalide o
+cache após troca de tenant/subscription/cloud, autenticação renovada, divergência
+entre parâmetros e contexto ou qualquer sinal de sessão diferente. Nunca armazene
+tenant/subscription reais em arquivos rastreados para implementar esse cache.
 
 ---
 
 ## 4. Detecção automática de produção
 
-Antes de QUALQUER WRITE ou DESTRUCTIVE, varra os parâmetros (nome de recurso, RG, subscription, tags) com a regex (case-insensitive):
+Antes de `EXECUTION`, `REMOTE_WRITE` ou `DESTRUCTIVE`, varra nome de recurso, RG,
+subscription e tags com a regex case-insensitive:
 
 ```
-\b(prod|prd|production|produção|live|hml|homolog|preprod|pre-prod|main|master)\b
+\b(prod|prd|production|produção|live)\b
 ```
 
-Se houver match → **trate como 🔴 DESTRUCTIVE**, mesmo que a tool seja WRITE.
+Se houver match, eleve `REMOTE_WRITE` para alto impacto. `EXECUTION` em produção
+exige uma prévia de disponibilidade, mas não deve ser chamado de irreversível se
+for apenas um start/restart explicitamente solicitado.
 
 Adicionalmente, se o nome da subscription contiver `prod` / `production`:
-- Recuse a primeira tentativa.
-- Exija que o usuário **digite o nome do recurso** para confirmar (anti-typo).
+- Para ação destrutiva, exija que o usuário digite exatamente o nome do recurso.
+- Para restart/deploy/failover, exija confirmação da janela ou aceite a declaração
+  explícita do usuário de que a indisponibilidade é esperada.
 
 ---
 
-## 5. Template "Plano de mudança" (🟡 WRITE)
+## 5. Template "Plano de mudança" (🟡 REMOTE_WRITE)
+
+Use este template quando a política acima exigir confirmação; para alteração
+reversível já autorizada de forma exata, registre os mesmos campos em formato
+resumido sem inserir uma pergunta redundante.
 
 ```
 🟡 PLANO DE MUDANÇA
@@ -141,13 +188,14 @@ Se a intenção do usuário levar a >3 mutações na mesma execução:
 Sempre que o usuário disser "muda para a sub X" / "vai pro tenant Y":
 1. Rode `scripts\switch-context.ps1` (ou `az account set`).
 2. Confirme com `az account show`.
-3. **Repita o bootstrap (seção 3)** antes de qualquer mutação.
+3. **Invalide o cache e obtenha novamente o contexto (seção 3)** antes de qualquer mutação.
 
 ---
 
 ## 9. Logs e auditoria
 
-- Toda operação WRITE/DESTRUCTIVE deve ser **logada na própria conversa** com timestamp.
+- Toda operação `EXECUTION`, `REMOTE_WRITE` ou `DESTRUCTIVE` deve ser resumida na
+  própria conversa com timestamp, alvo e resultado, sem valores secretos.
 - Sugira ao usuário que o Azure Activity Log (`azmcp_monitor_activitylog_*`) registra automaticamente — útil para compliance.
 
 ---
@@ -159,7 +207,8 @@ Recuse (e explique o motivo) quando o usuário pedir para:
 - Conceder roles privilegiadas (`Owner`, `Contributor`, `User Access Administrator`) em escopo de subscription/tenant sem aprovação registrada.
 - Abrir regras de network para `0.0.0.0/0` em produção.
 - Deletar Key Vaults com soft-delete + purge protection desabilitados.
-- Operar em recursos cuja subscription/tenant você não confirmou no bootstrap (seção 3).
+- Executar mutações em recursos cujo tenant/subscription não foi identificado e
+  validado conforme a seção 3.
 
 Em todos os casos: explique a regra desta política e ofereça uma alternativa segura.
 

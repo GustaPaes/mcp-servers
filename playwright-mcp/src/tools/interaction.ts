@@ -16,16 +16,27 @@ const baseProps = {
   timeout_ms: { type: "number" },
 };
 
-function resolveAllowedUpload(input: string): string {
+export function resolveAllowedUpload(input: string): string {
+  for (const root of config.allowedFileRoots) fs.mkdirSync(root, { recursive: true });
   const candidate = fs.realpathSync(path.resolve(config.repoRoot, input));
   const candidateKey = process.platform === "win32" ? candidate.toLowerCase() : candidate;
-  const allowed = config.allowedFileRoots.some((root) => {
+  const allowedRoot = config.allowedFileRoots.find((root) => {
     const realRoot = fs.realpathSync(root);
     const rootKey = process.platform === "win32" ? realRoot.toLowerCase() : realRoot;
     return candidateKey === rootKey || candidateKey.startsWith(`${rootKey}${path.sep}`);
   });
-  if (!allowed || !fs.statSync(candidate).isFile()) {
+  if (!allowedRoot || !fs.statSync(candidate).isFile()) {
     throw new Error("upload path must be a file inside PWMCP_ALLOWED_FILE_ROOTS");
+  }
+  const relativeParts = path.relative(fs.realpathSync(allowedRoot), candidate).split(path.sep);
+  const base = path.basename(candidate).toLowerCase();
+  const secretLike = base === ".env" || base.startsWith(".env.") ||
+    /(?:credential|secret|token|cookie|storage[-_.]?state|id_rsa|id_ed25519)/i.test(base) ||
+    relativeParts.some((part) => part.startsWith(".") || part === ".git" || part === ".ssh");
+  if (secretLike) throw new Error("upload path resembles a credential or browser secret file");
+  const bytes = fs.statSync(candidate).size;
+  if (bytes > config.maxUploadFileBytes) {
+    throw new Error(`upload file exceeds PWMCP_MAX_UPLOAD_FILE_BYTES (${bytes} bytes)`);
   }
   return candidate;
 }
@@ -249,7 +260,7 @@ export const interactionTools: ToolModule = {
         required: ["selector", "paths"],
         properties: {
           ...baseProps,
-          paths: { type: "array", items: { type: "string" }, minItems: 1 },
+          paths: { type: "array", items: { type: "string" }, minItems: 1, maxItems: config.maxUploadFiles },
         },
       },
     },

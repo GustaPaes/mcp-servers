@@ -12,6 +12,10 @@ export const logger = pino(
     level,
     base: null,
     timestamp: pino.stdTimeFunctions.isoTime,
+    redact: {
+      paths: ["authorization", "cookie", "token", "secret", "password", "clientSecret", "accessToken", "sessionId"],
+      censor: "[REDACTED]",
+    },
     formatters: {
       level: (label) => ({ level: label }),
     },

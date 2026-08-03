@@ -54,8 +54,8 @@ Defina apenas `AZURE_TENANT_ID` no `.env` (sem client/secret) — o `DefaultAzur
 Você opera com múltiplos tenants. Use o script:
 
 ```powershell
-& "C:\Workspace\MCP Servers\azure-mcp\scripts\switch-context.ps1" -Subscription "<nome ou id>"
-& "C:\Workspace\MCP Servers\azure-mcp\scripts\switch-context.ps1" -Tenant "<tenant-id>"
+& ".\scripts\switch-context.ps1" -Subscription "<nome ou id>"
+& ".\scripts\switch-context.ps1" -Tenant "<tenant-id>"
 ```
 
 Boas práticas:
@@ -156,30 +156,18 @@ Doc: <https://github.com/microsoft/mcp/blob/main/docs/sovereign-clouds.md>
 
 ## 7. Performance e startup
 
-### Startup lento (`npx` baixando o pacote)
-Solução A — instalar global:
+### Startup reproduzível
+Instale uma vez a partir do lockfile:
 ```powershell
-npm install -g @azure/mcp@3.0.0-beta.30
+npm ci --workspaces=false
 ```
-Edite `mcp.json`:
-```json
-"command": "azmcp",
-"args": ["server", "start"]
-```
+O launcher resolve `node_modules/.bin/azmcp`, portanto não consulta a rede e não
+depende de cache global durante o startup. `package.json`, `package-lock.json` e
+`server-version.json` devem permanecer com o mesmo pin.
 
-Solução B — pinar versão no `mcp.json`:
-```json
-"args": ["-y", "@azure/mcp@2.0.0", "server", "start"]
-```
-
-### Cold start típico
-- `npx -y @latest`: 3–8 s (primeira vez), 1–2 s (cacheado)
-- Global instalado: <1 s
-- Docker: 5–10 s
-
-### Limpar cache npx
+### Restaurar a instalação
 ```powershell
-& "C:\Workspace\MCP Servers\azure-mcp\scripts\update-server.ps1"
+& ".\scripts\update-server.ps1"
 ```
 
 ---
@@ -193,17 +181,17 @@ Solução B — pinar versão no `mcp.json`:
 ### Modo debug
 Adicione `--debug` em `args` no `mcp.json`:
 ```json
-"args": ["-y", "@azure/mcp@3.0.0-beta.30", "server", "start", "--debug"]
+"args": ["-NoProfile", "-File", "<repo-root>/azure-mcp/scripts/start-server.ps1", "--debug"]
 ```
 
 ### Listar tools disponíveis
 ```powershell
-npx -y @azure/mcp@3.0.0-beta.30 tools list
+npm run verify:tools
 ```
 
 ### Diagnóstico end-to-end
 ```powershell
-& "C:\Workspace\MCP Servers\azure-mcp\scripts\verify-auth.ps1"
+& ".\scripts\verify-auth.ps1"
 ```
 
 ---
@@ -218,8 +206,10 @@ npx -y @azure/mcp@3.0.0-beta.30 tools list
     tenant-id: ${{ secrets.AZURE_TENANT_ID }}
     subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-- run: npm install -g @azure/mcp@3.0.0-beta.30
-- run: azmcp <comando>
+- run: npm ci --workspaces=false
+  working-directory: azure-mcp
+- run: npm run verify:tools
+  working-directory: azure-mcp
 ```
 
 ### Azure DevOps (TFS hospedado internamente)
@@ -240,11 +230,14 @@ docker run --rm \
 
 | Estratégia | Quando usar | Pro | Contra |
 |---|---|---|---|
-| `@latest` | Sandbox individual | Sempre atualizado, novas tools | Pode quebrar ao rodar `npx` se houver breaking change |
+| `@latest` | Sandbox individual | Sempre atualizado, novas tools | Pode quebrar sem aviso se houver mudança incompatível |
 | `@x.y.z` (pinado) | Times, CI | Reprodutível | Update manual |
-| Global install | Dev frequente | Cold start rápido | Update manual |
+| Instalação local + lockfile | Desenvolvimento e CI | Startup rápido e reprodutível | Exige `npm ci` por clone |
 | Docker tag fixa | CI/CD | Imutável, isolado | Latência maior |
 
-**Recomendação para este workspace:** usar o pin `@azure/mcp@3.0.0-beta.30` em clientes e scripts. Testar `@latest` apenas em sandbox e promover o novo pin depois de validação com `scripts\verify-auth.ps1 -Version "<versao>"`.
+**Recomendação:** use o pin de `server-version.json` e o launcher local. Teste
+versões novas em branch isolada com `update-server.ps1 -Pin "<versao>" -Promote`,
+execute `npm run verify:tools` e revise o diff de `tool-inventory.json` antes de
+integrar a atualização.
 
 Releases: <https://github.com/microsoft/mcp/releases?q=Azure.Mcp.Server->

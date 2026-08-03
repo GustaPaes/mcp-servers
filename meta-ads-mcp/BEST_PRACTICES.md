@@ -76,7 +76,10 @@ If the ad promotes **HOUSING / EMPLOYMENT / CREDIT / ISSUES_ELECTIONS_POLITICS**
 
 ## 9. Audit and reproducibility
 
-Every tool call goes to the **append-only JSONL audit log** with timestamp, account, tool, redacted args and result. For finance and post-mortem reviews:
+Every tool call goes to the **append-only JSONL audit log** with timestamp,
+account, tool, risk, bounded input metadata and outcome. Domain-specific events
+record redacted before/after details for consequential changes. For finance and
+post-mortem reviews:
 
 - Keep audit logs for at least 90 days.
 - When investigating a regression, the audit log + Meta's change log together reconstruct the timeline.
@@ -100,3 +103,11 @@ Every tool call goes to the **append-only JSONL audit log** with timestamp, acco
 | Repeatable weekly performance report | This MCP (`generate_performance_report`) |
 
 The MCP is for **structured, auditable, repeatable** operations. The UI is still the right tool for visual judgment and one-off creative work.
+
+## 12. Tool contracts and concurrency
+
+- Treat the policy manifest as the source of truth for risk, idempotency and external access. A contract test must compare it with every registered definition and handler.
+- Expose the shared strict output envelope through `outputSchema`; add a more specific data schema when consumers depend on stable fields.
+- Audit centrally at the registration boundary so a new tool cannot bypass invocation/completion records. Keep detailed mutation events for before/after evidence.
+- Perform local draft changes with the storage transaction API. The revision identifies the exact state observed by resources and prevents concurrent writers from silently overwriting one another.
+- Set hard caps for timeouts, retries, body size, session count, session TTL, page size and text/array inputs. Prefer cursors and explicit truncation metadata over large responses.

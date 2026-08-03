@@ -4,6 +4,7 @@
  * Secret values are masked unless reveal flag is granted.
  */
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import {
   vaultClient,
   kmsVaultClient,
@@ -113,8 +114,9 @@ export const vault_create = {
     }
 
     const v = await kmsVaultClient();
+    const opcRetryToken = randomUUID();
     const res = await withRetry(() =>
-      v.createVault({ createVaultDetails: payload })
+      v.createVault({ createVaultDetails: payload, opcRetryToken })
     );
     ownership.record({
       ocid: res.vault.id,
@@ -187,7 +189,10 @@ export const kms_key_create = {
     }
 
     const c = await kmsManagementClient(input.managementEndpoint);
-    const res = await withRetry(() => c.createKey({ createKeyDetails: payload }));
+    const opcRetryToken = randomUUID();
+    const res = await withRetry(() =>
+      c.createKey({ createKeyDetails: payload, opcRetryToken })
+    );
     ownership.record({
       ocid: res.key.id,
       type: "kms_key",
@@ -392,8 +397,9 @@ export const secret_create = {
     }
 
     const v = await vaultsControlClient();
+    const opcRetryToken = randomUUID();
     const res = await withRetry(() =>
-      v.createSecret({ createSecretDetails: payload })
+      v.createSecret({ createSecretDetails: payload, opcRetryToken })
     );
     ownership.record({
       ocid: res.secret.id,

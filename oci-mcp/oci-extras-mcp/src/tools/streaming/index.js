@@ -104,8 +104,8 @@ export const streaming_tail_pod_logs = {
     pod: z.string(),
     container: z.string().optional(),
     durationSeconds: z.number().int().positive().max(900).default(60),
-    sinceSeconds: z.number().int().positive().default(60),
-    tailLines: z.number().int().positive().default(200),
+    sinceSeconds: z.number().int().positive().max(86_400).default(60),
+    tailLines: z.number().int().positive().max(5_000).default(200),
   }),
   async handler(input, ctx = {}) {
     const api = getKc().makeApiClient(k8s.CoreV1Api);

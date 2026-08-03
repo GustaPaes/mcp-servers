@@ -7,6 +7,7 @@
  *   - resources created here are recorded in the ownership ledger
  */
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import { containerEngineClient, workRequestClient } from "../../lib/ociClient.js";
 import { paginateAll } from "../../lib/pagination.js";
 import { withRetry } from "../../lib/retries.js";
@@ -248,8 +249,9 @@ export const oke_create_cluster = {
       });
     }
 
+    const opcRetryToken = randomUUID();
     const res = await withRetry(() =>
-      ce.createCluster({ createClusterDetails: payload })
+      ce.createCluster({ createClusterDetails: payload, opcRetryToken })
     );
     const workRequestId = res.opcWorkRequestId;
     return {
@@ -268,7 +270,7 @@ export const oke_track_create = {
     "Poll an OKE create WorkRequest until completion and register the resulting OCID in the ownership ledger.",
   input: z.object({
     workRequestId: Ocid,
-    timeoutSeconds: z.number().int().positive().default(900),
+    timeoutSeconds: z.number().int().min(10).max(3600).default(900),
     resourceTypeHint: z.enum(["oke_cluster", "oke_node_pool"]).default("oke_cluster"),
   }),
   async handler({ workRequestId, timeoutSeconds, resourceTypeHint }) {
@@ -372,7 +374,10 @@ export const oke_create_node_pool = {
       });
     }
 
-    const res = await withRetry(() => ce.createNodePool({ createNodePoolDetails: payload }));
+    const opcRetryToken = randomUUID();
+    const res = await withRetry(() =>
+      ce.createNodePool({ createNodePoolDetails: payload, opcRetryToken })
+    );
     return {
       ok: true,
       workRequestId: res.opcWorkRequestId,
