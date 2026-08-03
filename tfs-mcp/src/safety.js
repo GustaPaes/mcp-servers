@@ -3,7 +3,7 @@
  */
 import { createCorrelationId, writeAuditEvent } from "./audit.js";
 
-const HIGH_IMPACT_PATTERN = /\b(prod|prd|production|produção|releases?|main|master|hml|homolog|preprod|pre-prod|live)\b/i;
+const HIGH_IMPACT_PATTERN = /\b(prod|prd|production|produção|release|main|master|hml|homolog|preprod|pre-prod|live)\b/i;
 
 export const MutationControlsSchema = {
   dry_run: {

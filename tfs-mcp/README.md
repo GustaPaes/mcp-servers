@@ -167,10 +167,9 @@ See the [root README](../README.md#%EF%B8%8F-install-in-your-mcp-client) for rea
 
 ### Pull requests & review
 - `tfs_list_prs`, `tfs_get_pr`
-- `tfs_create_pr`, `tfs_update_pr` — create/update standardized PR metadata and reconcile requested work items as idempotent, direct PR artifact links
 - `tfs_review_pr` — automated code review with project-specific rules + modern frontend/backend best practices
 - `tfs_comment_review_findings` — turn findings into PR comments with suggested fixes
-- `tfs_prepare_pr_review` — **premium** review-prep workflow (work items, threads, risks, areas, automated review, and pipeline runs matched by repository plus PR identity or commit SHA)
+- `tfs_prepare_pr_review` — **premium** review-prep workflow (work items, threads, risks, areas, automated review, pipeline)
 - `tfs_add_pr_comment`
 
 ### Execution & governance
@@ -180,7 +179,6 @@ See the [root README](../README.md#%EF%B8%8F-install-in-your-mcp-client) for rea
 - `tfs_delivery_risk_report` — **premium** executive delivery-risk score
 - `tfs_pipeline_status` — recent pipeline runs
 - `tfs_pipeline_upsert` — safely create or update a repository-backed YAML pipeline definition; its preview reports changed fields and sanitized before/after values, while `ci_trigger_mode` can preserve the current CI override, delegate CI filters to YAML or disable CI
-- `tfs_branch_policy_upsert` — reconcile a Build Validation policy identified by repository, branch and build definition, with in-process serialization, persisted-state verification, path filters and sanitized before/after preview
 - `tfs_pipeline_queue` — queue a pipeline or release-oriented YAML run directly by ID/name, branch and YAML parameters; execution is audited and `dry_run:true` remains available for an optional preview
 - `tfs_list_repos`
 - `tfs_wiki` — list every wiki, recursively search nested page paths, read exact page content or enumerate a subtree
@@ -203,34 +201,7 @@ See the [root README](../README.md#%EF%B8%8F-install-in-your-mcp-client) for rea
 - `tfs_update_issue_analysis` — write the required development analysis and optional correction/impact fields for an Issue; defaults to `dry_run:true`. See [`docs/issue-analysis.md`](./docs/issue-analysis.md).
 - `tfs_add_pr_comment` — add a PR comment; defaults to `dry_run:true`
 
-Definition edits and other controlled writes require `dry_run:false`, `confirm:true`, `reason` and `requestedBy`/`requested_by`. High-impact targets such as production/release/main/master/hml/homolog branches require the extra `confirm_high_impact` value returned by the dry-run mutation plan. The plans for `tfs_pipeline_upsert` and `tfs_branch_policy_upsert` include sanitized `before`, `after` and `changedFields` data so the change can be reviewed without exposing variable values.
-
-Preview a required Build Validation policy before applying it:
-
-```json
-{
-  "repository": "example-repo",
-  "branch": "main",
-  "build_definition_name": "Example PR Validation",
-  "display_name": "Required PR validation",
-  "filename_patterns": [
-    "/src/*",
-    "/pipelines/pr-validation.yml"
-  ],
-  "enabled": true,
-  "blocking": true,
-  "manual_queue_only": false,
-  "queue_on_source_update_only": false,
-  "valid_duration": 0,
-  "dry_run": true
-}
-```
-
-The identity is repository + normalized, case-sensitive branch ref + build definition, not the display name. Exact scopes must reference an existing branch with the same casing; the branch is checked while building the plan and again immediately before a write. Prefix scopes accept a valid Git ref prefix, do not require a branch with that exact name and are always treated as high impact because they can affect multiple branches. Repeated calls in one server process are serialized by identity; an already matching policy is returned as `unchanged` without a PUT. Every write is sent once and then reconciled against a fresh read. Before an update, the tool rechecks the current policy revision and fails closed on drift or an API conflict. This is a safety preflight, not a promise of atomic compare-and-swap because that guarantee is not documented by the Policy API.
-
-An enabled policy requires a build definition with `queueStatus: enabled`; `enabled:false` remains available to disable a broken policy when its definition is paused or disabled. The definition must belong to the target repository. A deliberate cross-repository validator requires `allow_cross_repository:true`, is exposed in the mutation plan and is treated as high impact. Immediately before POST or PUT, the tool reloads the definition and stops if its revision, name, queue status or repository changed since the plan read. The tool refuses ambiguous duplicates and policies that combine multiple scopes, because changing either implicitly could affect branches outside the requested target. `filename_patterns` accepts one absolute or wildcard pattern per array item; an empty array applies the policy to every changed path.
-
-Serialization is local to one MCP process. Separate MCP instances can still race because Azure DevOps Server does not expose an atomic uniqueness key for policy creation; post-write reconciliation detects ambiguity and fails closed, but cannot guarantee that a cross-instance race never creates duplicate server records. Reconcile any reported duplicate explicitly before retrying.
+Definition edits and other controlled writes require `dry_run:false`, `confirm:true`, `reason` and `requestedBy`/`requested_by`. High-impact targets such as production/release/main/master/hml/homolog branches require the extra `confirm_high_impact` value returned by the dry-run mutation plan. The plan for `tfs_pipeline_upsert` includes sanitized `before`, `after` and `changedFields` data so the change can be reviewed without exposing variable values.
 
 `tfs_pipeline_queue` is an intentional exception: starting an existing pipeline or release-oriented YAML run does not change its definition, so it executes by default without confirmation and writes an audit event. Pass `dry_run:true` only when a preview is useful. Definition edits — and any future deletion operation — remain confirmation-gated and must describe exactly what will change or be removed.
 
