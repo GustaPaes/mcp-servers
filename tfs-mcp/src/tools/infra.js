@@ -5,6 +5,7 @@ import { z } from "zod";
 import { tfsGet, tfsGetAbsoluteJson } from "../tfs-client.js";
 import { TFS_COLLECTION, TFS_PROJECT, TFS_URL } from "../config.js";
 import { buildSpecialistReview } from "../specialists.js";
+import { getRequestContext } from "../request-context.js";
 
 // ─── Wiki ──────────────────────────────────────────────────────────────────
 
@@ -208,7 +209,7 @@ export async function findWikiMatchesDeep(search, top = 20, wikiSelector, skip =
 
 export async function toolWiki(args) {
   const parsed = z
-    .object({
+    .strictObject({
       action: z.enum(["list", "search", "read", "tree"]).optional(),
       search: z.string().min(1).optional(),
       wiki: z.string().min(1).optional(),
@@ -284,7 +285,7 @@ export async function toolPipelineStatus(args) {
     branch = "master",
     top = 3,
   } = z
-    .object({
+    .strictObject({
       name: z.string().optional(),
       branch: z.string().default("master"),
       top: z.number().int().min(1).max(10).default(3),
@@ -405,13 +406,13 @@ function summarizeInventory(files, rootPath) {
 
 export async function toolBuildArtifactInventory(args) {
   const { build_id, artifact_name } = z
-    .object({
+    .strictObject({
       build_id: z.union([z.number(), z.string()]),
       artifact_name: z.string().optional(),
     })
     .parse(args);
 
-  const authAlias = args?.auth_alias;
+  const authAlias = getRequestContext().authAlias;
   const buildId = Number(build_id);
   const artifactsData = await getBuildArtifacts(buildId, authAlias);
   const artifacts = artifactsData.value ?? [];
@@ -451,17 +452,17 @@ export async function toolBuildArtifactInventory(args) {
 
 export async function toolCompareBuildArtifacts(args) {
   const { old_build_id, new_build_id, artifact_name } = z
-    .object({
+    .strictObject({
       old_build_id: z.union([z.number(), z.string()]),
       new_build_id: z.union([z.number(), z.string()]),
       artifact_name: z.string().optional(),
     })
     .parse(args);
 
-  const authAlias = args?.auth_alias;
+  const authAlias = getRequestContext().authAlias;
   const [oldInv, newInv] = await Promise.all([
-    toolBuildArtifactInventory({ build_id: old_build_id, artifact_name, auth_alias: authAlias }),
-    toolBuildArtifactInventory({ build_id: new_build_id, artifact_name, auth_alias: authAlias }),
+    toolBuildArtifactInventory({ build_id: old_build_id, artifact_name }),
+    toolBuildArtifactInventory({ build_id: new_build_id, artifact_name }),
   ]);
 
   const oldArtifacts = new Map((oldInv.artifacts ?? []).map((artifact) => [artifact.name, artifact]));
@@ -497,7 +498,7 @@ export async function toolCompareBuildArtifacts(args) {
 // ─── Repos ─────────────────────────────────────────────────────────────────
 
 export async function toolListRepos(args) {
-  z.object({}).parse(args ?? {});
+  z.strictObject({}).parse(args ?? {});
   const data = await tfsGet("/git/repositories", {}, { cacheKey: "repos:list", cacheTtlMs: 2 * 60_000 });
   return (data.value ?? []).map((r) => ({
     id: r.id,

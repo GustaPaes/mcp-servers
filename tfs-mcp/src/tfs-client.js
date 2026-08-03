@@ -3,13 +3,21 @@
  *
  * Responsabilidades:
  *  - Autenticação via PAT (Basic Auth)
- *  - Retry com exponential backoff + jitter para erros transientes (429, 5xx)
+ *  - Retry com backoff, jitter e Retry-After somente para operações seguras
  *  - Cache in-memory com TTL configurável por chamada
  *  - Health check de conectividade
  *
- * Padrão 2026: retry com jitter evita thundering-herd em ambientes Azure.
+ * POST/PATCH não são repetidos para evitar mutações duplicadas.
  */
-import { BASE, getAvailableAuthAliases, resolvePat } from "./config.js";
+import {
+  BASE,
+  TFS_MAX_RETRIES,
+  TFS_REQUEST_TIMEOUT_MS,
+  TFS_RETRY_MAX_DELAY_MS,
+  TFS_URL,
+  getAvailableAuthAliases,
+  resolvePat,
+} from "./config.js";
 import { logger } from "./logger.js";
 
 // ─── Auth ──────────────────────────────────────────────────────────────────
@@ -52,24 +60,72 @@ export function buildHeaders(extra = {}, { authAlias } = {}) {
 // ─── Retry ─────────────────────────────────────────────────────────────────
 
 const RETRY_ON_STATUS = new Set([429, 500, 502, 503, 504]);
-const MAX_RETRIES = 3;
-const MAX_DELAY_MS = 8_000;
+const TRUSTED_TFS_ORIGIN = new URL(TFS_URL).origin;
 
-async function withRetry(fn) {
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+export function assertTrustedTfsUrl(input) {
+  const url = new URL(input);
+  if (!["http:", "https:"].includes(url.protocol)) throw new Error("URL TFS deve usar HTTP ou HTTPS.");
+  if (url.username || url.password) throw new Error("Credenciais embutidas na URL TFS nao sao permitidas.");
+  if (url.origin !== TRUSTED_TFS_ORIGIN) {
+    throw new Error(`Recusado encaminhar credenciais TFS para origem nao confiavel: ${url.origin}`);
+  }
+  return url;
+}
+
+function retryAfterMs(response) {
+  const value = response.headers.get("retry-after");
+  if (!value) return 0;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+  const at = Date.parse(value);
+  return Number.isFinite(at) ? Math.max(0, at - Date.now()) : 0;
+}
+
+export async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(
+    () => controller.abort(new Error(`TFS request timeout after ${TFS_REQUEST_TIMEOUT_MS}ms`)),
+    TFS_REQUEST_TIMEOUT_MS,
+  );
+  const upstreamSignal = options.signal;
+  const abortFromUpstream = () => controller.abort(upstreamSignal.reason);
+  if (upstreamSignal) {
+    if (upstreamSignal.aborted) abortFromUpstream();
+    else upstreamSignal.addEventListener("abort", abortFromUpstream, { once: true });
+  }
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+    upstreamSignal?.removeEventListener?.("abort", abortFromUpstream);
+  }
+}
+
+function attachResponseMetadata(error, response) {
+  error.status = response.status;
+  error.retryAfterMs = retryAfterMs(response);
+  return error;
+}
+
+async function withRetry(fn, { safeToRetry = false } = {}) {
+  for (let attempt = 0; attempt <= TFS_MAX_RETRIES; attempt++) {
     try {
       return await fn();
     } catch (err) {
       const status = err?.status ?? 0;
-      if (attempt === MAX_RETRIES || !RETRY_ON_STATUS.has(status)) throw err;
+      const timeout = err?.name === "AbortError" || /request timeout/i.test(err?.message ?? "");
+      if (!safeToRetry || attempt === TFS_MAX_RETRIES || (!RETRY_ON_STATUS.has(status) && !timeout)) throw err;
 
       // Exponential backoff com jitter: 1s → 2s → 4s (mais ruído aleatório)
       const baseDelay = 1000 * 2 ** attempt;
       const jitter = Math.random() * 300;
-      const delay = Math.min(baseDelay + jitter, MAX_DELAY_MS);
+      const delay = Math.min(
+        Math.max(baseDelay + jitter, err?.retryAfterMs ?? 0),
+        TFS_RETRY_MAX_DELAY_MS,
+      );
 
       logger.warn(
-        { attempt: attempt + 1, maxRetries: MAX_RETRIES, status, delayMs: Math.round(delay) },
+        { attempt: attempt + 1, maxRetries: TFS_MAX_RETRIES, status, delayMs: Math.round(delay) },
         "TFS request retry"
       );
       await new Promise((r) => setTimeout(r, delay));
@@ -123,15 +179,14 @@ export async function tfsGet(endpoint, params = {}, { cacheKey, cacheTtlMs = 0, 
 
   const data = await withRetry(async () => {
     logger.debug({ method: "GET", path: url.pathname + url.search }, "TFS →");
-    const res = await fetch(url.toString(), { headers: buildHeaders({}, { authAlias }) });
+    const res = await fetchWithTimeout(url.toString(), { headers: buildHeaders({}, { authAlias }) });
     if (!res.ok) {
       const txt = await res.text();
       const err = new Error(`TFS ${res.status} GET ${endpoint}: ${txt.slice(0, 400)}`);
-      err.status = res.status;
-      throw err;
+      throw attachResponseMetadata(err, res);
     }
     return res.json();
-  });
+  }, { safeToRetry: true });
 
   if (scopedCacheKey && cacheTtlMs > 0) cacheStore(scopedCacheKey, data, cacheTtlMs);
   return data;
@@ -147,7 +202,7 @@ export async function tfsPost(endpoint, body, params = {}, { authAlias } = {}) {
 
   return withRetry(async () => {
     logger.debug({ method: "POST", path: url.pathname }, "TFS →");
-    const res = await fetch(url.toString(), {
+    const res = await fetchWithTimeout(url.toString(), {
       method: "POST",
       headers: buildHeaders({ "Content-Type": "application/json" }, { authAlias }),
       body: JSON.stringify(body),
@@ -155,8 +210,7 @@ export async function tfsPost(endpoint, body, params = {}, { authAlias } = {}) {
     if (!res.ok) {
       const txt = await res.text();
       const err = new Error(`TFS ${res.status} POST ${endpoint}: ${txt.slice(0, 400)}`);
-      err.status = res.status;
-      throw err;
+      throw attachResponseMetadata(err, res);
     }
     return res.json();
   });
@@ -172,7 +226,7 @@ export async function tfsJsonPatch(method, endpoint, ops, { authAlias } = {}) {
 
   return withRetry(async () => {
     logger.debug({ method, path: url.pathname }, "TFS →");
-    const res = await fetch(url.toString(), {
+    const res = await fetchWithTimeout(url.toString(), {
       method,
       headers: buildHeaders({ "Content-Type": "application/json-patch+json" }, { authAlias }),
       body: JSON.stringify(ops),
@@ -180,22 +234,9 @@ export async function tfsJsonPatch(method, endpoint, ops, { authAlias } = {}) {
     if (!res.ok) {
       const txt = await res.text();
       const err = new Error(`TFS ${res.status} ${method} ${endpoint}: ${txt.slice(0, 400)}`);
-      err.status = res.status;
-      throw err;
+      throw attachResponseMetadata(err, res);
     }
     return res.json();
-  });
-}
-
-/**
- * POST arbitrário com fetch direto (sem passar pelo BASE).
- * Usado para buscar conteúdo de arquivos via URL completa.
- */
-export async function tfsFetchRaw(url, opts = {}, { authAlias } = {}) {
-  return withRetry(async () => {
-    const res = await fetch(url, { headers: buildHeaders({}, { authAlias }), ...opts });
-    if (!res.ok) return null;
-    return res.text();
   });
 }
 
@@ -210,7 +251,7 @@ export async function tfsPatch(endpoint, body, params = {}, { authAlias } = {}) 
 
   return withRetry(async () => {
     logger.debug({ method: "PATCH", path: url.pathname }, "TFS →");
-    const res = await fetch(url.toString(), {
+    const res = await fetchWithTimeout(url.toString(), {
       method: "PATCH",
       headers: buildHeaders({ "Content-Type": "application/json" }, { authAlias }),
       body: JSON.stringify(body),
@@ -218,8 +259,7 @@ export async function tfsPatch(endpoint, body, params = {}, { authAlias } = {}) 
     if (!res.ok) {
       const txt = await res.text();
       const err = new Error(`TFS ${res.status} PATCH ${endpoint}: ${txt.slice(0, 400)}`);
-      err.status = res.status;
-      throw err;
+      throw attachResponseMetadata(err, res);
     }
     return res.json();
   });
@@ -236,7 +276,7 @@ export async function tfsPut(endpoint, body, params = {}, { authAlias } = {}) {
 
   return withRetry(async () => {
     logger.debug({ method: "PUT", path: url.pathname }, "TFS →");
-    const res = await fetch(url.toString(), {
+    const res = await fetchWithTimeout(url.toString(), {
       method: "PUT",
       headers: buildHeaders({ "Content-Type": "application/json" }, { authAlias }),
       body: JSON.stringify(body),
@@ -244,14 +284,14 @@ export async function tfsPut(endpoint, body, params = {}, { authAlias } = {}) {
     if (!res.ok) {
       const txt = await res.text();
       const err = new Error(`TFS ${res.status} PUT ${endpoint}: ${txt.slice(0, 400)}`);
-      err.status = res.status;
-      throw err;
+      throw attachResponseMetadata(err, res);
     }
     return res.json();
-  });
+  }, { safeToRetry: true });
 }
 
 export async function tfsGetAbsoluteJson(url, { cacheKey, cacheTtlMs = 0, authAlias } = {}) {
+  const trustedUrl = assertTrustedTfsUrl(url);
   const scopedCacheKey = buildScopedCacheKey(cacheKey, authAlias);
   const hit = tryCacheHit(scopedCacheKey);
   if (hit !== null) {
@@ -260,19 +300,33 @@ export async function tfsGetAbsoluteJson(url, { cacheKey, cacheTtlMs = 0, authAl
   }
 
   const data = await withRetry(async () => {
-    logger.debug({ method: "GET", url }, "TFS absolute →");
-    const res = await fetch(url, { headers: buildHeaders({}, { authAlias }) });
+    logger.debug({ method: "GET", path: trustedUrl.pathname }, "TFS absolute →");
+    const res = await fetchWithTimeout(trustedUrl, { headers: buildHeaders({}, { authAlias }) });
     if (!res.ok) {
       const txt = await res.text();
-      const err = new Error(`TFS ${res.status} GET ${url}: ${txt.slice(0, 400)}`);
-      err.status = res.status;
-      throw err;
+      const err = new Error(`TFS ${res.status} GET ${trustedUrl.pathname}: ${txt.slice(0, 400)}`);
+      throw attachResponseMetadata(err, res);
     }
     return res.json();
-  });
+  }, { safeToRetry: true });
 
   if (scopedCacheKey && cacheTtlMs > 0) cacheStore(scopedCacheKey, data, cacheTtlMs);
   return data;
+}
+
+export async function tfsGetAbsoluteText(url, { authAlias } = {}) {
+  const trustedUrl = assertTrustedTfsUrl(url);
+  return withRetry(async () => {
+    const res = await fetchWithTimeout(trustedUrl, { headers: buildHeaders({}, { authAlias }) });
+    if (!res.ok) {
+      const body = await res.text();
+      throw attachResponseMetadata(
+        new Error(`TFS ${res.status} GET ${trustedUrl.pathname}: ${body.slice(0, 400)}`),
+        res,
+      );
+    }
+    return res.text();
+  }, { safeToRetry: true });
 }
 
 // ─── Health check ──────────────────────────────────────────────────────────

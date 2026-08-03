@@ -25,7 +25,7 @@ import { toolPipelineStatus } from "./infra.js";
 
 export async function toolSprintInfo(args) {
   const { iteration_path } = z
-    .object({ iteration_path: z.string().optional() })
+    .strictObject({ iteration_path: z.string().optional() })
     .parse(args ?? {});
 
   // Determine current iteration if not specified
@@ -90,7 +90,7 @@ export async function toolReleaseReadiness(args) {
     include_pipeline = true,
     top = 100,
   } = z
-    .object({
+    .strictObject({
       branch: z.string().default("master"),
       pipeline_name: z.string().optional(),
       include_pull_requests: z.boolean().default(true),
@@ -165,7 +165,7 @@ export async function toolReleaseReadiness(args) {
 // ─── Team focus report ──────────────────────────────────────────────────────
 
 export async function toolTeamFocusReport(args) {
-  z.object({ top: z.number().int().min(1).max(500).default(150) }).parse(args ?? {});
+  z.strictObject({ top: z.number().int().min(1).max(500).default(150) }).parse(args ?? {});
   const { top = 150 } = args ?? {};
 
   // Get current iteration metadata
@@ -231,7 +231,7 @@ export async function toolTeamFocusReport(args) {
 
 export async function toolDeliveryRiskReport(args) {
   const { include_pipelines = true, branch = "master", include_pull_requests = true, top = 100 } = z
-    .object({
+    .strictObject({
       include_pipelines: z.boolean().default(true),
       include_pull_requests: z.boolean().default(true),
       branch: z.string().default("master"),

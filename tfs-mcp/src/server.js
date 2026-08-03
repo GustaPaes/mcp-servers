@@ -66,36 +66,19 @@ import { runWithRequestContext } from "./request-context.js";
 import { MutationControlsSchema } from "./safety.js";
 import { redactSensitiveValue } from "@gustapaes/mcp-runtime";
 import { TFS_URL } from "./config.js";
+import { annotationsForRisk, assertToolManifest } from "@gustapaes/mcp-runtime";
+import { TOOL_POLICY } from "./tool-policy.js";
+import {
+  applyContractLimits,
+  boundToolResult,
+  GENERIC_OBJECT_OUTPUT_SCHEMA,
+  validateToolArguments,
+} from "./tool-contract.js";
 
 // ─── Tool metadata helpers ─────────────────────────────────────────────────
 
-const MUTATING_TOOLS = new Set([
-  "tfs_update_work_item",
-  "tfs_update_issue_analysis",
-  "tfs_add_pr_comment",
-  "tfs_comment_review_findings",
-  "tfs_work_item_create",
-  "tfs_create_pr",
-  "tfs_update_pr",
-  "tfs_pipeline_upsert",
-  "tfs_pipeline_queue",
-]);
-const NON_IDEMPOTENT_TOOLS = new Set([
-  "tfs_add_pr_comment",
-  "tfs_comment_review_findings",
-  "tfs_work_item_create",
-  "tfs_create_pr",
-  "tfs_pipeline_queue",
-]);
-const DESTRUCTIVE_TOOLS = new Set([
-  "tfs_update_work_item",
-  "tfs_update_issue_analysis",
-  "tfs_update_pr",
-]);
-
 function withToolMetadata(tool) {
-  const readOnly = !MUTATING_TOOLS.has(tool.name);
-  const idempotent = !NON_IDEMPOTENT_TOOLS.has(tool.name);
+  const policy = TOOL_POLICY[tool.name];
   const inputProperties = {
     ...(tool.inputSchema?.properties ?? {}),
     auth_alias: {
@@ -105,33 +88,31 @@ function withToolMetadata(tool) {
   };
   return {
     ...tool,
+    outputSchema: tool.outputSchema ?? GENERIC_OBJECT_OUTPUT_SCHEMA,
     annotations: {
-      readOnlyHint: readOnly,
-      destructiveHint: DESTRUCTIVE_TOOLS.has(tool.name),
-      idempotentHint: idempotent,
-      openWorldHint: true,
+      ...annotationsForRisk(policy.risk, policy),
       ...(tool.annotations ?? {}),
+      ...annotationsForRisk(policy.risk, policy),
     },
-    inputSchema: {
+    inputSchema: applyContractLimits({
       additionalProperties: false,
       ...tool.inputSchema,
       properties: inputProperties,
-    },
+    }),
   };
 }
 
 function formatToolResult(result) {
-  const text = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+  const bounded = boundToolResult(result);
+  const text = JSON.stringify(bounded, null, 2);
   const payload = { content: [{ type: "text", text }] };
-  if (result && typeof result === "object") {
-    payload.structuredContent = Array.isArray(result) ? { items: result } : result;
-  }
+  payload.structuredContent = bounded;
   return payload;
 }
 
 // ─── Tool definitions ──────────────────────────────────────────────────────
 
-const TOOL_DEFS = [
+export const TOOL_DEFS = [
   {
     name: "tfs_doctor",
     title: "TFS MCP Doctor",
@@ -822,6 +803,9 @@ const TOOL_HANDLERS = {
   tfs_compare_build_artifacts: (args) => toolCompareBuildArtifacts(args),
 };
 
+assertToolManifest({ definitions: TOOL_DEFS, handlers: TOOL_HANDLERS, policies: TOOL_POLICY, label: "TFS MCP" });
+export const PUBLISHED_TOOL_DEFS = TOOL_DEFS.map(withToolMetadata);
+
 // ─── Server factory ────────────────────────────────────────────────────────
 
 export function buildMcpServer() {
@@ -835,7 +819,7 @@ export function buildMcpServer() {
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: TOOL_DEFS.map(withToolMetadata),
+    tools: PUBLISHED_TOOL_DEFS,
   }));
 
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
@@ -852,7 +836,10 @@ export function buildMcpServer() {
         authAlias: typeof args?.auth_alias === "string" ? args.auth_alias : "",
         repo: typeof args?.repo === "string" ? args.repo : "",
       };
-      const result = await runWithRequestContext(context, () => handler(args ?? {}));
+      const definition = PUBLISHED_TOOL_DEFS.find((tool) => tool.name === name);
+      const { auth_alias: _authAlias, ...toolArgs } = args ?? {};
+      validateToolArguments(definition.inputSchema, args ?? {});
+      const result = await runWithRequestContext(context, () => handler(toolArgs));
       return formatToolResult(result);
     } catch (err) {
       const safeMessage = String(redactSensitiveValue(err?.message ?? String(err)))
