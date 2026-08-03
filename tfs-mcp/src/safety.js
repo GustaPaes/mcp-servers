@@ -62,6 +62,7 @@ export function buildMutationPlan({
   operation,
   changes,
   controls,
+  confirmationRequired = true,
   highImpact,
   highImpactMatch,
   highImpactConfirmation,
@@ -75,14 +76,18 @@ export function buildMutationPlan({
     changes,
     dryRun: controls.dryRun,
     confirmation: {
+      required: confirmationRequired,
       confirm: controls.confirm,
       reasonProvided: controls.reason.length >= 5,
       requestedBy: controls.requestedBy || null,
       highImpact: Boolean(highImpact),
       highImpactMatch: highImpactMatch ?? null,
-      highImpactConfirmationRequired: highImpact ? highImpactConfirmation : null,
+      highImpactConfirmationRequired:
+        confirmationRequired && highImpact ? highImpactConfirmation : null,
       highImpactConfirmed:
-        !highImpact || controls.confirmHighImpact === String(highImpactConfirmation ?? ""),
+        !confirmationRequired ||
+        !highImpact ||
+        controls.confirmHighImpact === String(highImpactConfirmation ?? ""),
     },
     context: {
       authAlias: authAlias || "default",
@@ -93,17 +98,19 @@ export function buildMutationPlan({
 
 export function assessMutation(plan, controls) {
   const blockReasons = [];
-  if (controls.dryRun) blockReasons.push("dry_run defaults to true");
-  if (!controls.confirm) blockReasons.push("confirm must be true");
-  if (controls.reason.length < 5) blockReasons.push("reason must have at least 5 characters");
-  if (controls.requestedBy.length < 2) blockReasons.push("requestedBy/requested_by must identify the requester");
-  if (
-    plan.confirmation.highImpact &&
-    controls.confirmHighImpact !== String(plan.confirmation.highImpactConfirmationRequired ?? "")
-  ) {
-    blockReasons.push(
-      `high-impact target requires confirm_high_impact="${plan.confirmation.highImpactConfirmationRequired}"`
-    );
+  if (controls.dryRun) blockReasons.push("dry_run requested a preview");
+  if (plan.confirmation.required !== false) {
+    if (!controls.confirm) blockReasons.push("confirm must be true");
+    if (controls.reason.length < 5) blockReasons.push("reason must have at least 5 characters");
+    if (controls.requestedBy.length < 2) blockReasons.push("requestedBy/requested_by must identify the requester");
+    if (
+      plan.confirmation.highImpact &&
+      controls.confirmHighImpact !== String(plan.confirmation.highImpactConfirmationRequired ?? "")
+    ) {
+      blockReasons.push(
+        `high-impact target requires confirm_high_impact="${plan.confirmation.highImpactConfirmationRequired}"`
+      );
+    }
   }
 
   return {

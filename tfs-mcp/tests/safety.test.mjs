@@ -57,6 +57,45 @@ test("high impact targets require exact confirm_high_impact", () => {
   assert.match(assessment.blockReasons.join("\n"), /confirm_high_impact="42"/);
 });
 
+test("operational execution can bypass confirmation while remaining guarded by optional dry-run", () => {
+  const controls = normalizeMutationControls({ dry_run: false });
+  const plan = buildMutationPlan({
+    tool: "tfs_pipeline_queue",
+    target: { definitionId: 42, branch: "refs/heads/release/2026.08" },
+    operation: "queue pipeline run",
+    changes: { templateParameterNames: ["environment"] },
+    controls,
+    confirmationRequired: false,
+    highImpact: true,
+    highImpactMatch: "release",
+    highImpactConfirmation: "42",
+  });
+
+  const assessment = assessMutation(plan, controls);
+
+  assert.equal(plan.confirmation.required, false);
+  assert.equal(plan.confirmation.highImpactConfirmationRequired, null);
+  assert.equal(assessment.willMutate, true);
+  assert.deepEqual(assessment.blockReasons, []);
+});
+
+test("confirmation-optional execution still honors an explicit dry-run", () => {
+  const controls = normalizeMutationControls({ dry_run: true });
+  const plan = buildMutationPlan({
+    tool: "tfs_pipeline_queue",
+    target: { definitionId: 42 },
+    operation: "queue pipeline run",
+    changes: {},
+    controls,
+    confirmationRequired: false,
+  });
+
+  const assessment = assessMutation(plan, controls);
+
+  assert.equal(assessment.willMutate, false);
+  assert.deepEqual(assessment.blockReasons, ["dry_run requested a preview"]);
+});
+
 test("audit redaction masks sensitive values and long payloads", () => {
   const redacted = redactAuditValue({
     Authorization: "Bearer abc.def.ghi",

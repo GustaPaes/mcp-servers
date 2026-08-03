@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildYamlDefinitionPayload } from "../src/tools/pipeline.js";
+import {
+  buildPipelineChangeSummary,
+  buildYamlDefinitionPayload,
+} from "../src/tools/pipeline.js";
 
 test("builds a generic YAML definition without organization defaults", () => {
   const payload = buildYamlDefinitionPayload({
@@ -47,6 +50,38 @@ test("preserves an existing definition while replacing YAML-specific fields", ()
   assert.equal(payload.url, undefined);
   assert.deepEqual(payload.triggers, [{ triggerType: "continuousIntegration" }]);
   assert.deepEqual(payload.variables.EXISTING, { value: "kept" });
+});
+
+test("summarizes pipeline edits with sanitized before and after values", () => {
+  const existing = {
+    process: { yamlFilename: "pipelines/old.yml" },
+    repository: { name: "app", defaultBranch: "refs/heads/main" },
+    queue: { name: "Linux" },
+    path: "\\Delivery",
+    triggers: [{ triggerType: "continuousIntegration", settingsSourceType: 1 }],
+    variables: { SECRET_TOKEN: { value: "must-not-leak", isSecret: true } },
+  };
+  const payload = buildYamlDefinitionPayload({
+    existing,
+    name: "Delivery",
+    yamlPath: "pipelines/new.yml",
+    repository: { id: "repo-id", name: "app" },
+    defaultBranch: "refs/heads/main",
+    queue: { id: 10, name: "Linux" },
+    folder: "\\Delivery",
+    variables: { SAFE_FLAG: true },
+    ciTriggerMode: "yaml",
+  });
+
+  const summary = buildPipelineChangeSummary(existing, payload, "yaml");
+
+  assert.equal(summary.action, "update");
+  assert.deepEqual(summary.changedFields, ["yamlPath", "ciTriggerMode", "variableNames"]);
+  assert.equal(summary.before.yamlPath, "pipelines/old.yml");
+  assert.equal(summary.after.yamlPath, "pipelines/new.yml");
+  assert.deepEqual(summary.before.variableNames, ["SECRET_TOKEN"]);
+  assert.deepEqual(summary.after.variableNames, ["SAFE_FLAG", "SECRET_TOKEN"]);
+  assert.equal(JSON.stringify(summary).includes("must-not-leak"), false);
 });
 
 test("delegates CI trigger settings to YAML without removing other trigger types", () => {

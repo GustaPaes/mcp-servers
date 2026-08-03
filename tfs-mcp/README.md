@@ -172,8 +172,8 @@ See the [root README](../README.md#%EF%B8%8F-install-in-your-mcp-client) for rea
 - `tfs_work_item_handoff` — **premium** PO ↔ Dev ↔ QA ↔ Support handoff package
 - `tfs_delivery_risk_report` — **premium** executive delivery-risk score
 - `tfs_pipeline_status` — recent pipeline runs
-- `tfs_pipeline_upsert` — safely create or update a repository-backed YAML pipeline definition; `ci_trigger_mode` can preserve the current CI override, delegate CI filters to YAML or disable CI
-- `tfs_pipeline_queue` — safely queue a pipeline by ID/name, branch and YAML parameters
+- `tfs_pipeline_upsert` — safely create or update a repository-backed YAML pipeline definition; its preview reports changed fields and sanitized before/after values, while `ci_trigger_mode` can preserve the current CI override, delegate CI filters to YAML or disable CI
+- `tfs_pipeline_queue` — queue a pipeline or release-oriented YAML run directly by ID/name, branch and YAML parameters; execution is audited and `dry_run:true` remains available for an optional preview
 - `tfs_list_repos`
 - `tfs_wiki` — list every wiki, recursively search nested page paths, read exact page content or enumerate a subtree
 
@@ -195,7 +195,9 @@ See the [root README](../README.md#%EF%B8%8F-install-in-your-mcp-client) for rea
 - `tfs_update_issue_analysis` — write the required development analysis and optional correction/impact fields for an Issue; defaults to `dry_run:true`. See [`docs/issue-analysis.md`](./docs/issue-analysis.md).
 - `tfs_add_pr_comment` — add a PR comment; defaults to `dry_run:true`
 
-Real writes require `dry_run:false`, `confirm:true`, `reason` and `requestedBy`/`requested_by`. High-impact targets such as production/release/main/master/hml/homolog branches require the extra `confirm_high_impact` value returned by the dry-run mutation plan.
+Definition edits and other controlled writes require `dry_run:false`, `confirm:true`, `reason` and `requestedBy`/`requested_by`. High-impact targets such as production/release/main/master/hml/homolog branches require the extra `confirm_high_impact` value returned by the dry-run mutation plan. The plan for `tfs_pipeline_upsert` includes sanitized `before`, `after` and `changedFields` data so the change can be reviewed without exposing variable values.
+
+`tfs_pipeline_queue` is an intentional exception: starting an existing pipeline or release-oriented YAML run does not change its definition, so it executes by default without confirmation and writes an audit event. Pass `dry_run:true` only when a preview is useful. Definition edits — and any future deletion operation — remain confirmation-gated and must describe exactly what will change or be removed.
 
 ### Premium workflows produce structured output
 The 5 premium workflows ship with formal `outputSchema` so MCP clients can validate the `structuredContent` payload, while still returning the human-readable text for simpler clients.

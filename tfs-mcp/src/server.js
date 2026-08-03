@@ -571,7 +571,7 @@ const TOOL_DEFS = [
   {
     name: "tfs_pipeline_queue",
     title: "Queue Pipeline Run",
-    description: "Enfileira uma execução existente por ID ou nome, branch e parâmetros YAML, com dry-run, confirmação e auditoria.",
+    description: "Enfileira diretamente uma execução existente por ID ou nome, branch e parâmetros YAML, com auditoria e dry-run opcional. Não exige confirmação porque não altera a definição.",
     inputSchema: {
       type: "object",
       properties: {
@@ -592,7 +592,11 @@ const TOOL_DEFS = [
           maxProperties: 100,
           additionalProperties: { type: ["string", "number", "boolean"], maxLength: 4000 },
         },
-        ...MutationControlsSchema,
+        dry_run: {
+          type: "boolean",
+          default: false,
+          description: "Quando true, retorna somente a prévia. Por padrão, enfileira a execução e registra a auditoria.",
+        },
       },
     },
   },
@@ -826,7 +830,7 @@ export function buildMcpServer() {
     {
       capabilities: { tools: { listChanged: false } },
       instructions:
-        "TFS/Azure DevOps Server workflows. Read tools may be called directly. Mutations must start with dry_run:true; execute only after the user reviews the returned plan and explicitly supplies dry_run:false, confirm:true, reason and requestedBy. Never invent confirm_high_impact values or expose PATs/private payloads.",
+        "TFS/Azure DevOps Server workflows. Read tools may be called directly. tfs_pipeline_queue may execute directly because it starts a run without changing its definition; use dry_run:true only when a preview is requested. Definition edits, deletions and other mutations must start with dry_run:true and execute only after the user reviews the returned plan and explicitly supplies dry_run:false, confirm:true, reason and requestedBy. Never invent confirm_high_impact values or expose PATs/private payloads.",
     }
   );
 
