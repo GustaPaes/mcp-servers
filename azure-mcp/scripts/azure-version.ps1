@@ -29,12 +29,11 @@ function Get-AzureMcpVersion {
     return (Get-AzureMcpManifest).version
 }
 
-function Get-AzureMcpCommand {
+function Get-AzureMcpNodeEntryPoint {
     $projectRoot = Get-AzureMcpProjectRoot
-    $binaryName = if ($IsWindows -or $env:OS -eq 'Windows_NT') { 'azmcp.cmd' } else { 'azmcp' }
-    $binaryPath = Join-Path $projectRoot "node_modules\.bin\$binaryName"
-    if (-not (Test-Path -LiteralPath $binaryPath -PathType Leaf)) {
+    $entryPoint = Join-Path $projectRoot "node_modules\@azure\mcp\index.js"
+    if (-not (Test-Path -LiteralPath $entryPoint -PathType Leaf)) {
         throw "Azure MCP local nao instalado. Execute 'npm ci --workspaces=false' em '$projectRoot'."
     }
-    return [System.IO.Path]::GetFullPath($binaryPath)
+    return [System.IO.Path]::GetFullPath($entryPoint)
 }
