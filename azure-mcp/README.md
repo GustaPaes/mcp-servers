@@ -30,7 +30,7 @@
   "mcp": {
     "azure-mcp": {
       "type": "local",
-      "command": ["powershell", "-NoProfile", "-File", "<repo-root>/azure-mcp/scripts/start-server.ps1"],
+      "command": ["node", "<repo-root>/azure-mcp/node_modules/@azure/mcp/index.js", "server", "start"],
       "enabled": true
     }
   }
@@ -42,8 +42,8 @@
 {
   "mcpServers": {
     "azure-mcp": {
-      "command": "powershell",
-      "args": ["-NoProfile", "-File", "<repo-root>/azure-mcp/scripts/start-server.ps1"]
+      "command": "node",
+      "args": ["<repo-root>/azure-mcp/node_modules/@azure/mcp/index.js", "server", "start"]
     }
   }
 }
@@ -51,10 +51,22 @@
 
 ```bash
 # Claude Code (CLI)
-claude mcp add azure-mcp -- powershell -NoProfile -File "<repo-root>/azure-mcp/scripts/start-server.ps1"
+claude mcp add azure-mcp -- node "<repo-root>/azure-mcp/node_modules/@azure/mcp/index.js" server start
 ```
 
-For Cursor / Cline / Codex CLI / Continue snippets, see the [root README](../README.md#%EF%B8%8F-install-in-your-mcp-client).
+```toml
+# Codex → ~/.codex/config.toml
+[mcp_servers.azure-mcp]
+command = "node"
+args = ["<repo-root>/azure-mcp/node_modules/@azure/mcp/index.js", "server", "start"]
+cwd = "<repo-root>/azure-mcp"
+enabled = true
+```
+
+No Windows, execute o módulo Node diretamente. O shim `azmcp.cmd` do npm abre
+um `cmd.exe` intermediário e pode deixar processos adicionais quando o cliente
+encerra uma sessão `stdio`. `scripts/start-server.ps1` permanece disponível
+somente para compatibilidade com configurações antigas.
 
 ---
 
@@ -137,8 +149,8 @@ Depois, registre o launcher no arquivo MCP do cliente:
   "servers": {
     "azure-mcp": {
       "type": "stdio",
-      "command": "powershell",
-      "args": ["-NoProfile", "-File", "<repo-root>/azure-mcp/scripts/start-server.ps1"],
+      "command": "node",
+      "args": ["<repo-root>/azure-mcp/node_modules/@azure/mcp/index.js", "server", "start"],
       "envFile": "<repo-root>/azure-mcp/.env"
     }
   }
@@ -151,7 +163,7 @@ Depois, registre o launcher no arquivo MCP do cliente:
 
 1. O cliente lê seu arquivo de configuração MCP ao abrir o workspace.
 2. Para cada server `stdio`, faz spawn do `command + args`.
-3. `start-server.ps1` resolve `node_modules/.bin/azmcp` e inicia exatamente a versão do lockfile, sem rede no startup.
+3. O Node executa `node_modules/@azure/mcp/index.js` diretamente e inicia exatamente a versão do lockfile, sem shell ou rede no startup.
 4. As variáveis de `.env` (se existir) são injetadas no processo.
 5. As tools `azmcp_*` ficam disponíveis em **GitHub Copilot → Agent mode → 🛠 (refresh)**.
 
@@ -217,7 +229,7 @@ use `-Pin "<versao>" -Promote`, revise todos os manifestos e atualize o snapshot
 de tools.
 
 > Após promover, rode `npm run verify:tools` e revise `tool-inventory.json`.
-> Todos os clientes que usam `start-server.ps1` consomem o mesmo pin local.
+> Todos os clientes que usam o módulo Node local consomem o mesmo pin.
 
 `tool-inventory.json` fixa a contagem, os comandos essenciais e a distribuição
 de metadados de risco da versão aprovada. Uma divergência exige revisão explícita,

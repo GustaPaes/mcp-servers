@@ -161,9 +161,10 @@ Instale uma vez a partir do lockfile:
 ```powershell
 npm ci --workspaces=false
 ```
-O launcher resolve `node_modules/.bin/azmcp`, portanto não consulta a rede e não
-depende de cache global durante o startup. `package.json`, `package-lock.json` e
-`server-version.json` devem permanecer com o mesmo pin.
+O cliente executa `node_modules/@azure/mcp/index.js` diretamente, portanto não
+passa pelo shim `azmcp.cmd`, não consulta a rede e não depende de cache global
+durante o startup. `package.json`, `package-lock.json` e `server-version.json`
+devem permanecer com o mesmo pin.
 
 ### Restaurar a instalação
 ```powershell
@@ -181,7 +182,7 @@ depende de cache global durante o startup. `package.json`, `package-lock.json` e
 ### Modo debug
 Adicione `--debug` em `args` no `mcp.json`:
 ```json
-"args": ["-NoProfile", "-File", "<repo-root>/azure-mcp/scripts/start-server.ps1", "--debug"]
+"args": ["<repo-root>/azure-mcp/node_modules/@azure/mcp/index.js", "server", "start", "--debug"]
 ```
 
 ### Listar tools disponíveis

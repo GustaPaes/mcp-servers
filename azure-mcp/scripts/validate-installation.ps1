@@ -37,17 +37,17 @@ if ($lockedVersion -ne $manifest.version) {
 Write-Host "[OK] Pin e lockfile consistentes: $($manifest.package)@$($manifest.version)" -ForegroundColor Green
 if ($SkipInstalledBinary) { exit 0 }
 
-$command = Get-AzureMcpCommand
-$versionOutput = & $command --version 2>&1
-if ($LASTEXITCODE -ne 0) { throw "Falha ao executar '$command --version': $versionOutput" }
+$entryPoint = Get-AzureMcpNodeEntryPoint
+$versionOutput = & node $entryPoint --version 2>&1
+if ($LASTEXITCODE -ne 0) { throw "Falha ao executar 'node $entryPoint --version': $versionOutput" }
 if ([string]$versionOutput -notmatch "^$([regex]::Escape($manifest.version))(?:\+|$)") {
     throw "Binario local respondeu '$versionOutput', mas o pin esperado e $($manifest.version)."
 }
-Write-Host "[OK] Binario local: $command" -ForegroundColor Green
+Write-Host "[OK] Modulo Node local: $entryPoint" -ForegroundColor Green
 
 if (-not $CheckTools) { exit 0 }
 
-$rawOutput = & $command tools list 2>&1
+$rawOutput = & node $entryPoint tools list 2>&1
 if ($LASTEXITCODE -ne 0) { throw "Falha ao listar tools: $rawOutput" }
 $parsed = $rawOutput | ConvertFrom-Json
 $tools = @($parsed.results)

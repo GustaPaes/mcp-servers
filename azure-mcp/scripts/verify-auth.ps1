@@ -100,13 +100,13 @@ $pinnedVersion = Get-AzureMcpVersion
 if ($Version -ne $pinnedVersion) {
     throw "A versao solicitada ($Version) nao esta instalada localmente. Promova-a com update-server.ps1 -Pin '$Version' -Promote."
 }
-$command = Get-AzureMcpCommand
+$entryPoint = Get-AzureMcpNodeEntryPoint
 
 Write-Section "4/4  Azure MCP Server local ($pkg tools list)"
 Write-Host ""
 
 try {
-    $output = & $command tools list 2>&1
+    $output = & node $entryPoint tools list 2>&1
     if ($LASTEXITCODE -ne 0) {
         Write-Err "Falha ao executar a instalacao local do Azure MCP."
         Write-Host $output

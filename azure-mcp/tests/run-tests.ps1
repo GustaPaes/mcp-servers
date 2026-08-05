@@ -21,6 +21,8 @@ Get-ChildItem -LiteralPath $scriptsRoot -Filter '*.ps1' -File | ForEach-Object {
 $manifest = Get-AzureMcpManifest
 Assert-True ($manifest.package -eq '@azure/mcp') 'O manifesto deve apontar para @azure/mcp.'
 Assert-True ((Get-AzureMcpPackage) -eq "@azure/mcp@$($manifest.version)") 'Get-AzureMcpPackage diverge do manifesto.'
+$entryPoint = Get-AzureMcpNodeEntryPoint
+Assert-True ($entryPoint -eq (Join-Path $projectRoot 'node_modules\@azure\mcp\index.js')) 'O entry point Node local diverge do caminho canonico.'
 
 $validator = Join-Path $scriptsRoot 'validate-installation.ps1'
 & powershell -NoProfile -File $validator -SkipInstalledBinary
@@ -35,7 +37,12 @@ Assert-True ($LASTEXITCODE -eq 0) 'update-server.ps1 -WhatIf falhou.'
 
 $startContent = Get-Content -Raw -LiteralPath (Join-Path $scriptsRoot 'start-server.ps1')
 Assert-True ($startContent -notmatch '\bnpx\b') 'O launcher deve usar apenas a instalação local travada.'
-Assert-True ($startContent -match 'Get-AzureMcpCommand') 'O launcher não usa o resolvedor local canônico.'
+Assert-True ($startContent -notmatch 'azmcp\.cmd|node_modules\\\.bin') 'O launcher nao deve iniciar o shim cmd do npm.'
+Assert-True ($startContent -match 'Get-AzureMcpNodeEntryPoint') 'O launcher nao usa o entry point Node local canonico.'
+Assert-True ($startContent -match '& node \$entryPoint server start') 'O launcher nao inicia o modulo Node diretamente.'
+
+$packageJson = Get-Content -Raw -LiteralPath (Join-Path $projectRoot 'package.json') | ConvertFrom-Json
+Assert-True ($packageJson.scripts.start -eq 'node ./node_modules/@azure/mcp/index.js server start') 'npm start nao usa o modulo Node diretamente.'
 
 & powershell -NoProfile -File (Join-Path $scriptsRoot 'vm-power.ps1') `
     -Action Start -Subscription '00000000-0000-0000-0000-000000000000' `
