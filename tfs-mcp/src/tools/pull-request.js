@@ -621,8 +621,50 @@ export async function toolGetPR(args) {
   const { id, repo } = z
     .strictObject({ id: z.union([z.number(), z.string()]), repo: z.string().optional() })
     .parse(args);
-  const { pr } = await resolvePullRequestTarget(id, repo);
-  return formatPR(pr);
+  const { repository, pr, parsedRef } = await resolvePullRequestTarget(id, repo);
+  const [threadsData, iterationsData, linkedWorkItems] = await Promise.all([
+    tfsGet(`/git/repositories/${repository}/pullrequests/${parsedRef.id}/threads`),
+    tfsGet(`/git/repositories/${repository}/pullrequests/${parsedRef.id}/iterations`),
+    findWorkItemsLinkedToPR(parsedRef.id, repository).catch(() => []),
+  ]);
+  const iterations = iterationsData.value ?? [];
+  const latestIteration = iterations.at(-1);
+  const changesData = latestIteration
+    ? await tfsGet(
+      `/git/repositories/${repository}/pullrequests/${parsedRef.id}/iterations/${latestIteration.id}/changes`
+    )
+    : { changeEntries: [] };
+
+  const threads = (threadsData.value ?? []).map((thread) => ({
+    id: thread.id,
+    status: thread.status,
+    isDeleted: Boolean(thread.isDeleted),
+    file: thread.threadContext?.filePath ?? null,
+    startLine: thread.threadContext?.rightFileStart?.line ?? null,
+    endLine: thread.threadContext?.rightFileEnd?.line ?? null,
+    comments: (thread.comments ?? [])
+      .filter((comment) => !comment.isDeleted)
+      .map((comment) => ({
+        id: comment.id,
+        author: comment.author?.displayName ?? "",
+        type: comment.commentType ?? "",
+        publishedDate: comment.publishedDate ?? comment.lastUpdatedDate ?? null,
+        content: comment.content ?? "",
+      })),
+  }));
+
+  return {
+    ...formatPR(pr),
+    latestIteration: latestIteration
+      ? { id: latestIteration.id, sourceCommit: latestIteration.sourceRefCommit?.commitId ?? null }
+      : null,
+    files: (changesData.changeEntries ?? []).map((change) => ({
+      path: change.item?.path ?? "",
+      changeType: change.changeType ?? "",
+    })),
+    workItems: linkedWorkItems.map((item) => ({ id: item.id, title: item.title, state: item.state, type: item.type })),
+    threads,
+  };
 }
 
 export async function toolReviewPR(args) {

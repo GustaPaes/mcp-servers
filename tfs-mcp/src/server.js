@@ -486,7 +486,7 @@ export const TOOL_DEFS = [
   {
     name: "tfs_get_pr",
     title: "Get Pull Request",
-    description: "Detalhes completos de um PR: metadata, reviewers, threads de comentarios e arquivos.",
+    description: "Detalhes completos de um PR: metadata, reviewers, work items vinculados, threads com comentarios e arquivos da iteracao mais recente.",
     inputSchema: {
       type: "object",
       properties: {
