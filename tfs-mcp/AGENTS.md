@@ -26,19 +26,20 @@ READ tools may be used without extra confirmation, but summarize sensitive resul
 
 ### REMOTE_WRITE
 
-`tfs_work_item_create`, `tfs_add_pr_comment`, `tfs_comment_review_findings`,
-`tfs_create_pr`.
+`tfs_work_item_create`, `tfs_update_work_item`, `tfs_update_issue_analysis`,
+`tfs_add_pr_comment`, `tfs_comment_review_findings`, `tfs_create_pr`,
+`tfs_update_pr`.
 
-REMOTE_WRITE tools are server-gated. They default to `dry_run:true` and return a mutation plan instead of changing TFS. To execute a real mutation, the call must include `dry_run:false`, `confirm:true`, `reason`, and `requestedBy`/`requested_by`.
+REMOTE_WRITE tools execute routine mutations requested by the caller by default. Use `dry_run:true` to request a mutation plan instead. High-impact targets still require a reviewed plan and `confirm:true`, `reason`, `requestedBy`/`requested_by`, plus the exact `confirm_high_impact` value returned by the plan.
 
 For high-impact targets (production/release/releases/main/master/hml/homolog patterns), the dry-run response will also require `confirm_high_impact` with an exact value. Do not guess that value; copy it from the returned mutation plan only after user approval.
 
 ### DESTRUCTIVE
 
-`tfs_update_work_item`, `tfs_update_issue_analysis`, `tfs_update_pr`,
 `tfs_pipeline_upsert`, `tfs_branch_policy_upsert`.
 
-These edits overwrite remote state and use the same server guard. Before
+Pipeline-definition and branch-policy edits remain preview-first and require
+the server guard. Removing work-item fields also requires confirmation. Before
 confirming a pipeline-definition or branch-policy edit, present
 `changes.changedFields`, `changes.before` and `changes.after`.
 
@@ -79,7 +80,7 @@ origin. Retries are allowed only for safe/idempotent operations.
 - Treat pipeline evidence in PR reviews as valid only when repository and PR
   identity or commit SHA match; target-branch equality is not sufficient.
 - Use `auth_alias` when the user names a specific PAT identity.
-- Do not change work item state, assignee, story points or acceptance criteria without explicit confirmation in the same turn.
+- Apply requested routine work-item fields, PR metadata and PR comments directly. Use a preview when requested; require confirmation for destructive removals and high-impact targets.
 - For development analysis of an `Issue`, use `tfs_update_issue_analysis`. It requires `development_analysis`, accepts optional `correction_and_impacts`, and follows [`docs/issue-analysis.md`](./docs/issue-analysis.md).
 - Treat production/release branches as high impact and ask for confirmation before posting, editing or deleting related items. Starting an existing run through `tfs_pipeline_queue` is the documented execution exception and remains audited.
 

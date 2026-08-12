@@ -8,8 +8,8 @@ const HIGH_IMPACT_PATTERN = /\b(prod|prd|production|produção|releases?|main|ma
 export const MutationControlsSchema = {
   dry_run: {
     type: "boolean",
-    default: true,
-    description: "Defaults to true. Set false only after reviewing the returned mutation plan.",
+    default: false,
+    description: "Defaults to false and executes routine requested mutations. Set true to return only a preview.",
   },
   confirm: {
     type: "boolean",
@@ -35,7 +35,7 @@ export const MutationControlsSchema = {
 
 export function normalizeMutationControls(input = {}) {
   return {
-    dryRun: input.dry_run !== false,
+    dryRun: input.dry_run === true,
     confirm: input.confirm === true,
     reason: String(input.reason ?? "").trim(),
     requestedBy: String(input.requestedBy ?? input.requested_by ?? "").trim(),
@@ -62,13 +62,14 @@ export function buildMutationPlan({
   operation,
   changes,
   controls,
-  confirmationRequired = true,
+  confirmationRequired,
   highImpact,
   highImpactMatch,
   highImpactConfirmation,
   authAlias,
   repo,
 }) {
+  const requiresConfirmation = confirmationRequired ?? Boolean(highImpact);
   return {
     tool,
     target,
@@ -76,16 +77,16 @@ export function buildMutationPlan({
     changes,
     dryRun: controls.dryRun,
     confirmation: {
-      required: confirmationRequired,
+      required: requiresConfirmation,
       confirm: controls.confirm,
       reasonProvided: controls.reason.length >= 5,
       requestedBy: controls.requestedBy || null,
       highImpact: Boolean(highImpact),
       highImpactMatch: highImpactMatch ?? null,
       highImpactConfirmationRequired:
-        confirmationRequired && highImpact ? highImpactConfirmation : null,
+        requiresConfirmation && highImpact ? highImpactConfirmation : null,
       highImpactConfirmed:
-        !confirmationRequired ||
+        !requiresConfirmation ||
         !highImpact ||
         controls.confirmHighImpact === String(highImpactConfirmation ?? ""),
     },

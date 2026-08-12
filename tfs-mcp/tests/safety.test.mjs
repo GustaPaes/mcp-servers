@@ -16,7 +16,7 @@ test("normalizeWorkItemId accepts numeric ids and TFS URLs", () => {
   assert.equal(normalizeWorkItemId("https://tfs.example.com/Default/_workitems/edit/789"), 789);
 });
 
-test("mutation controls default to dry-run and block real mutation", () => {
+test("routine mutation controls execute directly by default", () => {
   const controls = normalizeMutationControls({});
   const plan = buildMutationPlan({
     tool: "tfs_update_work_item",
@@ -28,8 +28,8 @@ test("mutation controls default to dry-run and block real mutation", () => {
 
   const assessment = assessMutation(plan, controls);
 
-  assert.equal(assessment.willMutate, false);
-  assert.match(assessment.blockReasons.join("\n"), /dry_run/);
+  assert.equal(assessment.willMutate, true);
+  assert.deepEqual(assessment.blockReasons, []);
 });
 
 test("high impact targets require exact confirm_high_impact", () => {

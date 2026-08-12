@@ -66,6 +66,15 @@ import { toolUpsertBuildValidationPolicy } from "./tools/branch-policy.js";
 import { toolSavedQueriesList, toolTfsDoctor } from "./tools/doctor.js";
 import { runWithRequestContext } from "./request-context.js";
 import { MutationControlsSchema } from "./safety.js";
+
+const SensitiveMutationControlsSchema = {
+  ...MutationControlsSchema,
+  dry_run: {
+    type: "boolean",
+    default: true,
+    description: "Defaults to true. Set false only after reviewing the returned mutation plan.",
+  },
+};
 import { redactSensitiveValue } from "@gustapaes/mcp-runtime";
 import { TFS_URL } from "./config.js";
 import { annotationsForRisk, assertToolManifest } from "@gustapaes/mcp-runtime";
@@ -554,7 +563,7 @@ export const TOOL_DEFS = [
           maxProperties: 100,
           additionalProperties: { type: ["string", "number", "boolean"], maxLength: 4000 },
         },
-        ...MutationControlsSchema,
+        ...SensitiveMutationControlsSchema,
       },
       required: ["name", "yaml_path"],
     },
@@ -633,7 +642,7 @@ export const TOOL_DEFS = [
           default: 0,
           description: "Validade em minutos; deve ser zero quando queue_on_source_update_only for false",
         },
-        ...MutationControlsSchema,
+        ...SensitiveMutationControlsSchema,
       },
       required: ["branch"],
       anyOf: [
@@ -763,7 +772,7 @@ export const TOOL_DEFS = [
       properties: {
         id: { type: ["number", "string"] },
         repo: { type: "string" },
-        dry_run: { type: "boolean", default: true },
+        dry_run: { type: "boolean", default: false },
         include_pr_hygiene: { type: "boolean", default: true },
         max_comments: { type: "number", default: 6 },
         confirm: MutationControlsSchema.confirm,
@@ -876,7 +885,7 @@ export function buildMcpServer() {
     {
       capabilities: { tools: { listChanged: false } },
       instructions:
-        "TFS/Azure DevOps Server workflows. Read tools may be called directly. tfs_pipeline_queue may execute directly because it starts a run without changing its definition; use dry_run:true only when a preview is requested. Pipeline-definition edits, branch-policy edits, deletions and other mutations must start with dry_run:true and execute only after the user reviews the returned plan and explicitly supplies dry_run:false, confirm:true, reason and requestedBy. Never invent confirm_high_impact values or expose PATs/private payloads.",
+        "TFS/Azure DevOps Server workflows. Routine requested operations, such as creating or editing pull requests, comments and work-item fields, execute directly; use dry_run:true when a preview is useful. Pipeline-definition and branch-policy edits remain preview-first. High-impact targets and destructive changes require a reviewed plan plus explicit confirmation. Never invent confirm_high_impact values or expose PATs/private payloads.",
     }
   );
 

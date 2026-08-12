@@ -73,6 +73,12 @@ test("publishes the complete safe tool contract", async () => {
 
     const pipelineQueue = tools.find(tool => tool.name === "tfs_pipeline_queue");
     assert.equal(pipelineQueue.inputSchema.properties.dry_run.default, false);
+    for (const name of ["tfs_work_item_create", "tfs_update_work_item", "tfs_create_pr", "tfs_update_pr", "tfs_add_pr_comment"]) {
+      assert.equal(tools.find(tool => tool.name === name).inputSchema.properties.dry_run.default, false, `${name} defaults to direct execution`);
+    }
+    for (const name of ["tfs_update_work_item", "tfs_update_issue_analysis", "tfs_update_pr"]) {
+      assert.equal(tools.find(tool => tool.name === name).annotations.destructiveHint, false, `${name} is a routine remote write`);
+    }
     for (const confirmationField of [
       "confirm",
       "reason",

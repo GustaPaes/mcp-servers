@@ -12,6 +12,7 @@ test("generic work item creation accepts arbitrary fields by reference name", as
       "Custom.Impact": "High",
       "Custom.ExpectedBenefits": "&lt;div&gt;Shorter lead time&lt;/div&gt;",
     },
+    dry_run: true,
   });
 
   assert.equal(result.dryRun, true);
