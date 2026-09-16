@@ -851,6 +851,43 @@ export async function toolAddPRComment(args) {
   });
 }
 
+export async function toolResolvePRThread(args) {
+  const { id, repo, thread_id, dry_run, confirm, reason, requestedBy, requested_by, confirm_high_impact } = z
+    .strictObject({
+      id: z.union([z.number(), z.string()]),
+      repo: z.string().optional(),
+      thread_id: z.number().int().positive(),
+      dry_run: z.boolean().default(false),
+      confirm: z.boolean().optional(),
+      reason: z.string().optional(),
+      requestedBy: z.string().optional(),
+      requested_by: z.string().optional(),
+      confirm_high_impact: z.string().optional(),
+    })
+    .parse(args);
+  const { repository, pr, parsedRef } = await resolvePullRequestTarget(id, repo);
+  const controls = normalizeMutationControls({ dry_run, confirm, reason, requestedBy, requested_by, confirm_high_impact });
+  const context = getRequestContext();
+  const plan = buildMutationPlan({
+    tool: "tfs_resolve_pr_thread",
+    target: { pullRequestId: parsedRef.id, repository, sourceBranch: formatPR(pr).sourceBranch, targetBranch: formatPR(pr).targetBranch, threadId: thread_id },
+    operation: "resolve pull request thread",
+    changes: [{ field: "thread.status", valuePreview: "fixed" }],
+    controls,
+    highImpact: false,
+    authAlias: context.authAlias,
+    repo: repository,
+  });
+  return executeGuardedMutation({
+    plan,
+    controls,
+    apply: async () => {
+      const result = await tfsPatch(`/git/repositories/${repository}/pullrequests/${parsedRef.id}/threads/${thread_id}`, { status: "fixed" });
+      return { threadId: result.id, status: result.status };
+    },
+  });
+}
+
 export async function toolCommentReviewFindings(args) {
   const {
     id,

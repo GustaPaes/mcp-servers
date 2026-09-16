@@ -11,9 +11,10 @@ import {
   executeGuardedMutation,
   normalizeMutationControls,
 } from "../safety.js";
-import { tfsGet, tfsPost, tfsPut } from "../tfs-client.js";
+import { tfsGet, tfsGetPage, tfsPost, tfsPut } from "../tfs-client.js";
 
 export const BUILD_VALIDATION_POLICY_TYPE_ID = "0609b952-1397-4640-95ec-e00a01b2c241";
+export const STATUS_POLICY_TYPE_ID = "cbdc66da-9728-4af8-aada-9a5a32e4a226";
 
 const MAX_FILENAME_PATTERNS = 100;
 const MAX_FILENAME_PATTERN_LENGTH = 512;
@@ -57,7 +58,33 @@ const UpsertBuildValidationPolicyArgs = z.strictObject({
   .refine(value => value.queue_on_source_update_only || value.valid_duration === 0, {
     message: "valid_duration deve ser 0 quando queue_on_source_update_only for false.",
     path: ["valid_duration"],
-  });
+});
+
+const ListPoliciesArgs = z.strictObject({
+  repository: z.string().trim().min(1).optional(),
+  branch: z.string().trim().min(1).optional(),
+  policy_type: z.enum(["build", "status", "all"]).default("all"),
+  build_definition_id: z.number().int().positive().optional(),
+  branch_match_kind: z.enum(["exact", "prefix"]).optional(),
+});
+
+const StatusPolicyArgs = z.strictObject({
+  repository: z.string().trim().min(1).optional(),
+  branch: z.string().trim().min(1),
+  branch_match_kind: z.enum(["exact", "prefix"]).default("exact"),
+  status_name: z.string().trim().min(1).max(256),
+  status_genre: z.string().trim().min(1).max(256),
+  enabled: z.boolean().default(true),
+  blocking: z.boolean().default(true),
+  invalidate_on_source_update: z.boolean().default(true),
+  ...MutationInput,
+});
+
+const ToggleBuildValidationArgs = z.strictObject({
+  policy_id: z.number().int().positive(),
+  enabled: z.boolean(),
+  ...MutationInput,
+});
 
 export function normalizePolicyBranch(branch, branchMatchKind = "exact") {
   const normalized = String(branch ?? "").trim().replace(/^\/+/, "");
@@ -164,6 +191,166 @@ function summarizeBuildValidationPolicy(policy, fallback = {}) {
     branch: scope.refName ?? fallback.branch ?? null,
     branchMatchKind: normalizeMatchKind(scope.matchKind ?? fallback.branchMatchKind),
   };
+}
+
+function summarizePolicy(policy) {
+  if (!policy) return null;
+  const scope = (policy.settings?.scope ?? [])[0] ?? {};
+  const typeId = String(policy.type?.id ?? "").toLowerCase();
+  return {
+    policyId: policy.id ?? null,
+    revision: policy.revision ?? null,
+    type: typeId === BUILD_VALIDATION_POLICY_TYPE_ID ? "build" : (typeId === STATUS_POLICY_TYPE_ID ? "status" : typeId || "unknown"),
+    typeId: policy.type?.id ?? null,
+    enabled: Boolean(policy.isEnabled),
+    blocking: Boolean(policy.isBlocking),
+    buildDefinitionId: policy.settings?.buildDefinitionId ? Number(policy.settings.buildDefinitionId) : null,
+    statusName: policy.settings?.statusName ?? null,
+    statusGenre: policy.settings?.statusGenre ?? null,
+    repositoryId: scope.repositoryId ?? null,
+    branch: scope.refName ?? null,
+    branchMatchKind: normalizeMatchKind(scope.matchKind),
+    filenamePatterns: [...(policy.settings?.filenamePatterns ?? [])],
+  };
+}
+
+async function listPoliciesForRepository({ repositoryId, branch, policyType, authAlias }) {
+  const all = [];
+  let continuationToken;
+  do {
+    const page = await tfsGetPage("/policy/configurations", {
+      "$top": POLICY_LIST_TOP,
+      ...(continuationToken ? { continuationToken } : {}),
+      "api-version": "7.0",
+    }, { authAlias });
+    all.push(...(page.data.value ?? []));
+    continuationToken = page.continuationToken || undefined;
+  } while (continuationToken);
+  return all.filter(policy => {
+    const scopes = policy.settings?.scope ?? [];
+    const repoMatch = scopes.some(scope => String(scope.repositoryId ?? "").toLowerCase() === String(repositoryId).toLowerCase());
+    const branchMatch = !branch || scopes.some(scope => String(scope.refName ?? "") === branch);
+    const typeMatch = !policyType || String(policy.type?.id ?? "").toLowerCase() === String(policyType).toLowerCase();
+    return repoMatch && branchMatch && typeMatch;
+  });
+}
+
+export async function toolListPolicies(args) {
+  const input = ListPoliciesArgs.parse(args ?? {});
+  const context = getRequestContext();
+  const repository = await resolveRepository(input.repository ?? TFS_REPO, context.authAlias);
+  const branch = input.branch ? normalizePolicyBranch(input.branch, input.branch_match_kind ?? "exact") : null;
+  const policyType = input.policy_type === "build"
+    ? BUILD_VALIDATION_POLICY_TYPE_ID
+    : (input.policy_type === "status" ? STATUS_POLICY_TYPE_ID : undefined);
+  const policies = await listPoliciesForRepository({ repositoryId: repository.id, branch, policyType, authAlias: context.authAlias });
+  const filtered = policies.filter(policy => (
+    input.build_definition_id === undefined || Number(policy.settings?.buildDefinitionId) === input.build_definition_id
+  ) && (
+    !input.branch_match_kind || normalizeMatchKind(policy.settings?.scope?.[0]?.matchKind) === normalizeMatchKind(input.branch_match_kind)
+  ));
+  return { repository: repository.name, repositoryId: repository.id, count: filtered.length, policies: filtered.map(summarizePolicy) };
+}
+
+function statusPolicyPayload({ existing, repositoryId, branch, branchMatchKind, statusName, statusGenre, enabled, blocking, invalidateOnSourceUpdate }) {
+  const payload = {
+    isEnabled: enabled,
+    isBlocking: blocking,
+    type: { id: STATUS_POLICY_TYPE_ID },
+    settings: {
+      ...(existing?.settings ?? {}),
+      statusName,
+      statusGenre,
+      invalidateOnSourceUpdate,
+      scope: [{ repositoryId, refName: normalizePolicyBranch(branch, branchMatchKind), matchKind: normalizeMatchKind(branchMatchKind) }],
+    },
+  };
+  if (existing) { payload.id = existing.id; payload.revision = existing.revision; }
+  return payload;
+}
+
+async function findStatusPolicy({ repositoryId, branch, statusName, statusGenre, authAlias }) {
+  const policies = await listPoliciesForRepository({ repositoryId, branch, policyType: STATUS_POLICY_TYPE_ID, authAlias });
+  const matches = policies.filter(policy => (
+    policy.settings?.statusName === statusName && policy.settings?.statusGenre === statusGenre
+  ));
+  if (matches.length > 1) throw new Error(`Há múltiplas Status Policies para '${statusGenre}/${statusName}' na branch '${branch}'.`);
+  if (!matches.length) return null;
+  return tfsGet(`/policy/configurations/${matches[0].id}`, { "api-version": "7.0" }, { authAlias });
+}
+
+export async function toolUpsertStatusPolicy(args) {
+  const input = StatusPolicyArgs.parse(args);
+  const controls = normalizeMutationControls(input);
+  const context = getRequestContext();
+  const repository = await resolveRepository(input.repository ?? TFS_REPO, context.authAlias);
+  const branch = normalizePolicyBranch(input.branch, input.branch_match_kind);
+  if (input.branch_match_kind === "exact") await requireExactBranchRef(repository.id, branch, context.authAlias);
+  const existing = await findStatusPolicy({ repositoryId: repository.id, branch, statusName: input.status_name, statusGenre: input.status_genre, authAlias: context.authAlias });
+  const payload = statusPolicyPayload({ existing, repositoryId: repository.id, branch, branchMatchKind: input.branch_match_kind, statusName: input.status_name, statusGenre: input.status_genre, enabled: input.enabled, blocking: input.blocking, invalidateOnSourceUpdate: input.invalidate_on_source_update });
+  const before = summarizePolicy(existing);
+  const after = summarizePolicy(payload);
+  const plan = buildMutationPlan({
+    tool: "tfs_status_policy_upsert",
+    target: { policyId: existing?.id ?? null, repository: repository.name, branch, statusName: input.status_name, statusGenre: input.status_genre },
+    operation: existing ? "atualizar Status Policy" : "criar Status Policy",
+    changes: { before, after },
+    controls,
+    confirmationRequired: true,
+    highImpact: true,
+    highImpactMatch: branch.replace(/^refs\/heads\//, ""),
+    highImpactConfirmation: branch.replace(/^refs\/heads\//, ""),
+    authAlias: context.authAlias,
+    repo: repository.name,
+  });
+  return executeGuardedMutation({
+    plan,
+    controls,
+    apply: async () => {
+      const fresh = existing ? await tfsGet(`/policy/configurations/${existing.id}`, { "api-version": "7.0" }, { authAlias: context.authAlias }) : null;
+      if (existing && (!fresh || Number(fresh.revision) !== Number(existing.revision))) throw new Error(`A policy ${existing.id} mudou de revisão antes da escrita.`);
+      const freshPayload = statusPolicyPayload({ existing: fresh ?? undefined, repositoryId: repository.id, branch, branchMatchKind: input.branch_match_kind, statusName: input.status_name, statusGenre: input.status_genre, enabled: input.enabled, blocking: input.blocking, invalidateOnSourceUpdate: input.invalidate_on_source_update });
+      const persisted = existing
+        ? await tfsPut(`/policy/configurations/${existing.id}`, freshPayload, { "api-version": "7.0" }, { authAlias: context.authAlias })
+        : await tfsPost("/policy/configurations", freshPayload, { "api-version": "7.0" }, { authAlias: context.authAlias });
+      return { policyId: persisted.id, revision: persisted.revision, created: !existing, updated: Boolean(existing), policy: summarizePolicy(persisted) };
+    },
+  });
+}
+
+export async function toolToggleBuildValidationPolicy(args) {
+  const input = ToggleBuildValidationArgs.parse(args);
+  const controls = normalizeMutationControls(input);
+  const context = getRequestContext();
+  const existing = await tfsGet(`/policy/configurations/${input.policy_id}`, { "api-version": "7.0" }, { authAlias: context.authAlias });
+  if (String(existing.type?.id ?? "").toLowerCase() !== BUILD_VALIDATION_POLICY_TYPE_ID) throw new Error(`A policy ${input.policy_id} não é uma Build Validation policy.`);
+  const scope = existing.settings?.scope?.[0] ?? {};
+  const branch = String(scope.refName ?? "").replace(/^refs\/heads\//, "");
+  const payload = { ...existing, isEnabled: input.enabled, settings: { ...(existing.settings ?? {}) } };
+  const plan = buildMutationPlan({
+    tool: "tfs_build_validation_toggle",
+    target: { policyId: input.policy_id, repositoryId: scope.repositoryId ?? null, branch },
+    operation: input.enabled ? "reativar Build Validation" : "desativar Build Validation",
+    changes: { before: summarizePolicy(existing), after: summarizePolicy(payload) },
+    controls,
+    confirmationRequired: true,
+    highImpact: true,
+    highImpactMatch: branch,
+    highImpactConfirmation: branch,
+    authAlias: context.authAlias,
+    repo: context.repo,
+  });
+  return executeGuardedMutation({
+    plan,
+    controls,
+    apply: async () => {
+      const fresh = await tfsGet(`/policy/configurations/${input.policy_id}`, { "api-version": "7.0" }, { authAlias: context.authAlias });
+      if (Number(fresh.revision) !== Number(existing.revision)) throw new Error(`A policy ${input.policy_id} mudou de revisão antes da escrita.`);
+      const freshPayload = { ...fresh, isEnabled: input.enabled, settings: { ...(fresh.settings ?? {}) } };
+      const persisted = await tfsPut(`/policy/configurations/${input.policy_id}`, freshPayload, { "api-version": "7.0" }, { authAlias: context.authAlias });
+      return { policyId: persisted.id, revision: persisted.revision, enabled: Boolean(persisted.isEnabled), policy: summarizePolicy(persisted) };
+    },
+  });
 }
 
 export function buildBuildValidationPolicyPayload({

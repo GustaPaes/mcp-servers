@@ -37,6 +37,7 @@ import {
   toolCreatePR,
   toolUpdatePR,
   toolAddPRComment,
+  toolResolvePRThread,
   toolCommentReviewFindings,
   toolPreparePRReview,
 } from "./tools/pull-request.js";
@@ -62,7 +63,7 @@ import {
 } from "./tools/infra.js";
 import { toolSpecialistReview } from "./tools/specialist.js";
 import { toolQueuePipeline, toolUpsertYamlPipeline } from "./tools/pipeline.js";
-import { toolUpsertBuildValidationPolicy } from "./tools/branch-policy.js";
+import { toolUpsertBuildValidationPolicy, toolListPolicies, toolUpsertStatusPolicy, toolToggleBuildValidationPolicy } from "./tools/branch-policy.js";
 import { toolSavedQueriesList, toolTfsDoctor } from "./tools/doctor.js";
 import { runWithRequestContext } from "./request-context.js";
 import { MutationControlsSchema } from "./safety.js";
@@ -652,6 +653,55 @@ export const TOOL_DEFS = [
     },
   },
   {
+    name: "tfs_policy_list",
+    title: "List Branch Policies",
+    description: "Lista policies por repositório, branch, tipo, definição e correspondência de escopo sem alterar o TFS.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        repository: { type: "string" },
+        branch: { type: "string" },
+        policy_type: { type: "string", enum: ["build", "status", "all"], default: "all" },
+        build_definition_id: { type: "integer", minimum: 1 },
+        branch_match_kind: { type: "string", enum: ["exact", "prefix"] },
+      },
+    },
+  },
+  {
+    name: "tfs_status_policy_upsert",
+    title: "Create or Update Status Policy",
+    description: "Cria ou atualiza uma Status Policy com escopo explícito, revisão concorrente e confirmação de alto impacto.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        repository: { type: "string" },
+        branch: { type: "string", minLength: 1 },
+        branch_match_kind: { type: "string", enum: ["exact", "prefix"], default: "exact" },
+        status_name: { type: "string", minLength: 1 },
+        status_genre: { type: "string", minLength: 1 },
+        enabled: { type: "boolean", default: true },
+        blocking: { type: "boolean", default: true },
+        invalidate_on_source_update: { type: "boolean", default: true },
+        ...SensitiveMutationControlsSchema,
+      },
+      required: ["branch", "status_name", "status_genre"],
+    },
+  },
+  {
+    name: "tfs_build_validation_toggle",
+    title: "Enable or Disable Build Validation",
+    description: "Habilita ou desabilita uma Build Validation por ID, relendo a revisão antes da escrita e permitindo rollback seguro.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        policy_id: { type: "integer", minimum: 1 },
+        enabled: { type: "boolean" },
+        ...SensitiveMutationControlsSchema,
+      },
+      required: ["policy_id", "enabled"],
+    },
+  },
+  {
     name: "tfs_wiki",
     title: "Wiki Explorer",
     description:
@@ -763,6 +813,21 @@ export const TOOL_DEFS = [
     },
   },
   {
+    name: "tfs_resolve_pr_thread",
+    title: "Resolve Pull Request Thread",
+    description: "Marca uma thread de review do Pull Request como corrigida.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: ["number", "string"] },
+        repo: { type: "string" },
+        thread_id: { type: "number" },
+        ...MutationControlsSchema,
+      },
+      required: ["id", "thread_id"],
+    },
+  },
+  {
     name: "tfs_comment_review_findings",
     title: "Comment Review Findings",
     description:
@@ -863,10 +928,14 @@ const TOOL_HANDLERS = {
   tfs_pipeline_upsert: (args) => toolUpsertYamlPipeline(args),
   tfs_pipeline_queue: (args) => toolQueuePipeline(args),
   tfs_branch_policy_upsert: (args) => toolUpsertBuildValidationPolicy(args),
+  tfs_policy_list: (args) => toolListPolicies(args),
+  tfs_status_policy_upsert: (args) => toolUpsertStatusPolicy(args),
+  tfs_build_validation_toggle: (args) => toolToggleBuildValidationPolicy(args),
   tfs_wiki: (args) => toolWiki(args),
   tfs_update_work_item: (args) => toolUpdateWorkItem(args),
   tfs_update_issue_analysis: (args) => toolUpdateIssueAnalysis(args),
   tfs_add_pr_comment: (args) => toolAddPRComment(args),
+  tfs_resolve_pr_thread: (args) => toolResolvePRThread(args),
   tfs_comment_review_findings: (args) => toolCommentReviewFindings(args),
   tfs_sprint_info: (args) => toolSprintInfo(args),
   tfs_list_repos: (args) => toolListRepos(args),

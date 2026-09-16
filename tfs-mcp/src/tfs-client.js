@@ -193,6 +193,26 @@ export async function tfsGet(endpoint, params = {}, { cacheKey, cacheTtlMs = 0, 
 }
 
 /**
+ * GET paginado preservando os cabeçalhos de continuação do TFS.
+ * Usado por inventários que podem ultrapassar o limite de 100 itens.
+ */
+export async function tfsGetPage(endpoint, params = {}, { authAlias } = {}) {
+  const url = new URL(`${BASE}${endpoint}`);
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
+  if (!url.searchParams.has("api-version")) url.searchParams.set("api-version", "7.0");
+  return withRetry(async () => {
+    logger.debug({ method: "GET", path: url.pathname + url.search }, "TFS →");
+    const res = await fetchWithTimeout(url.toString(), { headers: buildHeaders({}, { authAlias }) });
+    if (!res.ok) {
+      const txt = await res.text();
+      const err = new Error(`TFS ${res.status} GET ${endpoint}: ${txt.slice(0, 400)}`);
+      throw attachResponseMetadata(err, res);
+    }
+    return { data: await res.json(), continuationToken: res.headers.get("x-ms-continuationtoken") ?? res.headers.get("x-ms-continuation-token") };
+  }, { safeToRetry: true });
+}
+
+/**
  * POST com corpo JSON.
  */
 export async function tfsPost(endpoint, body, params = {}, { authAlias } = {}) {

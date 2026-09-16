@@ -15,11 +15,15 @@ process.env.TFS_AUDIT_LOG_PATH = auditPath;
 
 const {
   BUILD_VALIDATION_POLICY_TYPE_ID,
+  STATUS_POLICY_TYPE_ID,
   buildBranchPolicyChangeSummary,
   buildBuildValidationPolicyPayload,
   normalizeFilenamePatterns,
   normalizePolicyBranch,
   toolUpsertBuildValidationPolicy,
+  toolListPolicies,
+  toolUpsertStatusPolicy,
+  toolToggleBuildValidationPolicy,
 } = await import("../src/tools/branch-policy.js");
 
 const REPOSITORY = {
@@ -134,6 +138,9 @@ function installFetch({
     if (request.method === "GET" && request.url.includes("/git/policy/configurations?")) {
       return jsonResponse({ value: state.policies });
     }
+    if (request.method === "GET" && request.url.includes("/policy/configurations?") && !request.url.match(/\/policy\/configurations\/\d+\?/)) {
+      return jsonResponse({ value: state.policies });
+    }
     const detailsMatch = request.url.match(/\/policy\/configurations\/(\d+)\?/);
     if (request.method === "GET" && detailsMatch) {
       return jsonResponse(state.policyById.get(detailsMatch[1]));
@@ -201,6 +208,66 @@ test("normalizes branch refs and rejects ambiguous path-filter strings", () => {
   assert.deepEqual(normalizeFilenamePatterns(["*.cs", "/src/*", "*.cs"]), ["*.cs", "/src/*"]);
   assert.throws(() => normalizeFilenamePatterns(["src/*"]), /deve começar/);
   assert.throws(() => normalizeFilenamePatterns(["/src/*;/tests/*"]), /separadamente/);
+});
+
+test("lista policies por repositório e preserva o tipo e o escopo", async () => {
+  const status = {
+    id: 88,
+    revision: 2,
+    isEnabled: false,
+    isBlocking: true,
+    type: { id: STATUS_POLICY_TYPE_ID },
+    settings: {
+      statusName: "PrValidationRouter",
+      statusGenre: "NDD.DevSecOps",
+      scope: [{ repositoryId: REPOSITORY.id, refName: "refs/heads/patch", matchKind: "Prefix" }],
+    },
+  };
+  const build = createPolicy({ settings: { ...createPolicy().settings, scope: [{ repositoryId: REPOSITORY.id, refName: "refs/heads/patch", matchKind: "Prefix" }] } });
+  const mock = installFetch({ policies: [build, status] });
+  try {
+    const result = await toolListPolicies({ repository: REPOSITORY.name, branch: "patch", policy_type: "all" });
+    assert.equal(result.count, 2);
+    assert.equal(result.policies.find(policy => policy.policyId === 88).type, "status");
+  } finally { mock.restore(); }
+});
+
+test("status policy exige confirmação e atualiza somente a revisão lida", async () => {
+  const status = {
+    id: 88,
+    revision: 2,
+    isEnabled: false,
+    isBlocking: true,
+    type: { id: STATUS_POLICY_TYPE_ID },
+    settings: {
+      statusName: "PrValidationRouter",
+      statusGenre: "NDD.DevSecOps",
+      scope: [{ repositoryId: REPOSITORY.id, refName: "refs/heads/patch", matchKind: "Exact" }],
+    },
+  };
+  const mock = installFetch({ policies: [status], policyDetails: status });
+  try {
+    const preview = await toolUpsertStatusPolicy({ repository: REPOSITORY.name, branch: "patch", branch_match_kind: "prefix", status_name: "PrValidationRouter", status_genre: "NDD.DevSecOps", enabled: true, dry_run: true });
+    assert.equal(preview.willMutate, false);
+    assert.equal(preview.mutationPlan.confirmation.highImpactConfirmationRequired, "patch");
+    const result = await toolUpsertStatusPolicy({ repository: REPOSITORY.name, branch: "patch", branch_match_kind: "prefix", status_name: "PrValidationRouter", status_genre: "NDD.DevSecOps", enabled: true, dry_run: false, confirm: true, confirm_high_impact: "patch", reason: "ativar canário seguro", requestedBy: "teste automatizado" });
+    assert.equal(result.willMutate, true);
+    const write = mock.requests.find(request => request.method === "PUT" && request.url.includes("/policy/configurations/88?"));
+    assert.equal(write.body.revision, 2);
+    assert.equal(write.body.settings.scope[0].matchKind, "Prefix");
+  } finally { mock.restore(); }
+});
+
+test("toggle de Build Validation permite rollback por ID", async () => {
+  const existing = createPolicy({ id: 90, settings: { ...createPolicy().settings, scope: [{ repositoryId: REPOSITORY.id, refName: "refs/heads/patch", matchKind: "Prefix" }] } });
+  const mock = installFetch({ policies: [existing], policyDetails: existing });
+  try {
+    const result = await toolToggleBuildValidationPolicy({ policy_id: 90, enabled: false, dry_run: false, confirm: true, confirm_high_impact: "patch", reason: "isolar o canário", requestedBy: "teste automatizado" });
+    assert.equal(result.enabled, false);
+    const write = mock.requests.find(request => request.method === "PUT" && request.url.includes("/policy/configurations/90?"));
+    assert.equal(write.body.isEnabled, false);
+    assert.equal(write.body.revision, 3);
+  } finally { mock.restore(); }
 });
 
 test("summarizes only controlled policy changes", () => {

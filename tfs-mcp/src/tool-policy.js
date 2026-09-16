@@ -33,9 +33,13 @@ export const TOOL_POLICY = Object.freeze({
   tfs_update_pr: WRITE(),
   tfs_pipeline_upsert: WRITE({ risk: TOOL_RISK.DESTRUCTIVE }),
   tfs_branch_policy_upsert: WRITE({ risk: TOOL_RISK.DESTRUCTIVE }),
+  tfs_policy_list: READ(),
+  tfs_status_policy_upsert: WRITE({ risk: TOOL_RISK.DESTRUCTIVE }),
+  tfs_build_validation_toggle: WRITE({ risk: TOOL_RISK.DESTRUCTIVE }),
   tfs_update_work_item: WRITE(),
   tfs_update_issue_analysis: WRITE(),
   tfs_add_pr_comment: WRITE({ idempotent: false }),
+  tfs_resolve_pr_thread: WRITE(),
   tfs_comment_review_findings: WRITE({ idempotent: false }),
   tfs_pipeline_queue: {
     risk: TOOL_RISK.EXECUTION,

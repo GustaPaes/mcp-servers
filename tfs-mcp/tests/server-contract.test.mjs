@@ -24,12 +24,15 @@ test("publishes the complete safe tool contract", async () => {
   try {
     await client.connect(transport);
     const { tools } = await client.listTools();
-    assert.equal(tools.length, 34);
+    assert.equal(tools.length, 38);
     const names = new Set(tools.map((tool) => tool.name));
     assert(names.has("tfs_doctor"));
     assert(names.has("tfs_saved_queries"));
     assert(names.has("tfs_pipeline_upsert"));
     assert(names.has("tfs_branch_policy_upsert"));
+    assert(names.has("tfs_policy_list"));
+    assert(names.has("tfs_status_policy_upsert"));
+    assert(names.has("tfs_build_validation_toggle"));
     assert(names.has("tfs_pipeline_queue"));
     const pipelineUpsert = tools.find(tool => tool.name === "tfs_pipeline_upsert");
     assert.deepEqual(
