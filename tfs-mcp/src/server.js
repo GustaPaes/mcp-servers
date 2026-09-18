@@ -682,6 +682,8 @@ export const TOOL_DEFS = [
         enabled: { type: "boolean", default: true },
         blocking: { type: "boolean", default: true },
         invalidate_on_source_update: { type: "boolean", default: true },
+        apply_by_default: { type: "boolean", default: true },
+        authorized_identity_id: { type: "string", minLength: 1 },
         ...SensitiveMutationControlsSchema,
       },
       required: ["branch", "status_name", "status_genre"],

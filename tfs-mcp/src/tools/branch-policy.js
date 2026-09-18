@@ -77,6 +77,8 @@ const StatusPolicyArgs = z.strictObject({
   enabled: z.boolean().default(true),
   blocking: z.boolean().default(true),
   invalidate_on_source_update: z.boolean().default(true),
+  apply_by_default: z.boolean().default(true),
+  authorized_identity_id: z.string().trim().min(1).max(256).optional(),
   ...MutationInput,
 });
 
@@ -252,7 +254,7 @@ export async function toolListPolicies(args) {
   return { repository: repository.name, repositoryId: repository.id, count: filtered.length, policies: filtered.map(summarizePolicy) };
 }
 
-function statusPolicyPayload({ existing, repositoryId, branch, branchMatchKind, statusName, statusGenre, enabled, blocking, invalidateOnSourceUpdate }) {
+export function statusPolicyPayload({ existing, repositoryId, branch, branchMatchKind, statusName, statusGenre, enabled, blocking, invalidateOnSourceUpdate, applyByDefault, authorizedIdentityId }) {
   const payload = {
     isEnabled: enabled,
     isBlocking: blocking,
@@ -262,6 +264,8 @@ function statusPolicyPayload({ existing, repositoryId, branch, branchMatchKind, 
       statusName,
       statusGenre,
       invalidateOnSourceUpdate,
+      applyByDefault,
+      ...(authorizedIdentityId ? { authorId: authorizedIdentityId } : {}),
       scope: [{ repositoryId, refName: normalizePolicyBranch(branch, branchMatchKind), matchKind: normalizeMatchKind(branchMatchKind) }],
     },
   };
@@ -287,7 +291,7 @@ export async function toolUpsertStatusPolicy(args) {
   const branch = normalizePolicyBranch(input.branch, input.branch_match_kind);
   if (input.branch_match_kind === "exact") await requireExactBranchRef(repository.id, branch, context.authAlias);
   const existing = await findStatusPolicy({ repositoryId: repository.id, branch, statusName: input.status_name, statusGenre: input.status_genre, authAlias: context.authAlias });
-  const payload = statusPolicyPayload({ existing, repositoryId: repository.id, branch, branchMatchKind: input.branch_match_kind, statusName: input.status_name, statusGenre: input.status_genre, enabled: input.enabled, blocking: input.blocking, invalidateOnSourceUpdate: input.invalidate_on_source_update });
+  const payload = statusPolicyPayload({ existing, repositoryId: repository.id, branch, branchMatchKind: input.branch_match_kind, statusName: input.status_name, statusGenre: input.status_genre, enabled: input.enabled, blocking: input.blocking, invalidateOnSourceUpdate: input.invalidate_on_source_update, applyByDefault: input.apply_by_default, authorizedIdentityId: input.authorized_identity_id });
   const before = summarizePolicy(existing);
   const after = summarizePolicy(payload);
   const plan = buildMutationPlan({
@@ -309,7 +313,7 @@ export async function toolUpsertStatusPolicy(args) {
     apply: async () => {
       const fresh = existing ? await tfsGet(`/policy/configurations/${existing.id}`, { "api-version": "7.0" }, { authAlias: context.authAlias }) : null;
       if (existing && (!fresh || Number(fresh.revision) !== Number(existing.revision))) throw new Error(`A policy ${existing.id} mudou de revisão antes da escrita.`);
-      const freshPayload = statusPolicyPayload({ existing: fresh ?? undefined, repositoryId: repository.id, branch, branchMatchKind: input.branch_match_kind, statusName: input.status_name, statusGenre: input.status_genre, enabled: input.enabled, blocking: input.blocking, invalidateOnSourceUpdate: input.invalidate_on_source_update });
+      const freshPayload = statusPolicyPayload({ existing: fresh ?? undefined, repositoryId: repository.id, branch, branchMatchKind: input.branch_match_kind, statusName: input.status_name, statusGenre: input.status_genre, enabled: input.enabled, blocking: input.blocking, invalidateOnSourceUpdate: input.invalidate_on_source_update, applyByDefault: input.apply_by_default, authorizedIdentityId: input.authorized_identity_id });
       const persisted = existing
         ? await tfsPut(`/policy/configurations/${existing.id}`, freshPayload, { "api-version": "7.0" }, { authAlias: context.authAlias })
         : await tfsPost("/policy/configurations", freshPayload, { "api-version": "7.0" }, { authAlias: context.authAlias });
