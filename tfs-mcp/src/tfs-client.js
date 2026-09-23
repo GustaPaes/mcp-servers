@@ -85,6 +85,19 @@ function assertSelectedScopeUrl(url, { allowCollectionResources = false } = {}) 
   return url;
 }
 
+function buildApiUrl(endpoint, baseUrl = getTfsScope().apiBase) {
+  const base = assertTrustedTfsUrl(baseUrl);
+  if (typeof endpoint !== "string" || !endpoint.startsWith("/")) {
+    throw new Error("Endpoint TFS deve ser um caminho relativo iniciado por /.");
+  }
+  const url = new URL(`${base.href.replace(/\/+$/, "")}${endpoint}`);
+  const basePath = base.pathname.replace(/\/+$/, "");
+  if (url.origin !== base.origin || !url.pathname.startsWith(`${basePath}/`)) {
+    throw new Error("Endpoint TFS escapou da API da collection e do projeto selecionados.");
+  }
+  return url;
+}
+
 function retryAfterMs(response) {
   const value = response.headers.get("retry-after");
   if (!value) return 0;
@@ -184,7 +197,7 @@ function cacheStore(key, data, ttlMs) {
  * @param {object} [cache]   — { cacheKey: string, cacheTtlMs: number }
  */
 export async function tfsGet(endpoint, params = {}, { cacheKey, cacheTtlMs = 0, authAlias } = {}) {
-  const url = new URL(`${getTfsScope().apiBase}${endpoint}`);
+  const url = buildApiUrl(endpoint);
   const scopedCacheKey = buildScopedCacheKey(cacheKey, authAlias, url.pathname);
   const hit = tryCacheHit(scopedCacheKey);
   if (hit !== null) {
@@ -215,7 +228,7 @@ export async function tfsGet(endpoint, params = {}, { cacheKey, cacheTtlMs = 0, 
  * Usado por inventários que podem ultrapassar o limite de 100 itens.
  */
 export async function tfsGetPage(endpoint, params = {}, { authAlias, baseUrl } = {}) {
-  const url = new URL(`${baseUrl ?? getTfsScope().apiBase}${endpoint}`);
+  const url = buildApiUrl(endpoint, baseUrl);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
   if (!url.searchParams.has("api-version")) url.searchParams.set("api-version", "7.0");
   return withRetry(async () => {
@@ -234,7 +247,7 @@ export async function tfsGetPage(endpoint, params = {}, { authAlias, baseUrl } =
  * POST com corpo JSON.
  */
 export async function tfsPost(endpoint, body, params = {}, { authAlias } = {}) {
-  const url = new URL(`${getTfsScope().apiBase}${endpoint}`);
+  const url = buildApiUrl(endpoint);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
   if (!url.searchParams.has("api-version")) url.searchParams.set("api-version", "7.0");
 
@@ -259,7 +272,7 @@ export async function tfsPost(endpoint, body, params = {}, { authAlias } = {}) {
  * Usado para criar (POST) e atualizar (PATCH) work items.
  */
 export async function tfsJsonPatch(method, endpoint, ops, { authAlias } = {}) {
-  const url = new URL(`${getTfsScope().apiBase}${endpoint}`);
+  const url = buildApiUrl(endpoint);
   url.searchParams.set("api-version", "7.0");
 
   return withRetry(async () => {
@@ -283,7 +296,7 @@ export async function tfsJsonPatch(method, endpoint, ops, { authAlias } = {}) {
  * Usado para atualizar recursos como Pull Requests.
  */
 export async function tfsPatch(endpoint, body, params = {}, { authAlias } = {}) {
-  const url = new URL(`${getTfsScope().apiBase}${endpoint}`);
+  const url = buildApiUrl(endpoint);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
   if (!url.searchParams.has("api-version")) url.searchParams.set("api-version", "7.0");
 
@@ -310,7 +323,7 @@ export async function tfsPatch(endpoint, body, params = {}, { authAlias } = {}) 
  * exatamente uma vez antes de reler o estado remoto.
  */
 export async function tfsPut(endpoint, body, params = {}, { authAlias, retry = true } = {}) {
-  const url = new URL(`${getTfsScope().apiBase}${endpoint}`);
+  const url = buildApiUrl(endpoint);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
   if (!url.searchParams.has("api-version")) url.searchParams.set("api-version", "7.0");
 

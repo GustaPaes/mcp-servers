@@ -98,14 +98,22 @@ test("unavailable discovery returns explicitly incomplete local configuration", 
 
 test("credentials stay within the configured root and selected project; redirects fail closed", async () => {
   const previousFetch = globalThis.fetch;
-  globalThis.fetch = async () => new Response(null, { status: 302, headers: { location: "https://attacker.example/" } });
+  let requests = 0;
+  globalThis.fetch = async () => {
+    requests += 1;
+    return new Response(null, { status: 302, headers: { location: "https://attacker.example/" } });
+  };
   try {
     await assert.rejects(() => runWithRequestContext({ collection: "Beta", project: "Shared" },
       () => tfsGetAbsoluteText("https://tfs.example.test/other/Beta/Shared/_apis/test")), /origem nao confiavel/);
     await assert.rejects(() => runWithRequestContext({ collection: "Beta", project: "Shared" },
       () => tfsGetAbsoluteText("https://tfs.example.test/tfs/Alpha/Shared/_apis/test")), /projeto selecionados/);
     await assert.rejects(() => runWithRequestContext({ collection: "Beta", project: "Shared" },
+      () => tfsGet("/../../../../Alpha/Shared/_apis/wit/fields")), /escapou da API/);
+    assert.equal(requests, 0);
+    await assert.rejects(() => runWithRequestContext({ collection: "Beta", project: "Shared" },
       () => tfsGet("/wit/fields")), /Redirecionamento TFS recusado/);
+    assert.equal(requests, 1);
     assert.equal(getTfsScope().collection, "Alpha");
   } finally { globalThis.fetch = previousFetch; }
 });
