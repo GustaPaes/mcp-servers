@@ -111,6 +111,21 @@ export function audit(event) {
   logger.debug(safeEvent, "audit");
 }
 
+/** Persist an audit record before a remote mutation starts. Failure is fatal. */
+export function auditCritical(event) {
+  const safeEvent = redact(event);
+  const line = JSON.stringify({ ts: new Date().toISOString(), ...safeEvent }) + "\n";
+  fs.mkdirSync(path.dirname(config.auditLogFile), { recursive: true });
+  const descriptor = fs.openSync(config.auditLogFile, "a");
+  try {
+    fs.writeSync(descriptor, line, undefined, "utf8");
+    fs.fsyncSync(descriptor);
+  } finally {
+    fs.closeSync(descriptor);
+  }
+  logger.debug(safeEvent, "critical audit");
+}
+
 export function closeAuditStream() {
   return new Promise((resolve) => auditStream.end(resolve));
 }

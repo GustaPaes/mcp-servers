@@ -30,7 +30,7 @@
   "mcp": {
     "azure-mcp": {
       "type": "local",
-      "command": ["node", "<repo-root>/azure-mcp/node_modules/@azure/mcp/index.js", "server", "start"],
+      "command": ["node", "<repo-root>/azure-mcp/node_modules/@azure/mcp/index.js", "server", "start", "--mode", "namespace", "--read-only", "--namespace", "storage", "--namespace", "keyvault"],
       "enabled": true
     }
   }
@@ -43,7 +43,7 @@
   "mcpServers": {
     "azure-mcp": {
       "command": "node",
-      "args": ["<repo-root>/azure-mcp/node_modules/@azure/mcp/index.js", "server", "start"]
+      "args": ["<repo-root>/azure-mcp/node_modules/@azure/mcp/index.js", "server", "start", "--mode", "namespace", "--read-only", "--namespace", "storage", "--namespace", "keyvault"]
     }
   }
 }
@@ -51,14 +51,14 @@
 
 ```bash
 # Claude Code (CLI)
-claude mcp add azure-mcp -- node "<repo-root>/azure-mcp/node_modules/@azure/mcp/index.js" server start
+claude mcp add azure-mcp -- node "<repo-root>/azure-mcp/node_modules/@azure/mcp/index.js" server start --mode namespace --read-only --namespace storage --namespace keyvault
 ```
 
 ```toml
 # Codex → ~/.codex/config.toml
 [mcp_servers.azure-mcp]
 command = "node"
-args = ["<repo-root>/azure-mcp/node_modules/@azure/mcp/index.js", "server", "start"]
+args = ["<repo-root>/azure-mcp/node_modules/@azure/mcp/index.js", "server", "start", "--mode", "namespace", "--read-only", "--namespace", "storage", "--namespace", "keyvault"]
 cwd = "<repo-root>/azure-mcp"
 enabled = true
 ```
@@ -67,6 +67,14 @@ No Windows, execute o módulo Node diretamente. O shim `azmcp.cmd` do npm abre
 um `cmd.exe` intermediário e pode deixar processos adicionais quando o cliente
 encerra uma sessão `stdio`. `scripts/start-server.ps1` permanece disponível
 somente para compatibilidade com configurações antigas.
+
+Os exemplos expõem somente `storage` e `keyvault` em modo de leitura. Troque
+os valores de `--namespace` no arquivo local do cliente para os serviços
+necessários. `npm start` usa `--mode namespace --read-only` com todos os
+namespaces de leitura disponíveis. Para habilitar escrita, remova `--read-only`
+apenas da configuração local do cliente, com uma identidade Azure de privilégio
+mínimo. No launcher PowerShell, essa escolha é explícita:
+`scripts/start-server.ps1 -EnableWrites -Namespace storage`.
 
 ---
 
@@ -150,7 +158,7 @@ Depois, registre o launcher no arquivo MCP do cliente:
     "azure-mcp": {
       "type": "stdio",
       "command": "node",
-      "args": ["<repo-root>/azure-mcp/node_modules/@azure/mcp/index.js", "server", "start"],
+      "args": ["<repo-root>/azure-mcp/node_modules/@azure/mcp/index.js", "server", "start", "--mode", "namespace", "--read-only", "--namespace", "storage", "--namespace", "keyvault"],
       "envFile": "<repo-root>/azure-mcp/.env"
     }
   }

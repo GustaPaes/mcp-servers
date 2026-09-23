@@ -36,6 +36,8 @@ Every tool returns the strict `{ ok, data, errors, meta }` envelope with an
 - Prefer `oci-extras-mcp` for OKE/Vault/Kubernetes workflows and official Oracle MCP servers for generic OCI service coverage.
 - Keep audit logs, ownership ledger, kubeconfig and `.env` files out of Git.
 - Keep audit redaction enabled; the server refuses to start when an environment override attempts to disable it.
+- `LOCAL_STATE`, `EXECUTION`, `REMOTE_WRITE`, `DESTRUCTIVE` and `SECRET_READ` calls require a durable audit record before the handler runs. `AUDIT_UNAVAILABLE` means the handler did not start; `AUDIT_OUTCOME_UNKNOWN` means the handler may have changed state and must be reconciled before retrying.
+- The official `oci-cloud` server's generic `invoke_oci_api` can call SDK write methods. Use separate OCI identities/profiles with least privilege for read and write workflows.
 - Bound request timeouts, retries, polling duration, pagination, HTTP body size, session TTL and active-session count.
 - HTTP activity refreshes session TTL. Session expiry and server shutdown must close both the MCP transport and its server instance.
 

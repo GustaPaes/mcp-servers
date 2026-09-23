@@ -40,9 +40,11 @@ Assert-True ($startContent -notmatch '\bnpx\b') 'O launcher deve usar apenas a i
 Assert-True ($startContent -notmatch 'azmcp\.cmd|node_modules\\\.bin') 'O launcher nao deve iniciar o shim cmd do npm.'
 Assert-True ($startContent -match 'Get-AzureMcpNodeEntryPoint') 'O launcher nao usa o entry point Node local canonico.'
 Assert-True ($startContent -match '& node \$entryPoint server start') 'O launcher nao inicia o modulo Node diretamente.'
+Assert-True ($startContent.Contains('$safeArgs += ''--read-only''')) 'O launcher não inicia em modo de leitura por padrão.'
+Assert-True ($startContent.Contains('$safeArgs += @(''--namespace'', $name)')) 'O launcher não permite selecionar namespaces.'
 
 $packageJson = Get-Content -Raw -LiteralPath (Join-Path $projectRoot 'package.json') | ConvertFrom-Json
-Assert-True ($packageJson.scripts.start -eq 'node ./node_modules/@azure/mcp/index.js server start') 'npm start nao usa o modulo Node diretamente.'
+Assert-True ($packageJson.scripts.start -eq 'node ./node_modules/@azure/mcp/index.js server start --mode namespace --read-only') 'npm start não aplica o modo seguro.'
 
 & powershell -NoProfile -File (Join-Path $scriptsRoot 'vm-power.ps1') `
     -Action Start -Subscription '00000000-0000-0000-0000-000000000000' `

@@ -3,6 +3,11 @@
 > Este arquivo complementa as [diretrizes globais](../AGENTS.md). As regras de
 > neutralidade, reutilização e separação de conteúdo local são obrigatórias.
 
+O launcher e os exemplos públicos iniciam em `--mode namespace --read-only`.
+Selecione apenas os namespaces necessários na configuração local do cliente.
+Escrita exige remover `--read-only` nessa configuração local ou usar
+`scripts/start-server.ps1 -EnableWrites`, com identidade de privilégio mínimo.
+
 > **Este arquivo é uma instrução vinculante para qualquer agente (GitHub Copilot, Claude, OpenCode, etc.) que utilize as tools `azmcp_*` neste workspace.** Leia-o no início de toda sessão que envolva o `azure-mcp`.
 
 ---

@@ -11,13 +11,14 @@ process.env.LOG_LEVEL = "fatal";
 process.env.LOG_REDACT_SECRETS = "true";
 
 try {
-  const [{ ALL_TOOLS, ToolOutputSchema }, manifest, guards, schemas, auditModule] =
+  const [{ ALL_TOOLS, ToolOutputSchema }, manifest, guards, schemas, auditModule, wrapper] =
     await Promise.all([
       import("../src/server.js"),
       import("../src/tool-manifest.js"),
       import("../src/safety/guards.js"),
       import("../src/schemas.js"),
       import("../src/safety/audit.js"),
+      import("../src/safety/wrap.js"),
     ]);
 
   assert.deepEqual(Object.keys(manifest.TOOL_POLICIES).sort(), Object.keys(ALL_TOOLS).sort());
@@ -64,6 +65,28 @@ try {
   });
   assert.equal(redacted.clientSecret, "***REDACTED***");
   assert.doesNotMatch(JSON.stringify(redacted), /do-not-log/);
+
+  let mutationSawPreflight = false;
+  const syntheticMutation = wrapper.withSafety("fn_create_application", async () => {
+    const lines = fs.readFileSync(process.env.AUDIT_LOG_FILE, "utf8").trim().split("\n").map(JSON.parse);
+    mutationSawPreflight = lines.some((line) => line.tool === "fn_create_application" && line.status === "started");
+    return { ok: true };
+  });
+  assert.equal((await syntheticMutation({ secretContent: "never-log-this" })).ok, true);
+  assert.equal(mutationSawPreflight, true);
+  assert.doesNotMatch(fs.readFileSync(process.env.AUDIT_LOG_FILE, "utf8"), /never-log-this/);
+
+  const unavailableAudit = spawnSync(process.execPath, ["--input-type=module", "--eval", [
+    'const { withSafety } = await import("./src/safety/wrap.js")',
+    'const result = await withSafety("fn_create_application", async () => { throw new Error("handler must not run") })({})',
+    'console.log(JSON.stringify(result))',
+  ].join(";\n")], {
+    cwd: process.cwd(),
+    env: { ...process.env, AUDIT_LOG_FILE: temporaryDirectory, LOG_LEVEL: "fatal" },
+    encoding: "utf8",
+  });
+  assert.equal(unavailableAudit.status, 0, unavailableAudit.stderr);
+  assert.equal(JSON.parse(unavailableAudit.stdout.trim()).code, "AUDIT_UNAVAILABLE");
 
   const invalidConfig = spawnSync(
     process.execPath,

@@ -13,28 +13,20 @@
 
 > A multi-session, batteries-included Model Context Protocol server for [Playwright](https://playwright.dev/) browser automation. Lets an LLM drive **Chromium / Firefox / WebKit** (and native **Chrome / Edge** channels), record HAR / video / traces, mock network responses, and operate **multiple isolated browser sessions in parallel**.
 
-Built in TypeScript. Stdio transport. Logs to stderr. JSON Schema raw on the wire. Aligned with the in-house MCP pattern (see `tfs-mcp`, `career-development-mcp`, `oci-extras-mcp`).
+Built in TypeScript. Stdio transport. Logs to stderr. JSON Schema raw on the wire. Uses the workspace's shared MCP contract pattern.
 
 ---
 
-## Why this exists (vs Microsoft `@playwright/mcp`)
+## When to use this server
 
-The official `@playwright/mcp` is excellent for single-session, snapshot-driven LLM browsing. **This MCP solves a different problem set:**
-
-| Need | Microsoft MCP | This MCP |
-|------|---------------|----------|
-| Run **N browsers in parallel** (separate sessions) | ❌ single context | ✅ up to `PWMCP_MAX_SESSIONS` (default 5) |
-| Save / restore login state programmatically at runtime | only via CLI flag | ✅ `context_storage_state` tool (save & load) |
-| Capture **HAR** of a real navigation | listing only | ✅ full HAR via `record_har` + `network_log_*` |
-| **Video** recording | — | ✅ `record_video` + `page_video_*` |
-| Playwright **tracing** (`trace.zip`) | — | ✅ `tracing_start` / `tracing_stop` |
-| Programmatic **request interception / mock** | block-list config only | ✅ `page_route` (abort / fulfill / continue) |
-| **iframe** evaluation helper | — | ✅ `page_eval_in_frame` |
-| **Stealth** profile toggle | — | ✅ `browser_stealth` (light) |
-| Server **healthcheck** (RAM, sessions, browsers) | — | ✅ `mcp_status` |
-| Bootstrap browsers from a tool | — | ✅ `browser_install` |
-
-What we **don't** have on purpose: `browser_run_code_unsafe` (RCE), `--cdp-endpoint` remote attach, `--secrets` redaction, Chrome extension bridge. They're tracked as backlog.
+For general browser automation, start with [Microsoft's official Playwright MCP](https://github.com/microsoft/playwright-mcp).
+It supports isolated sessions, storage state, CDP and the browser extension.
+This server is useful when one MCP connection needs to manage several named
+browser sessions and contexts at runtime, with explicit tools for HAR, video,
+tracing, request interception and local artifact controls. Session and artifact
+limits are configured with `PWMCP_*` variables. Its `page_video_start` and
+`network_log_start` compatibility tools only report recording status;
+recording must be enabled when creating the context.
 
 ---
 
