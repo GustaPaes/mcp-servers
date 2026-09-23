@@ -20,6 +20,10 @@ updates:
     directory: /playwright-mcp
     schedule: { interval: weekly }
     open-pull-requests-limit: 3
+    ignore:
+      # A tipagem major deve acompanhar a matriz de runtime suportada.
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
     groups:
       compatible-updates:
         patterns: ["*"]
@@ -42,6 +46,8 @@ updates:
     open-pull-requests-limit: 3
     ignore:
       # Majors exigem uma migracao coordenada de runtime e toolchain.
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
       - dependency-name: typescript
         update-types: [version-update:semver-major]
       - dependency-name: undici
@@ -54,6 +60,10 @@ updates:
     directory: /meta-ads-mcp/web-panel
     schedule: { interval: weekly }
     open-pull-requests-limit: 3
+    ignore:
+      # A tipagem major deve acompanhar a matriz de runtime suportada.
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
     groups:
       compatible-updates:
         patterns: ["*"]

@@ -157,8 +157,30 @@ proteção contra divergência.
 5. Execute `npm run doctor`, `npm run validate` e `git diff --check` na raiz
    quando os comandos estiverem disponíveis e forem aplicáveis à mudança.
 
+## Configuração local e clientes MCP
+
+- Ao alterar configuração, dependências, argumentos ou tools de um servidor,
+  confira `.env.example` e valide a configuração local ignorada pelo Git sem
+  copiar valores privados para logs, testes, documentação ou PRs.
+- Confira as integrações MCP dos clientes de IA instalados que usam o servidor,
+  como Claude Code, Codex e Copilot CLI. Ajuste apenas os servidores escolhidos
+  para cada cliente; não habilite outros só por estarem disponíveis no repositório.
+- Valide a inicialização e o inventário de tools pelo protocolo MCP. Quando
+  houver credenciais e autorização, faça uma leitura remota sem expor dados
+  privados. Informe quando uma sessão já aberta precisar recarregar as tools.
+- Configurações de clientes, credenciais e scripts locais permanecem fora do
+  Git. Verifique o ignore antes de criar arquivos e confirme a árvore limpa ao
+  terminar.
+
 ## Pull requests e limpeza de branches
 
+- Ao concluir toda alteração de configuração, revise os PRs e branches
+  existentes. Identifique mudanças sobrepostas, obsoletas ou ainda úteis;
+  valide e integre as úteis, encerre as descartadas com justificativa e limpe
+  suas branches após confirmar que nenhum trabalho necessário será perdido.
+- Para atualizações de dependências, compare a versão proposta com a matriz de
+  runtime suportada e rode os testes relevantes na versão instalada. Não
+  integre upgrades incompatíveis apenas para zerar a fila de PRs.
 - Entregue mudanças em uma branch de trabalho por pull request para `main`;
   não envie commits diretamente para a branch padrão.
 - Depois de abrir uma pull request pronta, habilite o auto-merge assim que os
@@ -174,9 +196,10 @@ proteção contra divergência.
   local somente depois de comprovar que seu conteúdo está integrado em `main`.
 - Após o merge, atualize `main` com fast-forward e remova referências remotas
   obsoletas com `git fetch --prune`.
-- Nunca exclua `main`, branches com pull request aberta, branches não mergeadas,
-  branches usadas por outro worktree ou branches cuja integração não possa ser
-  comprovada.
+- Nunca exclua `main`, branches com pull request aberta ou branches usadas por
+  outro worktree. Preserve branches não mergeadas com trabalho útil. Uma branch
+  de PR fechado como obsoleto pode ser removida após registrar a decisão e
+  confirmar que não contém trabalho a preservar.
 
 Se uma implementação não atender a estes critérios, generalize-a antes de
 versionar ou mantenha-a integralmente em `local-private/`.
