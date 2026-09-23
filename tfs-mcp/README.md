@@ -20,6 +20,7 @@ A wrapper around TFS REST APIs is easy. **The hard part is making an LLM useful 
 - **Specialist routing** — activity writing, refinement, handoff, PR review, release readiness, delivery risk and pipeline status apply explicit specialist rubrics (Business Analyst/PO, Tech Lead, QA, DevOps, Security, Backend, Frontend, Database, Architecture and Observability) so the MCP explains which expert lenses were used and why.
 - **Standardized writing template** — `tfs_generate_activity_template` and its bulk sibling `tfs_generate_activity_template_from_items` produce business + technical descriptions in a fixed bold-block format with `**Deve**` acceptance criteria. The MCP self-summarizes the technical block when the change estimate exceeds 50 lines.
 - **Multi-PAT auth** — `TFS_PAT_<ALIAS>` lets you keep a build PAT and a personal PAT side by side; pass `auth_alias` per call.
+- **Multi-collection access** — `collection` and `project` select the target for each call; `tfs_list_collections` and `tfs_list_projects` enumerate visible scopes.
 - **Multi-repo PR search** — when `repo` is omitted, the server iterates `TFS_REPOS` until it finds the PR.
 - **Both transports** — `stdio` (default) and Streamable HTTP (`--http`).
 
@@ -48,6 +49,34 @@ For organization-specific fields and reusable queries, copy
 [`config/tfs.example.json`](./config/tfs.example.json) to the ignored
 `local-private/config/tfs.json`. Keep PATs in `.env`; never put credentials in
 the JSON file.
+
+### Collections and projects
+
+Set `TFS_URL` to the installation root (for example `https://tfs.example.com/tfs`),
+without a collection or project suffix. `TFS_COLLECTION` and `TFS_PROJECT` remain
+optional defaults for existing clients. Every tool accepts `collection` and
+`project`; explicit values take precedence. A work-item, PR or wiki URL must
+belong to the selected scope. If a URL supplies a scope and neither selector
+was passed, that URL selects the scope. Use `auth_alias` to select a PAT per
+call; an optional `authAlias` in a local scope supplies its default.
+
+Call `tfs_list_collections` and follow `nextCursor` until it is empty to
+enumerate all collections visible to the selected PAT. Then call
+`tfs_list_projects` with each collection and follow its `nextCursor`.
+Some Server installations do not expose or authorize collection discovery.
+In that case, put collection names in the ignored
+`local-private/config/tfs.json` `collections` array. The response reports
+`source: "local-config"`, `complete: false` and a warning; it does not claim
+to have discovered all visible collections. A 401 or network failure remains
+an error. The supported baseline is Azure DevOps Server 2022, whose REST API
+version is [7.0](https://learn.microsoft.com/en-us/rest/api/azure/devops/?view=azure-devops-rest-7.2).
+
+The same local JSON file can define `scopes`, each with `collection`, `project`
+and optional `repositories`, `authAlias`, `workItemProfiles`, `fields` and
+`savedQueries`. Keep actual names and PAT values out of Git; the committed
+[`config/tfs.example.json`](./config/tfs.example.json) contains synthetic
+values. A scope's PAT alias refers to a `TFS_PAT_<ALIAS>` environment variable;
+never place the PAT itself in JSON.
 
 Verify it starts:
 

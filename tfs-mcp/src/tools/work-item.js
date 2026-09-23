@@ -5,14 +5,15 @@
 import { z } from "zod";
 import { tfsGet, tfsPost, tfsJsonPatch } from "../tfs-client.js";
 import {
-  TFS_PROJECT,
-  TFS_URL,
-  TFS_COLLECTION,
   TFS_WORK_ITEM_PROFILE_FIELDS,
   TFS_ISSUE_ANALYSIS_FIELD,
   TFS_ISSUE_CORRECTION_AND_IMPACTS_FIELD,
   getConfiguredWorkItemProfile,
+  getIssueAnalysisFields,
   getSavedQuery,
+  getTfsScope,
+  getWorkItemProfileFields,
+  buildProjectUrl,
 } from "../config.js";
 import {
   validateCustomFields,
@@ -198,6 +199,10 @@ export const WI_FIELDS = [...new Set([
   ...TFS_WORK_ITEM_PROFILE_FIELDS,
 ])].join(",");
 
+export function getWorkItemFields() {
+  return [...new Set([...WI_FIELDS.split(","), ...getWorkItemProfileFields()])].join(",");
+}
+
 function extractBusinessAcceptanceCriteria(description = "") {
   const content = autoDecodeRichText(description);
   const match = content.match(
@@ -272,44 +277,47 @@ async function fetchWorkItemFieldMap(id) {
   };
 }
 
-export const QUERY_PRESETS = {
+export function getQueryPresets() {
+  const project = escapeWiql(getTfsScope().project);
+  return {
   sprint: `SELECT [System.Id] FROM WorkItems
-    WHERE [System.TeamProject] = '${TFS_PROJECT}'
+    WHERE [System.TeamProject] = '${project}'
     AND [System.IterationPath] = @CurrentIteration
     AND [System.State] <> 'Removed'
     ORDER BY [System.WorkItemType],[System.State]`,
 
   my_tasks: `SELECT [System.Id] FROM WorkItems
-    WHERE [System.TeamProject] = '${TFS_PROJECT}'
+    WHERE [System.TeamProject] = '${project}'
     AND [System.IterationPath] = @CurrentIteration
     AND [System.AssignedTo] = @Me
     AND [System.State] <> 'Removed'
     ORDER BY [System.State]`,
 
   active_pbis: `SELECT [System.Id] FROM WorkItems
-    WHERE [System.TeamProject] = '${TFS_PROJECT}'
+    WHERE [System.TeamProject] = '${project}'
     AND [System.WorkItemType] = 'Product Backlog Item'
     AND [System.State] NOT IN ('Closed','Removed','Done')
     ORDER BY [Microsoft.VSTS.Common.Priority],[System.ChangedDate] DESC`,
 
   bugs: `SELECT [System.Id] FROM WorkItems
-    WHERE [System.TeamProject] = '${TFS_PROJECT}'
+    WHERE [System.TeamProject] = '${project}'
     AND [System.WorkItemType] = 'Bug'
     AND [System.State] NOT IN ('Closed','Removed')
     ORDER BY [Microsoft.VSTS.Common.Priority],[System.ChangedDate] DESC`,
 
   user_stories: `SELECT [System.Id] FROM WorkItems
-    WHERE [System.TeamProject] = '${TFS_PROJECT}'
+    WHERE [System.TeamProject] = '${project}'
     AND [System.WorkItemType] = 'User Story'
     AND [System.State] <> 'Removed'
     ORDER BY [System.ChangedDate] DESC`,
 
   active_tasks: `SELECT [System.Id] FROM WorkItems
-    WHERE [System.TeamProject] = '${TFS_PROJECT}'
+    WHERE [System.TeamProject] = '${project}'
     AND [System.WorkItemType] = 'Sprint Task'
     AND [System.State] NOT IN ('Closed','Removed','Done')
     ORDER BY [System.ChangedDate] DESC`,
-};
+  };
+}
 
 // ─── Fetchers ──────────────────────────────────────────────────────────────
 
@@ -325,7 +333,7 @@ export async function fetchWorkItemsBatch(ids, { includeRelations = false } = {}
   }
   const data = await tfsGet("/wit/workitems", {
     ids: normalized.join(","),
-    fields: WI_FIELDS,
+    fields: getWorkItemFields(),
   });
   return data.value ?? [];
 }
@@ -388,7 +396,7 @@ export async function loadRelatedItems(workItem) {
     linkType: linkMap.get(item.id) ?? null,
     url:
       item._links?.html?.href ??
-      `${TFS_URL}/${TFS_COLLECTION}/${TFS_PROJECT}/_workitems/edit/${item.id}`,
+      buildProjectUrl(`/_workitems/edit/${item.id}`),
   }));
 }
 
@@ -525,11 +533,11 @@ export async function toolQueryWorkItems(args) {
       if (!query) {
         throw new Error(`Consulta salva desconhecida: ${saved_query}. Use tfs_saved_queries para listar as disponíveis.`);
       }
-    } else if (preset && QUERY_PRESETS[preset]) {
-      query = QUERY_PRESETS[preset];
+    } else if (preset && getQueryPresets()[preset]) {
+      query = getQueryPresets()[preset];
     } else {
       const filters = [
-        `[System.TeamProject] = '${escapeWiql(TFS_PROJECT)}'`,
+        `[System.TeamProject] = '${escapeWiql(getTfsScope().project)}'`,
         `[System.State] <> 'Removed'`,
       ];
       if (search) filters.push(`[System.Title] CONTAINS '${escapeWiql(search)}'`);
@@ -545,7 +553,7 @@ export async function toolQueryWorkItems(args) {
 
   if (!query)
     throw new Error(
-      `Preset desconhecido: ${preset}. Disponíveis: ${Object.keys(QUERY_PRESETS).join(", ")}`
+      `Preset desconhecido: ${preset}. Disponíveis: ${Object.keys(getQueryPresets()).join(", ")}`
     );
 
   const wiqlResult = await tfsPost("/wit/wiql", { query }, { "$top": top });
@@ -559,7 +567,7 @@ export async function toolQueryWorkItems(args) {
     .slice(0, top)
     .map((r) => r.id)
     .join(",");
-  const data = await tfsGet("/wit/workitems", { ids: batch, fields: WI_FIELDS });
+  const data = await tfsGet("/wit/workitems", { ids: batch, fields: getWorkItemFields() });
   return (data.value ?? []).map(formatWorkItem);
 }
 
@@ -683,7 +691,7 @@ export async function toolUpdateIssueAnalysis(args) {
   const ops = buildIssueAnalysisPatch({
     developmentAnalysis: development_analysis,
     correctionAndImpacts: correction_and_impacts,
-  });
+  }, getIssueAnalysisFields());
   const formatted = formatWorkItem(workItem);
   const controls = normalizeMutationControls(parsed);
   const impact = detectHighImpact(
@@ -913,7 +921,7 @@ export async function toolCreateWorkItem(args) {
       path: "/relations/-",
       value: {
         rel: "System.LinkTypes.Hierarchy-Reverse",
-        url: `${TFS_URL}/${TFS_COLLECTION}/${TFS_PROJECT}/_apis/wit/workitems/${parent_id}`,
+        url: buildProjectUrl(`/_apis/wit/workitems/${parent_id}`),
         attributes: { comment: "Parent link set on creation" },
       },
     });
@@ -955,7 +963,7 @@ export async function toolCreateWorkItem(args) {
         assignedTo: f["System.AssignedTo"]?.displayName ?? "Unassigned",
         iteration: f["System.IterationPath"],
         area: f["System.AreaPath"],
-        url: wi._links?.html?.href ?? `${TFS_URL}/${TFS_COLLECTION}/${TFS_PROJECT}/_workitems/edit/${wi.id}`,
+        url: wi._links?.html?.href ?? buildProjectUrl(`/_workitems/edit/${wi.id}`),
         created: true,
       };
     },

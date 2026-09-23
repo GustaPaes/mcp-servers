@@ -24,9 +24,11 @@ test("publishes the complete safe tool contract", async () => {
   try {
     await client.connect(transport);
     const { tools } = await client.listTools();
-    assert.equal(tools.length, 38);
+    assert.equal(tools.length, 40);
     const names = new Set(tools.map((tool) => tool.name));
     assert(names.has("tfs_doctor"));
+    assert(names.has("tfs_list_collections"));
+    assert(names.has("tfs_list_projects"));
     assert(names.has("tfs_saved_queries"));
     assert(names.has("tfs_pipeline_upsert"));
     assert(names.has("tfs_branch_policy_upsert"));
@@ -95,6 +97,8 @@ test("publishes the complete safe tool contract", async () => {
     assert.equal(pipelineQueue.annotations.idempotentHint, false);
     assert.equal(pipelineQueue.annotations.destructiveHint, false);
     for (const tool of tools) {
+      assert.equal(tool.inputSchema.properties.collection.type, "string");
+      assert.equal(tool.inputSchema.properties.project.type, "string");
       assert.equal(tool.inputSchema?.additionalProperties, false, `${tool.name} input must be strict`);
       assert.equal(tool.outputSchema?.type, "object", `${tool.name} output must be structured`);
       assert.equal(typeof tool.annotations?.readOnlyHint, "boolean", `${tool.name} readOnlyHint`);
@@ -108,6 +112,24 @@ test("publishes the complete safe tool contract", async () => {
     });
     assert.equal(strictResult.isError, true);
     assert.match(strictResult.content[0].text, /unexpected.*nao e permitido/i);
+
+    const scopedQueries = await client.callTool({
+      name: "tfs_saved_queries",
+      arguments: { collection: "OtherCollection", project: "ExampleProject" },
+    });
+    assert.notEqual(scopedQueries.isError, true);
+
+    const mismatchedUrl = await client.callTool({
+      name: "tfs_wiki",
+      arguments: {
+        action: "read",
+        collection: "ExampleCollection",
+        project: "ExampleProject",
+        url: "https://tfs.example.com/OtherCollection/ExampleProject/_wiki/wikis/example",
+      },
+    });
+    assert.equal(mismatchedUrl.isError, true);
+    assert.match(mismatchedUrl.content[0].text, /collection da URL difere/);
   } finally {
     await client.close().catch(() => {});
   }

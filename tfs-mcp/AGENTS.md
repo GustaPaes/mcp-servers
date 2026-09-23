@@ -12,7 +12,7 @@ The server refuses to start if a tool lacks a definition, handler or explicit
 risk classification. Contract tests must remain aligned with that manifest.
 
 ### READ
-`tfs_doctor`, `tfs_saved_queries`, `tfs_analyze_work_item`,
+`tfs_list_collections`, `tfs_list_projects`, `tfs_doctor`, `tfs_saved_queries`, `tfs_analyze_work_item`,
 `tfs_work_item_context`, `tfs_specialist_review`, `tfs_prepare_refinement`,
 `tfs_work_item`, `tfs_generate_activity_template`,
 `tfs_generate_activity_template_from_items`, `tfs_query_work_items`,
@@ -66,7 +66,7 @@ Execution tools may start an existing pipeline or release-oriented YAML pipeline
 All public input schemas are strict at the MCP boundary and their Zod equivalents
 must use `z.strictObject`. External requests must go through `tfs-client.js`, use
 the configured timeout and forward PAT credentials only to the configured TFS
-origin. Retries are allowed only for safe/idempotent operations.
+installation root, including its path. Redirects are rejected. Retries are allowed only for safe/idempotent operations.
 
 ## Defaults
 
@@ -80,6 +80,7 @@ origin. Retries are allowed only for safe/idempotent operations.
 - Treat pipeline evidence in PR reviews as valid only when repository and PR
   identity or commit SHA match; target-branch equality is not sufficient.
 - Use `auth_alias` when the user names a specific PAT identity.
+- Use `collection` and `project` on calls outside the locally configured default. The mutation plan and audit identify both, and high-impact confirmations for explicit scopes include both names.
 - Apply requested routine work-item fields, PR metadata and PR comments directly. Use a preview when requested; require confirmation for destructive removals and high-impact targets.
 - For development analysis of an `Issue`, use `tfs_update_issue_analysis`. It requires `development_analysis`, accepts optional `correction_and_impacts`, and follows [`docs/issue-analysis.md`](./docs/issue-analysis.md).
 - Treat production/release branches as high impact and ask for confirmation before posting, editing or deleting related items. Starting an existing run through `tfs_pipeline_queue` is the documented execution exception and remains audited.

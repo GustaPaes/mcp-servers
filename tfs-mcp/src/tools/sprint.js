@@ -3,8 +3,8 @@
  */
 import { z } from "zod";
 import { tfsGet, tfsPost } from "../tfs-client.js";
-import { TFS_PROJECT } from "../config.js";
-import { formatWorkItem } from "../formatters.js";
+import { getTfsScope } from "../config.js";
+import { escapeWiql, formatWorkItem } from "../formatters.js";
 import { buildSpecialistReview } from "../specialists.js";
 import {
   buildReleaseSignals,
@@ -17,7 +17,7 @@ import {
   scoreDeliveryRisk,
   normalizeWorkflowState,
 } from "../analytics.js";
-import { toolQueryWorkItems, WI_FIELDS } from "./work-item.js";
+import { toolQueryWorkItems, getWorkItemFields } from "./work-item.js";
 import { toolListPRs } from "./pull-request.js";
 import { toolPipelineStatus } from "./infra.js";
 
@@ -32,13 +32,13 @@ export async function toolSprintInfo(args) {
   let iterPath = iteration_path;
   if (!iterPath) {
     const iterData = await tfsGet("/work/teamsettings/iterations", { "$timeframe": "current" }).catch(() => ({ value: [] }));
-    iterPath = (iterData.value ?? [])[0]?.path ?? TFS_PROJECT;
+    iterPath = (iterData.value ?? [])[0]?.path ?? getTfsScope().project;
   }
 
   // WIQL queries must use POST
   const wiql = `SELECT [System.Id] FROM WorkItems
-    WHERE [System.TeamProject] = '${TFS_PROJECT}'
-    AND [System.IterationPath] = '${iterPath}'
+    WHERE [System.TeamProject] = '${escapeWiql(getTfsScope().project)}'
+    AND [System.IterationPath] = '${escapeWiql(iterPath)}'
     AND [System.State] <> 'Removed'
     ORDER BY [System.WorkItemType],[System.State]`;
 
@@ -50,7 +50,7 @@ export async function toolSprintInfo(args) {
   }
 
   const ids = itemRefs.slice(0, 200).map((r) => r.id).join(",");
-  const data = await tfsGet("/wit/workitems", { ids, fields: WI_FIELDS });
+  const data = await tfsGet("/wit/workitems", { ids, fields: getWorkItemFields() });
   const items = (data.value ?? []).map(formatWorkItem);
 
   const done = items.filter((i) => isCompletedState(i.state));

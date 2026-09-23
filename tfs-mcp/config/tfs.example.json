@@ -8,6 +8,18 @@
       "example-repo"
     ]
   },
+  "collections": ["ExampleCollection", "OtherCollection"],
+  "scopes": [
+    {
+      "collection": "OtherCollection",
+      "project": "ExampleProject",
+      "repositories": ["other-example-repo"],
+      "authAlias": "other",
+      "fields": { "issueAnalysis": "Custom.DevelopmentAnalysis" },
+      "workItemProfiles": {},
+      "savedQueries": {}
+    }
+  ],
   "defaults": {
     "repository": "example-repo",
     "authAlias": ""

@@ -65,6 +65,7 @@ import { toolSpecialistReview } from "./tools/specialist.js";
 import { toolQueuePipeline, toolUpsertYamlPipeline } from "./tools/pipeline.js";
 import { toolUpsertBuildValidationPolicy, toolListPolicies, toolUpsertStatusPolicy, toolToggleBuildValidationPolicy } from "./tools/branch-policy.js";
 import { toolSavedQueriesList, toolTfsDoctor } from "./tools/doctor.js";
+import { toolListCollections, toolListProjects } from "./tools/collections.js";
 import { runWithRequestContext } from "./request-context.js";
 import { MutationControlsSchema } from "./safety.js";
 
@@ -78,6 +79,7 @@ const SensitiveMutationControlsSchema = {
 };
 import { redactSensitiveValue } from "@gustapaes/mcp-runtime";
 import { TFS_URL } from "./config.js";
+import { assertTrustedTfsUrl } from "./tfs-client.js";
 import { annotationsForRisk, assertToolManifest } from "@gustapaes/mcp-runtime";
 import { TOOL_POLICY } from "./tool-policy.js";
 import {
@@ -97,6 +99,8 @@ function withToolMetadata(tool) {
       type: "string",
       description: "Alias do PAT TFS configurado no .env (ex: joao, maria)",
     },
+    collection: { type: "string", minLength: 1, description: "Collection da instalação TFS para esta chamada." },
+    project: { type: "string", minLength: 1, description: "Projeto dentro da collection selecionada." },
   };
   return {
     ...tool,
@@ -125,6 +129,24 @@ function formatToolResult(result) {
 // ─── Tool definitions ──────────────────────────────────────────────────────
 
 export const TOOL_DEFS = [
+  {
+    name: "tfs_list_collections",
+    title: "List Project Collections",
+    description: "Lista collections visíveis para o PAT na instalação. Se a descoberta não for permitida, retorna somente a lista local configurada com aviso explícito.",
+    inputSchema: { type: "object", properties: {
+      top: { type: "integer", minimum: 1, maximum: 100, default: 100 },
+      cursor: { type: "string", maxLength: 512 },
+    } },
+  },
+  {
+    name: "tfs_list_projects",
+    title: "List Projects",
+    description: "Lista projetos visíveis na collection selecionada, com paginação.",
+    inputSchema: { type: "object", properties: {
+      top: { type: "integer", minimum: 1, maximum: 100, default: 100 },
+      cursor: { type: "string", maxLength: 512 },
+    } },
+  },
   {
     name: "tfs_doctor",
     title: "TFS MCP Doctor",
@@ -906,6 +928,8 @@ export function getToolCount() {
 
 const TOOL_HANDLERS = {
   tfs_doctor: (args) => toolTfsDoctor(args),
+  tfs_list_collections: (args) => toolListCollections(args),
+  tfs_list_projects: (args) => toolListProjects(args),
   tfs_saved_queries: () => toolSavedQueriesList(),
   tfs_analyze_work_item: (args) => toolAnalyzeWorkItem(args),
   tfs_work_item_context: (args) => toolWorkItemContext(args),
@@ -977,10 +1001,28 @@ export function buildMcpServer() {
       const context = {
         authAlias: typeof args?.auth_alias === "string" ? args.auth_alias : "",
         repo: typeof args?.repo === "string" ? args.repo : "",
+        collection: typeof args?.collection === "string" ? args.collection : "",
+        project: typeof args?.project === "string" ? args.project : "",
       };
       const definition = PUBLISHED_TOOL_DEFS.find((tool) => tool.name === name);
-      const { auth_alias: _authAlias, ...toolArgs } = args ?? {};
       validateToolArguments(definition.inputSchema, args ?? {});
+      for (const value of [args?.url, args?.id]) {
+        if (typeof value !== "string" || !/^https?:\/\//i.test(value)) continue;
+        const url = assertTrustedTfsUrl(value);
+        const rootPath = new URL(TFS_URL).pathname.replace(/\/+$/, "");
+        const relative = url.pathname.slice(rootPath.length).split("/").filter(Boolean);
+        if (relative.length < 2) throw new Error("URL TFS deve identificar collection e projeto.");
+        const [urlCollection, urlProject] = relative.map(decodeURIComponent);
+        if (context.collection && context.collection.toLowerCase() !== urlCollection.toLowerCase()) {
+          throw new Error("A collection da URL difere da collection selecionada.");
+        }
+        if (context.project && context.project.toLowerCase() !== urlProject.toLowerCase()) {
+          throw new Error("O projeto da URL difere do projeto selecionado.");
+        }
+        context.collection ||= urlCollection;
+        context.project ||= urlProject;
+      }
+      const { auth_alias: _authAlias, collection: _collection, project: _project, ...toolArgs } = args ?? {};
       const result = await runWithRequestContext(context, () => handler(toolArgs));
       return formatToolResult(result);
     } catch (err) {

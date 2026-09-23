@@ -2,7 +2,7 @@
  * tools/pipeline.js — Publicação e execução segura de pipelines YAML.
  */
 import { z } from "zod";
-import { TFS_COLLECTION, TFS_PROJECT, TFS_REPO, TFS_URL } from "../config.js";
+import { buildProjectUrl, getDefaultRepository } from "../config.js";
 import { getRequestContext } from "../request-context.js";
 import {
   buildMutationPlan,
@@ -244,7 +244,7 @@ async function resolveDefinition({ definitionId, definitionName, authAlias }) {
 }
 
 function pipelineWebUrl(definitionId) {
-  return `${TFS_URL}/${TFS_COLLECTION}/${TFS_PROJECT}/_build?definitionId=${definitionId}`;
+  return buildProjectUrl(`/_build?definitionId=${definitionId}`);
 }
 
 export async function toolUpsertYamlPipeline(args) {
@@ -252,7 +252,7 @@ export async function toolUpsertYamlPipeline(args) {
   const controls = normalizeMutationControls(input);
   const context = getRequestContext();
   const authAlias = context.authAlias;
-  const repository = await resolveRepository(input.repository ?? TFS_REPO, authAlias);
+  const repository = await resolveRepository(input.repository ?? getDefaultRepository(), authAlias);
   const queue = await resolveQueue(input.pool_name, authAlias);
   const existingSummary = await findDefinitionByName(input.name, authAlias);
   const existing = existingSummary

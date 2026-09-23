@@ -2,6 +2,8 @@
  * safety.js — Shared mutation guards for TFS tools.
  */
 import { createCorrelationId, writeAuditEvent } from "./audit.js";
+import { getTfsScope } from "./config.js";
+import { getRequestContext } from "./request-context.js";
 
 const HIGH_IMPACT_PATTERN = /\b(prod|prd|production|produção|releases?|main|master|hml|homolog|preprod|pre-prod|live)\b/i;
 
@@ -70,6 +72,10 @@ export function buildMutationPlan({
   repo,
 }) {
   const requiresConfirmation = confirmationRequired ?? Boolean(highImpact);
+  const { collection, project } = getTfsScope();
+  const selectedExplicitly = Boolean(getRequestContext().collection || getRequestContext().project);
+  const scopedHighImpactConfirmation = selectedExplicitly
+    ? `${collection}/${project}:${highImpactConfirmation ?? ""}` : highImpactConfirmation;
   return {
     tool,
     target,
@@ -84,13 +90,15 @@ export function buildMutationPlan({
       highImpact: Boolean(highImpact),
       highImpactMatch: highImpactMatch ?? null,
       highImpactConfirmationRequired:
-        requiresConfirmation && highImpact ? highImpactConfirmation : null,
+        requiresConfirmation && highImpact ? scopedHighImpactConfirmation : null,
       highImpactConfirmed:
         !requiresConfirmation ||
         !highImpact ||
-        controls.confirmHighImpact === String(highImpactConfirmation ?? ""),
+        controls.confirmHighImpact === String(scopedHighImpactConfirmation ?? ""),
     },
     context: {
+      collection,
+      project,
       authAlias: authAlias || "default",
       repo: repo || null,
     },
@@ -132,6 +140,8 @@ export function auditMutationPlan({ plan, assessment, status, result, correlatio
     willMutate: assessment.willMutate,
     blockReasons: assessment.blockReasons,
     authAlias: plan.context.authAlias,
+    collection: plan.context.collection,
+    project: plan.context.project,
     repo: plan.context.repo,
     result,
   });

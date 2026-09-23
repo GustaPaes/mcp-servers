@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getConfigurationSummary, TFS_SAVED_QUERIES } from "../config.js";
+import { getConfigurationSummary, getSavedQueryNames } from "../config.js";
 import { checkTfsConnectivity } from "../tfs-client.js";
 
 export async function toolTfsDoctor(args) {
@@ -30,8 +30,9 @@ export async function toolTfsDoctor(args) {
 }
 
 export function toolSavedQueriesList() {
+  const names = getSavedQueryNames();
   return {
-    count: Object.keys(TFS_SAVED_QUERIES).length,
-    names: Object.keys(TFS_SAVED_QUERIES),
+    count: names.length,
+    names,
   };
 }
