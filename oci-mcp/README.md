@@ -41,7 +41,7 @@ cd "<repo-root>/oci-mcp"
 .\scripts\install-prereqs.ps1
 
 # 2. Authenticate against OCI (creates ~/.oci/config or refreshes session token)
-oci session authenticate --region sa-saopaulo-1 --tenancy-name <your-tenancy>
+oci session authenticate --region <your-region> --tenancy-name <your-tenancy>
 
 # 3. Install custom server dependencies
 cd oci-extras-mcp
@@ -61,7 +61,7 @@ node .\scripts\generate-mcp-config.mjs --client cursor --out "$env:USERPROFILE\.
 
 | Need | Use | Source |
 |---|---|---|
-| Generic OCI API access | `oci-api` | `uvx oracle.oci-api-mcp-server` |
+| Generic OCI API access (OCI Python SDK) | `oci-cloud` | `uvx oracle.oci-cloud-mcp-server` |
 | Compute (VMs, shapes, images) | `oci-compute` | `uvx oracle.oci-compute-mcp-server` |
 | Identity (IAM, policies, compartments) | `oci-identity` | `uvx oracle.oci-identity-mcp-server` |
 | Networking (VCN, subnets, SL) | `oci-networking` | `uvx oracle.oci-networking-mcp-server` |
@@ -77,6 +77,16 @@ node .\scripts\generate-mcp-config.mjs --client cursor --out "$env:USERPROFILE\.
 | **Streaming logs (SSE)** | `oci-extras` | this repo |
 
 > ℹ️ The `oci-extras-mcp` server **does not duplicate** what upstream already covers; it **complements** it. Run them side-by-side.
+
+Oracle recommends the [OCI Cloud MCP server](https://github.com/oracle/mcp/tree/main/src/oci-cloud-mcp-server)
+for generic SDK access. Its `invoke_oci_api` tool can invoke SDK **write** methods
+as well as reads, according to the IAM permissions of the selected profile.
+Use a separate least-privilege, read-only OCI identity/profile for routine
+discovery, and enable a write-capable identity only in a local, untracked MCP
+client configuration when a task calls for it. The OCI CLI-backed `oci-api`
+server remains an optional upstream alternative for CLI-specific workflows.
+The committed client examples use `EXAMPLE_READ_ONLY` as a placeholder profile;
+replace it in your ignored local client config with a real read-only profile.
 
 ---
 
@@ -105,7 +115,7 @@ node .\scripts\generate-mcp-config.mjs --client cursor --out "$env:USERPROFILE\.
 | **Destructive tools** (delete/terminate/schedule_deletion) | Require `OCI_MCP_ALLOW_DESTRUCTIVE=true` **AND** explicit `confirm: "<name-or-ocid>"` |
 | **Mutation of pre-existing resources** (not created by MCP) | Require `OCI_MCP_ALLOW_THIRD_PARTY_MUTATION=true` **AND** explicit `confirm` **AND** a human prompt acknowledgement returned to the LLM |
 | **Secret values** | Masked by default; reveal needs `OCI_MCP_ALLOW_SECRET_REVEAL=true` + `reveal:true` |
-| **Audit** | Every call → `logs/audit.jsonl` (JSON Lines) |
+| **Audit** | Every call → `logs/audit.jsonl` (JSON Lines); local writes, executions, remote writes, destructive and secret-read tools require a durable pre-execution record |
 
 Resources created by `oci-extras-mcp` are tracked in `.ownership-ledger.json` and may be edited/deleted with the standard guardrails. Resources NOT in the ledger are treated as **third-party** and protected.
 
@@ -178,7 +188,7 @@ Or add manually to OpenCode (`~/.config/opencode/opencode.json`):
       "enabled": true,
       "env": {
         "OCI_AUTH_METHOD": "session_token",
-        "OCI_REGION": "sa-saopaulo-1"
+        "OCI_CONFIG_PROFILE": "DEFAULT"
       }
     }
   }

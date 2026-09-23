@@ -8,7 +8,7 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "start": "node ./node_modules/@azure/mcp/index.js server start",
+    "start": "node ./node_modules/@azure/mcp/index.js server start --mode namespace --read-only",
     "verify": "powershell -NoProfile -File scripts/validate-installation.ps1",
     "verify:tools": "powershell -NoProfile -File scripts/validate-installation.ps1 -CheckTools",
     "test": "powershell -NoProfile -File tests/run-tests.ps1",

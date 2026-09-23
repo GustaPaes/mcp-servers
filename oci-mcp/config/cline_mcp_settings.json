@@ -27,7 +27,6 @@
       "args": ["<repo-root>/oci-mcp/oci-extras-mcp/index.js"],
       "env": {
         "OCI_CONFIG_PROFILE": "DEFAULT",
-        "OCI_REGION": "sa-saopaulo-1",
         "OCI_MCP_DEFAULT_DRY_RUN": "true"
       }
     },
@@ -37,11 +36,11 @@
       "url": "http://127.0.0.1:3020/mcp",
       "disabled": true
     },
-    "oci-api": {
+    "oci-cloud": {
       "type": "stdio",
       "command": "cmd",
-      "args": ["/c", "uvx", "oracle.oci-api-mcp-server@latest"],
-      "env": { "OCI_CONFIG_PROFILE": "DEFAULT", "FASTMCP_LOG_LEVEL": "ERROR" }
+      "args": ["/c", "uvx", "oracle.oci-cloud-mcp-server@latest"],
+      "env": { "OCI_CONFIG_PROFILE": "EXAMPLE_READ_ONLY", "FASTMCP_LOG_LEVEL": "ERROR" }
     }
   }
 }

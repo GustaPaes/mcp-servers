@@ -101,7 +101,7 @@ em vez de pedir ao usuário para colar a string em texto puro.
 
 ## 4. Controle de blast radius
 
-Mesmo sem `--read-only`, reduza risco:
+Se uma configuração local habilitar escrita ao remover `--read-only`, reduza risco:
 
 | Prática | Como |
 |---|---|
@@ -139,7 +139,7 @@ Default: Azure Public Cloud. Para outros:
 $env:AZURE_CLOUD = "AzureUSGovernment"
 
 # Ou inline na CLI
-azmcp server start --cloud AzureChinaCloud
+azmcp server start --mode namespace --read-only --cloud AzureChinaCloud
 ```
 
 Aliases aceitos: `AzureCloud`, `AzurePublicCloud`, `AzureChinaCloud`, `AzureUSGovernment` (case-insensitive).
@@ -182,7 +182,7 @@ devem permanecer com o mesmo pin.
 ### Modo debug
 Adicione `--debug` em `args` no `mcp.json`:
 ```json
-"args": ["<repo-root>/azure-mcp/node_modules/@azure/mcp/index.js", "server", "start", "--debug"]
+"args": ["<repo-root>/azure-mcp/node_modules/@azure/mcp/index.js", "server", "start", "--mode", "namespace", "--read-only", "--debug"]
 ```
 
 ### Listar tools disponíveis
