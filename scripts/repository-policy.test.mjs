@@ -31,6 +31,13 @@ test("rejects private identities and credential-like values", () => {
   );
 });
 
+test("rejects private and credentialed endpoints without flagging examples", () => {
+  assert.match(inspectPublishableText("README.md", "https://intranet.corp/api")[0], /private or credentialed URL/);
+  assert.match(inspectPublishableText("README.md", "http://10.20.30.40/api")[0], /private or credentialed URL/);
+  assert.match(inspectPublishableText("README.md", "https://operator:token@example.com/api")[0], /private or credentialed URL/);
+  assert.deepEqual(inspectPublishableText("README.md", "https://tfs.example.com/api"), []);
+});
+
 test("supports private organization terms without hardcoding them", () => {
   const findings = inspectPublishableText("README.md", "ExampleOrganization internal flow", {
     forbiddenTerms: ["ExampleOrganization"],

@@ -219,7 +219,7 @@ test("lista policies por repositório e preserva o tipo e o escopo", async () =>
     type: { id: STATUS_POLICY_TYPE_ID },
     settings: {
       statusName: "PrValidationRouter",
-      statusGenre: "NDD.DevSecOps",
+      statusGenre: "Example.DevSecOps",
       scope: [{ repositoryId: REPOSITORY.id, refName: "refs/heads/patch", matchKind: "Prefix" }],
     },
   };
@@ -241,16 +241,16 @@ test("status policy exige confirmação e atualiza somente a revisão lida", asy
     type: { id: STATUS_POLICY_TYPE_ID },
     settings: {
       statusName: "PrValidationRouter",
-      statusGenre: "NDD.DevSecOps",
+      statusGenre: "Example.DevSecOps",
       scope: [{ repositoryId: REPOSITORY.id, refName: "refs/heads/patch", matchKind: "Exact" }],
     },
   };
   const mock = installFetch({ policies: [status], policyDetails: status });
   try {
-    const preview = await toolUpsertStatusPolicy({ repository: REPOSITORY.name, branch: "patch", branch_match_kind: "prefix", status_name: "PrValidationRouter", status_genre: "NDD.DevSecOps", enabled: true, apply_by_default: true, authorized_identity_id: "build-user", dry_run: true });
+    const preview = await toolUpsertStatusPolicy({ repository: REPOSITORY.name, branch: "patch", branch_match_kind: "prefix", status_name: "PrValidationRouter", status_genre: "Example.DevSecOps", enabled: true, apply_by_default: true, authorized_identity_id: "build-user", dry_run: true });
     assert.equal(preview.willMutate, false);
     assert.equal(preview.mutationPlan.confirmation.highImpactConfirmationRequired, "patch");
-    const result = await toolUpsertStatusPolicy({ repository: REPOSITORY.name, branch: "patch", branch_match_kind: "prefix", status_name: "PrValidationRouter", status_genre: "NDD.DevSecOps", enabled: true, apply_by_default: true, authorized_identity_id: "build-user", dry_run: false, confirm: true, confirm_high_impact: "patch", reason: "ativar canário seguro", requestedBy: "teste automatizado" });
+    const result = await toolUpsertStatusPolicy({ repository: REPOSITORY.name, branch: "patch", branch_match_kind: "prefix", status_name: "PrValidationRouter", status_genre: "Example.DevSecOps", enabled: true, apply_by_default: true, authorized_identity_id: "build-user", dry_run: false, confirm: true, confirm_high_impact: "patch", reason: "ativar canário seguro", requestedBy: "teste automatizado" });
     assert.equal(result.willMutate, true);
     const write = mock.requests.find(request => request.method === "PUT" && request.url.includes("/policy/configurations/88?"));
     assert.equal(write.body.revision, 2);
