@@ -3,9 +3,7 @@
  * Funções puras, sem side effects, sem network calls.
  */
 import {
-  TFS_URL,
-  TFS_COLLECTION,
-  TFS_PROJECT,
+  buildProjectUrl,
   getConfiguredWorkItemProfile,
 } from "./config.js";
 
@@ -157,7 +155,7 @@ export function formatWorkItem(wi) {
     id: wi.id,
     url:
       wi._links?.html?.href ??
-      `${TFS_URL}/${TFS_COLLECTION}/${TFS_PROJECT}/_workitems/edit/${wi.id}`,
+      buildProjectUrl(`/_workitems/edit/${wi.id}`),
     type: f["System.WorkItemType"] ?? "",
     state: f["System.State"] ?? "",
     title: f["System.Title"] ?? "",

@@ -7,6 +7,8 @@ export function runWithRequestContext(context, fn) {
     {
       authAlias: typeof context?.authAlias === "string" ? context.authAlias.trim() : "",
       repo: typeof context?.repo === "string" ? context.repo.trim() : "",
+      collection: typeof context?.collection === "string" ? context.collection.trim() : "",
+      project: typeof context?.project === "string" ? context.project.trim() : "",
     },
     fn
   );

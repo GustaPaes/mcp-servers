@@ -3,7 +3,7 @@
  */
 import { z } from "zod";
 import { tfsGet, tfsGetAbsoluteJson } from "../tfs-client.js";
-import { TFS_COLLECTION, TFS_PROJECT, TFS_URL } from "../config.js";
+import { TFS_URL, buildProjectUrl, getTfsScope } from "../config.js";
 import { buildSpecialistReview } from "../specialists.js";
 import { getRequestContext } from "../request-context.js";
 
@@ -34,7 +34,7 @@ function flattenWikiPages(page, bucket = []) {
 
 function buildWikiPageUrl(wiki, path) {
   const wikiRef = wiki.name ?? wiki.id;
-  return `${TFS_URL}/${TFS_COLLECTION}/${TFS_PROJECT}/_wiki/wikis/${encodeURIComponent(wikiRef)}?pagePath=${encodeURIComponent(path ?? "/")}`;
+  return buildProjectUrl(`/_wiki/wikis/${encodeURIComponent(wikiRef)}?pagePath=${encodeURIComponent(path ?? "/")}`);
 }
 
 function normalizeWikiText(value) {
@@ -363,7 +363,7 @@ async function getBuildArtifacts(buildId, authAlias) {
 }
 
 async function listContainerItems(containerId, rootPath, authAlias) {
-  const baseUrl = `${TFS_URL}/${TFS_COLLECTION}/_apis/resources/Containers/${containerId}`;
+  const baseUrl = `${TFS_URL}/${encodeURIComponent(getTfsScope().collection)}/_apis/resources/Containers/${containerId}`;
   const url = new URL(baseUrl);
   url.searchParams.set("itemPath", rootPath);
   url.searchParams.set("isShallow", "false");

@@ -10,11 +10,11 @@
  * POST/PATCH não são repetidos para evitar mutações duplicadas.
  */
 import {
-  BASE,
   TFS_MAX_RETRIES,
   TFS_REQUEST_TIMEOUT_MS,
   TFS_RETRY_MAX_DELAY_MS,
   TFS_URL,
+  getTfsScope,
   getAvailableAuthAliases,
   resolvePat,
 } from "./config.js";
@@ -42,10 +42,10 @@ function ensurePat(authAlias) {
   }
 }
 
-function buildScopedCacheKey(cacheKey, authAlias) {
+function buildScopedCacheKey(cacheKey, authAlias, url) {
   if (!cacheKey) return cacheKey;
   const resolved = resolvePat(authAlias);
-  return `auth:${resolved.alias || "default"}:${cacheKey}`;
+  return `auth:${resolved.alias || "default"}:url:${url}:${cacheKey}`;
 }
 
 export function buildHeaders(extra = {}, { authAlias } = {}) {
@@ -60,14 +60,27 @@ export function buildHeaders(extra = {}, { authAlias } = {}) {
 // ─── Retry ─────────────────────────────────────────────────────────────────
 
 const RETRY_ON_STATUS = new Set([429, 500, 502, 503, 504]);
-const TRUSTED_TFS_ORIGIN = new URL(TFS_URL).origin;
+const TRUSTED_TFS_ROOT = new URL(TFS_URL);
 
 export function assertTrustedTfsUrl(input) {
   const url = new URL(input);
   if (!["http:", "https:"].includes(url.protocol)) throw new Error("URL TFS deve usar HTTP ou HTTPS.");
   if (url.username || url.password) throw new Error("Credenciais embutidas na URL TFS nao sao permitidas.");
-  if (url.origin !== TRUSTED_TFS_ORIGIN) {
+  const rootPath = TRUSTED_TFS_ROOT.pathname.replace(/\/+$/, "");
+  if (url.origin !== TRUSTED_TFS_ROOT.origin || (rootPath && url.pathname !== rootPath && !url.pathname.startsWith(`${rootPath}/`))) {
     throw new Error(`Recusado encaminhar credenciais TFS para origem nao confiavel: ${url.origin}`);
+  }
+  return url;
+}
+
+function assertSelectedScopeUrl(url, { allowCollectionResources = false } = {}) {
+  const { collection, project } = getTfsScope();
+  const projectPath = `${new URL(TFS_URL).pathname.replace(/\/+$/, "")}/${encodeURIComponent(collection)}/${encodeURIComponent(project)}`;
+  const collectionResourcePath = `${new URL(TFS_URL).pathname.replace(/\/+$/, "")}/${encodeURIComponent(collection)}/_apis/resources/Containers/`;
+  const selectedPath = url.pathname.toLowerCase();
+  if (selectedPath !== projectPath.toLowerCase() && !selectedPath.startsWith(`${projectPath.toLowerCase()}/`)
+    && !(allowCollectionResources && selectedPath.startsWith(collectionResourcePath.toLowerCase()))) {
+    throw new Error("URL TFS não pertence à collection e ao projeto selecionados.");
   }
   return url;
 }
@@ -82,6 +95,7 @@ function retryAfterMs(response) {
 }
 
 export async function fetchWithTimeout(url, options = {}) {
+  const trustedUrl = assertTrustedTfsUrl(url);
   const controller = new AbortController();
   const timer = setTimeout(
     () => controller.abort(new Error(`TFS request timeout after ${TFS_REQUEST_TIMEOUT_MS}ms`)),
@@ -94,7 +108,11 @@ export async function fetchWithTimeout(url, options = {}) {
     else upstreamSignal.addEventListener("abort", abortFromUpstream, { once: true });
   }
   try {
-    return await fetch(url, { ...options, signal: controller.signal });
+    const response = await fetch(trustedUrl, { ...options, redirect: "manual", signal: controller.signal });
+    if (response.status >= 300 && response.status < 400) {
+      throw new Error(`Redirecionamento TFS recusado (HTTP ${response.status}). Confira a URL configurada; credenciais não são reenviadas.`);
+    }
+    return response;
   } finally {
     clearTimeout(timer);
     upstreamSignal?.removeEventListener?.("abort", abortFromUpstream);
@@ -166,14 +184,14 @@ function cacheStore(key, data, ttlMs) {
  * @param {object} [cache]   — { cacheKey: string, cacheTtlMs: number }
  */
 export async function tfsGet(endpoint, params = {}, { cacheKey, cacheTtlMs = 0, authAlias } = {}) {
-  const scopedCacheKey = buildScopedCacheKey(cacheKey, authAlias);
+  const url = new URL(`${getTfsScope().apiBase}${endpoint}`);
+  const scopedCacheKey = buildScopedCacheKey(cacheKey, authAlias, url.pathname);
   const hit = tryCacheHit(scopedCacheKey);
   if (hit !== null) {
     logger.debug({ cacheKey: scopedCacheKey }, "TFS cache hit");
     return hit;
   }
 
-  const url = new URL(`${BASE}${endpoint}`);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
   if (!url.searchParams.has("api-version")) url.searchParams.set("api-version", "7.0");
 
@@ -196,8 +214,8 @@ export async function tfsGet(endpoint, params = {}, { cacheKey, cacheTtlMs = 0, 
  * GET paginado preservando os cabeçalhos de continuação do TFS.
  * Usado por inventários que podem ultrapassar o limite de 100 itens.
  */
-export async function tfsGetPage(endpoint, params = {}, { authAlias } = {}) {
-  const url = new URL(`${BASE}${endpoint}`);
+export async function tfsGetPage(endpoint, params = {}, { authAlias, baseUrl } = {}) {
+  const url = new URL(`${baseUrl ?? getTfsScope().apiBase}${endpoint}`);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
   if (!url.searchParams.has("api-version")) url.searchParams.set("api-version", "7.0");
   return withRetry(async () => {
@@ -216,7 +234,7 @@ export async function tfsGetPage(endpoint, params = {}, { authAlias } = {}) {
  * POST com corpo JSON.
  */
 export async function tfsPost(endpoint, body, params = {}, { authAlias } = {}) {
-  const url = new URL(`${BASE}${endpoint}`);
+  const url = new URL(`${getTfsScope().apiBase}${endpoint}`);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
   if (!url.searchParams.has("api-version")) url.searchParams.set("api-version", "7.0");
 
@@ -241,7 +259,7 @@ export async function tfsPost(endpoint, body, params = {}, { authAlias } = {}) {
  * Usado para criar (POST) e atualizar (PATCH) work items.
  */
 export async function tfsJsonPatch(method, endpoint, ops, { authAlias } = {}) {
-  const url = new URL(`${BASE}${endpoint}`);
+  const url = new URL(`${getTfsScope().apiBase}${endpoint}`);
   url.searchParams.set("api-version", "7.0");
 
   return withRetry(async () => {
@@ -265,7 +283,7 @@ export async function tfsJsonPatch(method, endpoint, ops, { authAlias } = {}) {
  * Usado para atualizar recursos como Pull Requests.
  */
 export async function tfsPatch(endpoint, body, params = {}, { authAlias } = {}) {
-  const url = new URL(`${BASE}${endpoint}`);
+  const url = new URL(`${getTfsScope().apiBase}${endpoint}`);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
   if (!url.searchParams.has("api-version")) url.searchParams.set("api-version", "7.0");
 
@@ -292,7 +310,7 @@ export async function tfsPatch(endpoint, body, params = {}, { authAlias } = {}) 
  * exatamente uma vez antes de reler o estado remoto.
  */
 export async function tfsPut(endpoint, body, params = {}, { authAlias, retry = true } = {}) {
-  const url = new URL(`${BASE}${endpoint}`);
+  const url = new URL(`${getTfsScope().apiBase}${endpoint}`);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
   if (!url.searchParams.has("api-version")) url.searchParams.set("api-version", "7.0");
 
@@ -314,8 +332,8 @@ export async function tfsPut(endpoint, body, params = {}, { authAlias, retry = t
 }
 
 export async function tfsGetAbsoluteJson(url, { cacheKey, cacheTtlMs = 0, authAlias } = {}) {
-  const trustedUrl = assertTrustedTfsUrl(url);
-  const scopedCacheKey = buildScopedCacheKey(cacheKey, authAlias);
+  const trustedUrl = assertSelectedScopeUrl(assertTrustedTfsUrl(url), { allowCollectionResources: true });
+  const scopedCacheKey = buildScopedCacheKey(cacheKey, authAlias, trustedUrl.toString());
   const hit = tryCacheHit(scopedCacheKey);
   if (hit !== null) {
     logger.debug({ cacheKey: scopedCacheKey }, "TFS absolute cache hit");
@@ -338,7 +356,7 @@ export async function tfsGetAbsoluteJson(url, { cacheKey, cacheTtlMs = 0, authAl
 }
 
 export async function tfsGetAbsoluteText(url, { authAlias } = {}) {
-  const trustedUrl = assertTrustedTfsUrl(url);
+  const trustedUrl = assertSelectedScopeUrl(assertTrustedTfsUrl(url));
   return withRetry(async () => {
     const res = await fetchWithTimeout(trustedUrl, { headers: buildHeaders({}, { authAlias }) });
     if (!res.ok) {

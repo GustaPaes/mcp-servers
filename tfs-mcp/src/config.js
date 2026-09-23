@@ -18,6 +18,7 @@ import {
   getProfileFieldNames,
   getWorkItemProfile,
   parseWorkItemProfiles,
+  validateFieldReferenceName,
 } from "./work-item-profile.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -71,6 +72,14 @@ function positiveInteger(value, fallback, label, max = Number.MAX_SAFE_INTEGER) 
   return integerInRange(value, fallback, label, 1, max);
 }
 
+function normalizeTfsRoot(value) {
+  const url = new URL(value);
+  if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
+    throw new Error("TFS_URL deve ser uma raiz HTTP(S) sem credenciais, query ou fragmento.");
+  }
+  return url.toString().replace(/\/+$/, "");
+}
+
 const DEFAULT_LOCAL_CONFIG_FILE = path.join(__dirname, "../local-private/config/tfs.json");
 export const TFS_MCP_CONFIG_FILE = path.resolve(
   firstNonEmpty(process.env.TFS_MCP_CONFIG_FILE, DEFAULT_LOCAL_CONFIG_FILE)
@@ -83,6 +92,49 @@ const LOCAL_CONFIG = readVersionedJsonConfigSync(TFS_MCP_CONFIG_FILE, {
 const CONNECTION_CONFIG = isPlainObject(LOCAL_CONFIG.connection) ? LOCAL_CONFIG.connection : {};
 const DEFAULTS_CONFIG = isPlainObject(LOCAL_CONFIG.defaults) ? LOCAL_CONFIG.defaults : {};
 const FIELDS_CONFIG = isPlainObject(LOCAL_CONFIG.fields) ? LOCAL_CONFIG.fields : {};
+
+function validateSegment(value, label) {
+  if (typeof value !== "string") throw new Error(`${label} deve ser uma string.`);
+  const segment = value.trim();
+  if (!segment || segment === "." || segment === ".." || /[\\/?#\x00-\x1f]/.test(segment)) {
+    throw new Error(`${label} deve ser um único nome de caminho, sem barras ou caracteres de controle.`);
+  }
+  return segment;
+}
+
+function normalizeScopeEntry(entry) {
+  if (!isPlainObject(entry)) throw new Error("Cada item de scopes deve ser um objeto.");
+  const collection = validateSegment(entry.collection, "scopes.collection");
+  const project = validateSegment(entry.project, "scopes.project");
+  const allowed = new Set(["collection", "project", "repositories", "workItemProfiles", "savedQueries", "fields", "authAlias"]);
+  for (const key of Object.keys(entry)) if (!allowed.has(key)) throw new Error(`Propriedade desconhecida em scopes: ${key}`);
+  if (entry.repositories !== undefined && !Array.isArray(entry.repositories)) throw new Error("scopes.repositories deve ser uma lista.");
+  for (const repository of entry.repositories ?? []) {
+    if (typeof repository !== "string" || !repository.trim()) throw new Error("scopes.repositories deve conter nomes não vazios.");
+  }
+  if (entry.authAlias !== undefined && (typeof entry.authAlias !== "string" || !normalizeAlias(entry.authAlias))) {
+    throw new Error("scopes.authAlias deve ser um alias não vazio.");
+  }
+  for (const key of ["workItemProfiles", "savedQueries", "fields"]) {
+    if (entry[key] !== undefined && !isPlainObject(entry[key])) throw new Error(`scopes.${key} deve ser um objeto.`);
+  }
+  for (const [key, value] of Object.entries(entry.fields ?? {})) {
+    if (!["issueAnalysis", "issueCorrectionAndImpacts"].includes(key)) throw new Error(`Campo desconhecido em scopes.fields: ${key}`);
+    validateFieldReferenceName(value, `scopes.fields.${key}`);
+  }
+  for (const [key, value] of Object.entries(entry.savedQueries ?? {})) {
+    if (!normalizeAlias(key) || typeof value !== "string" || !value.trim()) throw new Error("scopes.savedQueries deve conter nomes e WIQL não vazios.");
+  }
+  return { ...entry, collection, project };
+}
+
+if (LOCAL_CONFIG.collections !== undefined && !Array.isArray(LOCAL_CONFIG.collections)) throw new Error("collections deve ser uma lista.");
+if (LOCAL_CONFIG.scopes !== undefined && !Array.isArray(LOCAL_CONFIG.scopes)) throw new Error("scopes deve ser uma lista.");
+const CONFIGURED_COLLECTIONS = Object.freeze((LOCAL_CONFIG.collections ?? []).map((item) => validateSegment(item, "collections")));
+const SCOPE_CONFIGS = Object.freeze((LOCAL_CONFIG.scopes ?? []).map(normalizeScopeEntry));
+if (new Set(SCOPE_CONFIGS.map((entry) => `${entry.collection.toLowerCase()}\0${entry.project.toLowerCase()}`)).size !== SCOPE_CONFIGS.length) {
+  throw new Error("scopes contém collection/project duplicados.");
+}
 
 const WORK_ITEM_PROFILE_FILE = firstNonEmpty(process.env.TFS_WORK_ITEM_PROFILES_FILE);
 const WORK_ITEM_PROFILE_FILE_CONFIG = readVersionedJsonConfigSync(WORK_ITEM_PROFILE_FILE, {
@@ -118,22 +170,51 @@ function detectRepositoryFromGit() {
 
 // ─── Exports ────────────────────────────────────────────────────────────────
 
-export const TFS_URL = firstNonEmpty(
+export const TFS_URL = normalizeTfsRoot(firstNonEmpty(
   process.env.TFS_URL,
   firstConfigured(CONNECTION_CONFIG.url),
   "https://tfs.example.com"
-).replace(/\/+$/, "");
+));
 export const TFS_COLLECTION = stripSlashes(firstNonEmpty(
   process.env.TFS_COLLECTION,
   firstConfigured(CONNECTION_CONFIG.collection),
-  "ExampleCollection"
+  new URL(TFS_URL).hostname === "tfs.example.com" ? "ExampleCollection" : ""
 ));
 export const TFS_PROJECT = stripSlashes(firstNonEmpty(
   process.env.TFS_PROJECT,
   firstConfigured(CONNECTION_CONFIG.project),
-  "ExampleProject"
+  new URL(TFS_URL).hostname === "tfs.example.com" ? "ExampleProject" : ""
 ));
+if (TFS_COLLECTION) validateSegment(TFS_COLLECTION, "TFS_COLLECTION");
+if (TFS_PROJECT) validateSegment(TFS_PROJECT, "TFS_PROJECT");
 export const PROJECT_BASE_URL = `${TFS_URL}/${TFS_COLLECTION}/${TFS_PROJECT}`;
+
+export function getTfsScope({ requireProject = true } = {}) {
+  const context = getRequestContext();
+  if (!context.collection && !TFS_COLLECTION) throw new Error("Informe collection ou configure TFS_COLLECTION como padrão.");
+  const collection = validateSegment(context.collection || TFS_COLLECTION, "collection");
+  const sameDefaultCollection = !context.collection || collection.toLowerCase() === TFS_COLLECTION.toLowerCase();
+  const scopedProjects = SCOPE_CONFIGS.filter((entry) => entry.collection.toLowerCase() === collection.toLowerCase());
+  const project = context.project || (sameDefaultCollection ? TFS_PROJECT : "")
+    || (scopedProjects.length === 1 ? scopedProjects[0].project : "");
+  if (requireProject && !project) throw new Error("Informe project: a collection selecionada não possui um projeto padrão inequívoco.");
+  if (project) validateSegment(project, "project");
+  const projectBaseUrl = `${TFS_URL}/${encodeURIComponent(collection)}/${encodeURIComponent(project)}`;
+  return { collection, project, projectBaseUrl, apiBase: `${projectBaseUrl}/_apis` };
+}
+
+export function getConfiguredCollections() {
+  return [...new Set([TFS_COLLECTION, ...CONFIGURED_COLLECTIONS, ...SCOPE_CONFIGS.map((entry) => entry.collection)].filter(Boolean))];
+}
+
+export function getScopeConfig() {
+  const context = getRequestContext();
+  if (!(context.collection || TFS_COLLECTION)) return {};
+  const { collection, project } = getTfsScope({ requireProject: false });
+  if (!project) return {};
+  return SCOPE_CONFIGS.find((entry) => entry.collection.toLowerCase() === collection.toLowerCase()
+    && entry.project.toLowerCase() === project.toLowerCase()) ?? {};
+}
 
 const DETECTED_REPOSITORY = detectRepositoryFromGit();
 const CONFIGURED_REPOSITORIES = unique([
@@ -157,6 +238,9 @@ export const TFS_DEFAULT_QUARTER = firstNonEmpty(
   firstConfigured(DEFAULTS_CONFIG.quarter),
   `${new Date().getFullYear()} Q${Math.floor(new Date().getMonth() / 3) + 1}`
 );
+for (const scope of SCOPE_CONFIGS) {
+  if (scope.workItemProfiles) parseWorkItemProfiles(scope.workItemProfiles, { variables: { currentQuarter: TFS_DEFAULT_QUARTER } });
+}
 export const TFS_WORK_ITEM_PROFILES = parseWorkItemProfiles(
   firstConfigured(
     process.env.TFS_WORK_ITEM_PROFILES_JSON,
@@ -256,31 +340,63 @@ export const TFS_MCP_MAX_RESPONSE_BYTES = positiveInteger(
 export const BASE = `${PROJECT_BASE_URL}/_apis`;
 
 export function buildProjectUrl(pathname = "") {
-  if (!pathname) return PROJECT_BASE_URL;
-  return `${PROJECT_BASE_URL}${pathname.startsWith("/") ? pathname : `/${pathname}`}`;
+  const base = getTfsScope().projectBaseUrl;
+  if (!pathname) return base;
+  return `${base}${pathname.startsWith("/") ? pathname : `/${pathname}`}`;
 }
 
 export function getConfiguredRepositories() {
-  return [...TFS_REPOS];
+  const scoped = toStringArray(getScopeConfig().repositories);
+  return scoped.length ? unique(scoped) : [...TFS_REPOS];
 }
 
 export function getConfiguredWorkItemProfile(workItemType) {
+  const scoped = getScopeConfig().workItemProfiles;
+  if (scoped) {
+    const profiles = parseWorkItemProfiles(scoped, { variables: { currentQuarter: TFS_DEFAULT_QUARTER } });
+    const scopedNames = new Set(Object.keys(profiles).map((name) => name.toLowerCase()));
+    const globalProfiles = Object.entries(TFS_WORK_ITEM_PROFILES)
+      .filter(([name]) => !scopedNames.has(name.toLowerCase()));
+    return getWorkItemProfile(Object.fromEntries([...Object.entries(profiles), ...globalProfiles]), workItemType);
+  }
   return getWorkItemProfile(TFS_WORK_ITEM_PROFILES, workItemType);
 }
 
 export function getSavedQuery(name) {
-  return TFS_SAVED_QUERIES[normalizeAlias(name)] ?? "";
+  const scoped = getScopeConfig().savedQueries ?? {};
+  return Object.entries(scoped).find(([key]) => normalizeAlias(key) === normalizeAlias(name))?.[1]
+    ?? TFS_SAVED_QUERIES[normalizeAlias(name)] ?? "";
+}
+
+export function getSavedQueryNames() {
+  return unique([...Object.keys(TFS_SAVED_QUERIES), ...Object.keys(getScopeConfig().savedQueries ?? {}).map(normalizeAlias)]);
+}
+
+export function getIssueAnalysisFields() {
+  const fields = getScopeConfig().fields ?? {};
+  return {
+    developmentAnalysis: fields.issueAnalysis ?? TFS_ISSUE_ANALYSIS_FIELD,
+    correctionAndImpacts: fields.issueCorrectionAndImpacts ?? TFS_ISSUE_CORRECTION_AND_IMPACTS_FIELD,
+  };
+}
+
+export function getWorkItemProfileFields() {
+  const scoped = getScopeConfig().workItemProfiles;
+  return unique([...TFS_WORK_ITEM_PROFILE_FIELDS, ...(scoped
+    ? getProfileFieldNames(parseWorkItemProfiles(scoped, { variables: { currentQuarter: TFS_DEFAULT_QUARTER } })) : [])]);
 }
 
 export function getConfigurationSummary() {
   return {
     configFileLoaded: Boolean(LOCAL_CONFIG.__file),
     endpointConfigured: !TFS_URL.includes("tfs.example.com"),
-    collectionConfigured: TFS_COLLECTION !== "ExampleCollection",
-    projectConfigured: TFS_PROJECT !== "ExampleProject",
+    collectionConfigured: Boolean(TFS_COLLECTION) && TFS_COLLECTION !== "ExampleCollection",
+    projectConfigured: Boolean(TFS_PROJECT) && TFS_PROJECT !== "ExampleProject",
     repositories: getConfiguredRepositories(),
     workItemProfiles: Object.keys(TFS_WORK_ITEM_PROFILES),
-    savedQueries: Object.keys(TFS_SAVED_QUERIES),
+    savedQueries: getSavedQueryNames(),
+    configuredCollections: getConfiguredCollections().filter((name) => name !== "ExampleCollection"),
+    scopedProjects: SCOPE_CONFIGS.length,
     auth: {
       defaultPatConfigured: Boolean(TFS_PAT),
       aliases: getAvailableAuthAliases(),
@@ -291,7 +407,7 @@ export function getConfigurationSummary() {
 
 export function getRepositoryCandidates() {
   const contextRepo = normalizeName(getRequestContext()?.repo);
-  return unique([contextRepo, ...TFS_REPOS]);
+  return unique([contextRepo, ...getConfiguredRepositories()]);
 }
 
 export function getDefaultRepository() {
@@ -303,7 +419,7 @@ export function getAvailableAuthAliases() {
 }
 
 export function resolvePat(preferredAlias) {
-  const requestedAlias = normalizeAlias(firstNonEmpty(preferredAlias, getRequestContext()?.authAlias));
+  const requestedAlias = normalizeAlias(firstNonEmpty(preferredAlias, getRequestContext()?.authAlias, getScopeConfig().authAlias));
   if (requestedAlias) {
     return {
       alias: requestedAlias,

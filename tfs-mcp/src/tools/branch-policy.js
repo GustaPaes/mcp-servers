@@ -2,7 +2,7 @@
  * tools/branch-policy.js — Governança segura de Build Validation policies.
  */
 import { z } from "zod";
-import { buildProjectUrl, TFS_REPO } from "../config.js";
+import { buildProjectUrl, getDefaultRepository, getTfsScope } from "../config.js";
 import { getRequestContext } from "../request-context.js";
 import {
   auditMutationPlan,
@@ -153,7 +153,9 @@ function scopeMatches(scope, repositoryId, branch) {
 }
 
 function policyIdentityKey(repositoryId, branch, buildDefinitionId) {
+  const { collection, project } = getTfsScope();
   return JSON.stringify([
+    collection.toLowerCase(), project.toLowerCase(),
     String(repositoryId).toLowerCase(),
     branch,
     Number(buildDefinitionId),
@@ -240,7 +242,7 @@ async function listPoliciesForRepository({ repositoryId, branch, policyType, aut
 export async function toolListPolicies(args) {
   const input = ListPoliciesArgs.parse(args ?? {});
   const context = getRequestContext();
-  const repository = await resolveRepository(input.repository ?? TFS_REPO, context.authAlias);
+  const repository = await resolveRepository(input.repository ?? getDefaultRepository(), context.authAlias);
   const branch = input.branch ? normalizePolicyBranch(input.branch, input.branch_match_kind ?? "exact") : null;
   const policyType = input.policy_type === "build"
     ? BUILD_VALIDATION_POLICY_TYPE_ID
@@ -287,7 +289,7 @@ export async function toolUpsertStatusPolicy(args) {
   const input = StatusPolicyArgs.parse(args);
   const controls = normalizeMutationControls(input);
   const context = getRequestContext();
-  const repository = await resolveRepository(input.repository ?? TFS_REPO, context.authAlias);
+  const repository = await resolveRepository(input.repository ?? getDefaultRepository(), context.authAlias);
   const branch = normalizePolicyBranch(input.branch, input.branch_match_kind);
   if (input.branch_match_kind === "exact") await requireExactBranchRef(repository.id, branch, context.authAlias);
   const existing = await findStatusPolicy({ repositoryId: repository.id, branch, statusName: input.status_name, statusGenre: input.status_genre, authAlias: context.authAlias });
@@ -656,7 +658,7 @@ export async function toolUpsertBuildValidationPolicy(args) {
   const controls = normalizeMutationControls(input);
   const context = getRequestContext();
   const authAlias = context.authAlias;
-  const repository = await resolveRepository(input.repository ?? TFS_REPO, authAlias);
+  const repository = await resolveRepository(input.repository ?? getDefaultRepository(), authAlias);
   const branch = normalizePolicyBranch(input.branch, input.branch_match_kind);
   const exactBranchRef = input.branch_match_kind === "exact"
     ? await requireExactBranchRef(repository.id, branch, authAlias)
