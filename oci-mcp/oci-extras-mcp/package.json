@@ -21,7 +21,7 @@
     "@gustapaes/mcp-runtime": "file:../../packages/mcp-runtime",
     "@kubernetes/client-node": "^1.0.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "dotenv": "^16.4.7",
+    "dotenv": "^18.0.1",
     "js-yaml": "^4.3.2",
     "oci-common": "^2.140.1",
     "oci-containerengine": "^2.140.1",
