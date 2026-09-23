@@ -34,7 +34,7 @@
     "oci-vault": "^2.140.1",
     "oci-workrequests": "^2.138.0",
     "pino": "^9.6.0",
-    "zod": "^3.25.0"
+    "zod": "^4.6.5"
   },
   "keywords": [
     "mcp",
