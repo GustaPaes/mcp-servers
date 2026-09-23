@@ -105,7 +105,7 @@ for (const file of publishable) {
 }
 
 const summary = {
-  policyVersion: 2,
+  policyVersion: 3,
   ok: errors.length === 0,
   servers: expectedServers.length,
   publishableFiles: publishable.length,

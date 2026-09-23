@@ -15,6 +15,23 @@ function containsForbiddenTerm(text, forbiddenTerms) {
   });
 }
 
+function hasPrivateEndpoint(text) {
+  const urls = text.match(/https?:\/\/[^\s"'`<>]+/gi) ?? [];
+  return urls.some((candidate) => {
+    let url;
+    try {
+      url = new URL(candidate);
+    } catch {
+      return false;
+    }
+    const host = url.hostname.toLowerCase();
+    if (url.username || url.password) return true;
+    if (/(?:^|\.)(?:internal|corp|lan|local)$/.test(host)) return true;
+    if (/^(?:10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.)/.test(host)) return true;
+    return false;
+  });
+}
+
 export function inspectPublishableText(file, text, { forbiddenTerms = [] } = {}) {
   const errors = [];
   const normalized = file.replaceAll("\\", "/");
@@ -25,6 +42,9 @@ export function inspectPublishableText(file, text, { forbiddenTerms = [] } = {})
   }
   if (!isPolicySource && containsForbiddenTerm(text, forbiddenTerms)) {
     errors.push(`organization-specific marker found: ${normalized}`);
+  }
+  if (!isPolicySource && hasPrivateEndpoint(text)) {
+    errors.push(`private or credentialed URL found: ${normalized}`);
   }
 
   const emails = text.match(/[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})/g) ?? [];
