@@ -33,9 +33,9 @@
   "dependencies": {
     "@gustapaes/mcp-config-kit": "file:../packages/config-kit",
     "@gustapaes/mcp-runtime": "file:../packages/mcp-runtime",
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "dotenv": "^16.4.7",
     "pino": "^9.6.0",
-    "zod": "^4.6.5"
+    "zod": "^4.6.6"
   }
 }
