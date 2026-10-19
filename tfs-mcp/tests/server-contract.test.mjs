@@ -16,6 +16,7 @@ test("publishes the complete safe tool contract", async () => {
       TFS_URL: "https://tfs.example.com",
       TFS_COLLECTION: "ExampleCollection",
       TFS_PROJECT: "ExampleProject",
+      TFS_DELIVERY_COMMIT_PREFIX: '#{work_item_id}: ',
     },
   });
   const client = new Client(
@@ -24,6 +25,8 @@ test("publishes the complete safe tool contract", async () => {
   );
   try {
     await client.connect(transport);
+    assert(client.getInstructions().includes('#{work_item_id}: '));
+    assert(client.getInstructions().includes('preserve board position'));
     const { tools } = await client.listTools();
     assert.equal(tools.length, 42);
     const names = new Set(tools.map((tool) => tool.name));

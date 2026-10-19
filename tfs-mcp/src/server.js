@@ -80,7 +80,7 @@ const SensitiveMutationControlsSchema = {
   },
 };
 import { redactSensitiveValue } from "@gustapaes/mcp-runtime";
-import { TFS_URL } from "./config.js";
+import { TFS_URL, DELIVERY_CONFIG } from "./config.js";
 import { assertTrustedTfsUrl } from "./tfs-client.js";
 import { annotationsForRisk, assertToolManifest } from "@gustapaes/mcp-runtime";
 import { TOOL_POLICY } from "./tool-policy.js";
@@ -980,12 +980,13 @@ export const PUBLISHED_TOOL_DEFS = TOOL_DEFS.map(withToolMetadata);
 // ─── Server factory ────────────────────────────────────────────────────────
 
 export function buildMcpServer() {
+  const commitGuidance = ` For authorized full deliveries, the configured new-commit prefix is ${JSON.stringify(DELIVERY_CONFIG.commitPrefix)}; replace {work_item_id} with the actual item ID.`;
   const server = new Server(
     { name: "tfs-mcp", version: "2.1.0" },
     {
       capabilities: { tools: { listChanged: false } },
       instructions:
-        "TFS/Azure DevOps Server workflows. Routine requested operations, such as creating or editing pull requests, comments and work-item fields, execute directly; use dry_run:true when a preview is useful. For an authorized full work-item delivery, follow the returned commit-prefix guidance and preserve board position, state, area and iteration. Prepare current-commit real test reports and final media, then publish concise PR/work-item evidence and, when configured, one final discussion comment updated in place with cases, results, inline screenshots and videos. Name media by tested scenario with capture date last. Do not post progress comments for each adjustment. This server does not execute tests; report partial/unverified checks honestly. Pipeline-definition and branch-policy edits remain preview-first. High-impact targets and destructive changes require a reviewed plan plus explicit confirmation. Never invent confirm_high_impact values or expose PATs/private payloads.",
+        "TFS/Azure DevOps Server workflows. Routine requested operations, such as creating or editing pull requests, comments and work-item fields, execute directly; use dry_run:true when a preview is useful. For an authorized full work-item delivery, follow the returned commit-prefix guidance and preserve board position, state, area and iteration. Prepare current-commit real test reports and final media, then publish concise PR/work-item evidence and, when configured, one final discussion comment updated in place with cases, results, inline screenshots and videos. Name media by tested scenario with capture date last. Do not post progress comments for each adjustment. This server does not execute tests; report partial/unverified checks honestly. Pipeline-definition and branch-policy edits remain preview-first. High-impact targets and destructive changes require a reviewed plan plus explicit confirmation. Never invent confirm_high_impact values or expose PATs/private payloads." + commitGuidance,
     }
   );
 
