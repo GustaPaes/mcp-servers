@@ -304,6 +304,12 @@ export function validateTfsAttachmentReceipt(receipt, { projectId } = {}) {
   return { id: receipt.id, url: expected.toString() };
 }
 
+export function canonicalAttachmentUrl(value, { projectId } = {}) {
+  const url = new URL(value);
+  const id = url.pathname.split('/').at(-1);
+  return validateTfsAttachmentReceipt({ id, url: url.toString() }, { projectId }).url;
+}
+
 export async function tfsReadAttachment(id, maxBytes, { authAlias } = {}) {
   if (!/^[a-f0-9-]{36}$/i.test(id)) throw new Error("Invalid attachment identifier.");
   const url = buildApiUrl(`/wit/attachments/${id}`);

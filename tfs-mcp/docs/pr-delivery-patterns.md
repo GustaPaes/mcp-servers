@@ -115,10 +115,15 @@ A private ledger key binds installation, collection/project, repository, PR and
 work item. Per-upload keys additionally bind source SHA, scenario, media kind
 and content SHA. Known receipts are reused across retries. New files are
 uploaded first; a revision-tested work-item patch replaces only relations
-matching both this ledger and this automation's exact marker. Humans and other
+matching this ledger's trusted installation/project/attachment identity and
+exact marker and filename. Project-name, authoritative project-GUID and
+collection URL forms identify the same attachment; a matching UUID alone does
+not establish ownership. Humans and other
 PRs are preserved. Blobs are never deleted. The PR description is re-read and
 verified; its provider API has no cross-process CAS guarantee, so concurrent
 human changes can require reconciliation instead of an atomic-transaction claim.
+Duplicate equivalent owned relations also require reconciliation; the publisher
+does not adopt or remove duplicates automatically.
 
 If an upload response is lost, publication returns `partial` and refuses to send
 it again. Obtain the actual stored attachment identifier through authorized
@@ -128,12 +133,27 @@ Recovery downloads only that scoped attachment with byte/time bounds and verifie
 its content hash before using it. Do not guess identifiers or delete blobs.
 Without an observed receipt, the interrupted upload remains pending.
 
+The PR's Markdown section uses comment markers. The work item's HTML section
+uses links to that same work item, with begin/end fragments in its heading and
+footer, so comment stripping does not remove ownership boundaries. Within that
+owned HTML section only, reconciliation tolerates ASCII whitespace inserted
+before closing `p`, `h3`, `td` and `th` tags and equivalent scoped attachment
+URLs. Code/preformatted content, meaningful text, attributes and human content
+outside the section remain exact. Missing, duplicated or foreign markers fail
+closed.
+Descriptions and generated replacements are limited to 256 KiB of UTF-8.
+HTML scanning advances through bounded tokens, including malformed or unclosed
+tags; unsupported input fails closed rather than triggering unbounded rescans.
+
 Lost work-item/PR PATCH responses are reconciled by re-reading the managed
-section and exact relations. If a provider strips markers or a section becomes
+section and scoped relations. If a provider strips markers or a section becomes
 ambiguous, the durable ledger blocks automatic reappend. Restore the reviewed
 remote section/relations using the private intended hashes/receipts, then rerun;
 do not remove the ledger or silently turn an unknown write into a second section.
-If server-side HTML sanitization prevents marker preservation, this feature is
-incompatible with that field until a supported persistent marker is available.
+Legacy ambiguous records retain their original exact hashes; the publisher
+does not infer or silently migrate a stripped section. New work-item writes
+record the `work-item-html-v1` normalization version in private state. If the
+provider also removes the persistent links, the field remains unsupported
+until the reviewed remote content can be restored.
 Audit/state failures stop publication or explicitly return partial; never claim
 that a partially applied PR/work-item update finished successfully.

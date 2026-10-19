@@ -8,7 +8,8 @@ import { validateTfsAttachmentReceipt } from "./tfs-client.js";
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 const ownedAttachment = z.strictObject({ url: z.string().max(2048), name: z.string().max(100), sha256: digest,
   scenario: z.string().max(80), kind: z.enum(['image', 'video']), marker: z.string().max(200) });
-const sectionWrite = z.strictObject({ beforeHash: digest, afterHash: digest, ambiguous: z.boolean() });
+const sectionWrite = z.strictObject({ beforeHash: digest, afterHash: digest, ambiguous: z.boolean(),
+  normalization: z.literal('work-item-html-v1').optional() });
 const ledger = z.strictObject({ schemaVersion: z.literal(1), key: digest,
   receipts: z.record(digest, z.discriminatedUnion('stage', [z.strictObject({ stage: z.literal('uploading') }),
     z.strictObject({ stage: z.literal('uploaded'), id: z.string().uuid(), url: z.string().max(2048), sha256: digest })])),

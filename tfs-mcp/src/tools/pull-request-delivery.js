@@ -5,7 +5,7 @@ import { buildMutationPlan, detectHighImpact, executeGuardedMutation, normalizeM
 import { DeliveryInput, PublishDeliveryInput } from "../delivery-contract.js";
 import { hash, hashObject, inspectEvidence, replaceManagedSection, sectionMarker, guardSectionReplay, beginSectionWrite } from "../evidence-manifest.js";
 import { withDeliveryState } from "../delivery-state.js";
-import { reconcileDeliveryWorkItem } from "./work-item-attachments.js";
+import { reconcileDeliveryWorkItem, deliveryAttachmentCount } from "./work-item-attachments.js";
 
 const prPath = (input) => `/git/repositories/${encodeURIComponent(input.repo)}/pullrequests/${input.pull_request_id}`;
 const envelope = (data, warnings = []) => ({ data, meta: { testsExecutedByServer: false }, warnings });
@@ -105,13 +105,14 @@ async function publish(input, result) {
       await recheckPlacement(input, result);
       const wiCurrent = await tfsGet(`/wit/workitems/${input.work_item_id}`, { '$expand': 'relations' });
       if (state.ambiguousRelations) {
-        if (!(state.pendingAttachments ?? []).every((entry) => (wiCurrent.relations ?? []).some((relation) => relation.rel === 'AttachedFile' && relation.url === entry.url && relation.attributes?.comment === entry.marker))) {
+        if (!state.pendingAttachments?.length || !state.pendingAttachments.every((entry) => deliveryAttachmentCount(wiCurrent.relations ?? [], entry, { projectId: result.observed.placement.projectId }) === 1)) {
           throw new Error("Attachment markers are ambiguous; restore reviewed relations before retrying publication.");
         }
         state.ambiguousRelations = false;
         await save();
       }
-      await guardSectionReplay(String(wiCurrent.fields?.['System.Description'] ?? ''), result.key, 'workItem', state, save);
+      await guardSectionReplay(String(wiCurrent.fields?.['System.Description'] ?? ''), result.key, 'workItem', state, save,
+        { workItemId: input.work_item_id, projectId: result.observed.placement.projectId });
       const prCurrent = await observe(input);
       await guardSectionReplay(prCurrent.pr.description ?? '', result.key, 'pullRequest', state, save);
       state.lastManifest = result.manifest;
@@ -146,7 +147,7 @@ async function publish(input, result) {
       // Recheck the source and description immediately before each publication stage.
       await recheckPlacement(input, result);
       const wi = await reconcileDeliveryWorkItem({ id: input.work_item_id, key: result.key,
-        html: renderDelivery(result, input.evidence_level, attachments, true), attachments, state, save });
+        html: renderDelivery(result, input.evidence_level, attachments, true), attachments, state, save, projectId: result.observed.placement.projectId });
       const latest = await recheckPlacement(input, result);
       await guardSectionReplay(latest.pr.description ?? '', result.key, 'pullRequest', state, save);
       const description = replaceManagedSection(latest.pr.description ?? '', result.key, renderDelivery(result, input.evidence_level, attachments));
