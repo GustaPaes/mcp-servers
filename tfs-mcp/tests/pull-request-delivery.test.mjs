@@ -269,7 +269,7 @@ test('ambiguous relation recovery accepts canonical identity and blocks changed 
     ledger.pendingAttachments = ledger.managed;
     ledger.ambiguousRelations = true;
     await fs.writeFile(ledgerPath, JSON.stringify(ledger));
-    const relation = f.wi.relations.find((entry) => entry.attributes.name?.startsWith('evidence-'));
+    const relation = f.wi.relations.find((entry) => entry.attributes.name?.endsWith('.png'));
     if (mutation === 'foreignProject') relation.url = relation.url.replace('/_apis/', '/OtherProject/_apis/');
     if (mutation === 'foreignHost') relation.url = relation.url.replace('tfs.example.com', 'attacker.example');
     if (mutation === 'changedName') relation.attributes.name = 'Human name';
@@ -288,7 +288,7 @@ test('ambiguous relation recovery accepts canonical identity and blocks changed 
 test('duplicate canonical owned relations stop reconciliation without adding or removing links', async () => {
   const f = await fixture({ normalizeRelations: true });
   assert.equal((await f.publish()).data.status, 'published');
-  const relation = f.wi.relations.find((entry) => entry.attributes.name?.startsWith('evidence-'));
+  const relation = f.wi.relations.find((entry) => entry.attributes.name?.endsWith('.png'));
   f.wi.relations.push({ ...relation, url: relation.url.replace('/_apis/', '/ExampleProject/_apis/') });
   const writes = f.calls.filter((entry) => entry.method !== 'GET').length;
   assert.equal((await f.publish()).data.status, 'partial');
@@ -297,7 +297,7 @@ test('duplicate canonical owned relations stop reconciliation without adding or 
 });
 test('new commit replaces only manifest-owned relations and retains another PR attachment', async () => {
   const f = await fixture(); assert.equal((await f.publish()).data.status, 'published');
-  const oldMarker = f.wi.relations.find((entry) => entry.attributes.name?.startsWith('evidence-')).attributes.comment;
+  const oldMarker = f.wi.relations.find((entry) => entry.attributes.name?.endsWith('.png')).attributes.comment;
   f.state.ref = 'd'.repeat(40); f.input.source_sha = f.state.ref;
   for (const entry of [...f.input.reports, ...f.input.media]) entry.provenance.commit = f.state.ref;
   assert.equal((await f.publish()).data.status, 'published');

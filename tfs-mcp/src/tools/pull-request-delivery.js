@@ -1,4 +1,4 @@
-import { getTfsScope, TFS_URL, DELIVERY_CONFIG } from "../config.js";
+import { getTfsScope, TFS_URL, DELIVERY_CONFIG, buildProjectUrl } from "../config.js";
 import { getRequestContext } from "../request-context.js";
 import { tfsGet, tfsPatch, tfsUploadAttachment, tfsReadAttachment } from "../tfs-client.js";
 import { buildMutationPlan, detectHighImpact, executeGuardedMutation, normalizeMutationControls } from "../safety.js";
@@ -6,13 +6,21 @@ import { DeliveryInput, PublishDeliveryInput } from "../delivery-contract.js";
 import { hash, hashObject, inspectEvidence, replaceManagedSection, sectionMarker, guardSectionReplay, beginSectionWrite } from "../evidence-manifest.js";
 import { withDeliveryState } from "../delivery-state.js";
 import { reconcileDeliveryWorkItem, deliveryAttachmentCount } from "./work-item-attachments.js";
+import { evidenceAttachmentName, renderDiscussion } from '../delivery-presentation.js';
+import { preflightDiscussion, reconcileDeliveryDiscussion } from './work-item-discussion.js';
 
 const prPath = (input) => `/git/repositories/${encodeURIComponent(input.repo)}/pullrequests/${input.pull_request_id}`;
 const envelope = (data, warnings = []) => ({ data, meta: { testsExecutedByServer: false }, warnings });
-export function deliveryChecklist() {
+const boardPlacement = (item) => Object.fromEntries(Object.entries(item.fields ?? {}).filter(([key]) =>
+  /^System\.(?:State|AreaPath|IterationPath|BoardColumn|BoardColumnDone|BoardLane)$/.test(key)
+  || /^WEF_.*_Kanban\.(?:Column|Column\.Done|Lane)$/.test(key)
+  || /^Microsoft\.VSTS\.Common\.(?:StackRank|BacklogPriority)$/.test(key)));
+export function deliveryChecklist(workItemId) {
   return { evidenceLevel: 'unverified', next: ['Run the relevant tests using a real executor.',
     'Prepare current-commit reports and final scenario media with tfs_prepare_pr_delivery.',
-    'Publish once with tfs_publish_pr_delivery; explicitly declare any partial evidence.'] };
+    'Publish once with tfs_publish_pr_delivery; explicitly declare any partial evidence.',
+    `For an authorized full work-item delivery, prefix new commits with ${DELIVERY_CONFIG.commitPrefix.replaceAll('{work_item_id}', workItemId ?? '{work_item_id}')} and preserve its board position, state, area and iteration.`,
+    'Use a concise final discussion with tested cases, results and concrete media when discussion publishing is enabled; never post progress notes for each adjustment.'] };
 }
 async function observe(input) {
   const pr = await tfsGet(prPath(input));
@@ -43,6 +51,10 @@ async function prepare(input) {
   const mergeBuild = observed.builds.some((build) => build.matching && build.sourceSha === observed.mergeSha);
   const files = await inspectEvidence(input, [input.source_sha, ...(mergeBuild ? [observed.mergeSha] : [])]);
   const pending = input.limitations.map((item) => `Declared limitation: ${item}`);
+  for (const item of input.test_cases) {
+    if (item.evidence_scenarios.some((scenario) => !files.media.some((media) => media.scenario === scenario))) throw new Error('A test case references missing evidence media.');
+    if (item.result !== 'passed') pending.push(`Test case ${item.result}: ${item.title}.`);
+  }
   if (!files.reports.length) pending.push('No current-commit parsed test report. A successful build alone does not prove tests ran.');
   if (files.reports.some((item) => !item.counts.total || item.counts.failed || item.counts.executionFailed)) pending.push('Tests contain failures, runtime errors or zero executed cases.');
   if (files.reports.some((item) => item.counts.skipped)) pending.push('Some reported tests were skipped.');
@@ -60,6 +72,9 @@ async function prepare(input) {
     repository: observed.pr.repository.id.toLowerCase(), pullRequestId: input.pull_request_id, workItemId: input.work_item_id };
   const key = hashObject(identity);
   const manifest = { schemaVersion: 1, identity, placement: observed.placement, sourceSha: input.source_sha, mergeSha: observed.mergeSha,
+    summary: input.summary, testCases: input.test_cases,
+    pullRequestUrl: buildProjectUrl(`/_git/${encodeURIComponent(observed.pr.repository.id)}/pullrequest/${input.pull_request_id}`),
+    presentation: { locale: DELIVERY_CONFIG.locale, timeZone: DELIVERY_CONFIG.timeZone, discussion: DELIVERY_CONFIG.discussionEnabled },
     requirements: { scenarios: input.required_scenarios, videoPerScenario: input.require_video_per_scenario },
     reports: files.reports, media: files.media, builds: observed.builds, evidenceLevel, pending };
   return { observed, files, key, manifest, digest: hashObject(manifest) };
@@ -71,7 +86,7 @@ export async function toolPreparePRDelivery(args) {
     placement: result.observed.placement, mergeSha: result.observed.mergeSha,
     sourceSha: input.source_sha, pending: result.manifest.pending, reports: result.files.reports,
     media: result.files.media, builds: result.observed.builds,
-    checklist: deliveryChecklist().next }, ['Local provenance is caller-declared; hashes prove file identity, not the truth of a test execution.']);
+    checklist: deliveryChecklist(input.work_item_id).next }, ['Local provenance is caller-declared; hashes prove file identity, not the truth of a test execution.']);
 }
 const escape = (value) => String(value).replace(/[&<>"']/g, (item) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[item]);
 function renderDelivery(result, level, attachments, html = false) {
@@ -83,12 +98,12 @@ function renderDelivery(result, level, attachments, html = false) {
   if (html) return `<h3>${title}</h3><p>Commit: ${commit}</p>`
     + (rows.length ? '<table><tr><th>Testes</th><th>Aprovados</th><th>Falhos</th><th>Ignorados</th></tr>' + rows.map((row) => `<tr>${row.map((cell) => `<td>${escape(cell)}</td>`).join('')}</tr>`).join('') + '</table>' : '')
     + notes.map((line) => `<p>${escape(line)}</p>`).join('')
-    + attachments.map((entry) => `<p><a href="${escape(entry.url)}">${escape(entry.scenario)} (${entry.kind})</a></p>`).join('')
+    + attachments.map((entry) => `<p><a href="${escape(entry.url)}">${escape(entry.name)}</a></p>`).join('')
     + `<p>${provenanceNote}</p>`;
   const markdown = (value) => String(value).replace(/[\\`*_{}[\]()#+.!<>]/g, '\\$&');
   return [`### ${title}`, `Commit: \`${commit}\``,
     ...(rows.length ? ['| Testes | Aprovados | Falhos | Ignorados |\n|---|---:|---:|---:|\n' + rows.map((row) => `| ${row.join(' | ')} |`).join('\n')] : []),
-    ...notes.map(markdown), attachments.map((entry) => `- [${entry.scenario} (${entry.kind})](<${entry.url}>)`).join('\n'), provenanceNote].filter(Boolean).join('\n\n');
+    ...notes.map(markdown), attachments.map((entry) => `- [${markdown(entry.name)}](<${entry.url}>)`).join('\n'), provenanceNote].filter(Boolean).join('\n\n');
 }
 async function recheckPlacement(input, result) {
   const observed = await observe(input);
@@ -104,6 +119,8 @@ async function publish(input, result) {
     try {
       await recheckPlacement(input, result);
       const wiCurrent = await tfsGet(`/wit/workitems/${input.work_item_id}`, { '$expand': 'relations' });
+      if (DELIVERY_CONFIG.discussionEnabled) await preflightDiscussion({ id: input.work_item_id, key: result.key,
+        state, save, projectId: result.observed.placement.projectId, recoveredId: input.recovered_discussion_comment_id });
       if (state.ambiguousRelations) {
         if (!state.pendingAttachments?.length || !state.pendingAttachments.every((entry) => deliveryAttachmentCount(wiCurrent.relations ?? [], entry, { projectId: result.observed.placement.projectId }) === 1)) {
           throw new Error("Attachment markers are ambiguous; restore reviewed relations before retrying publication.");
@@ -133,7 +150,7 @@ async function publish(input, result) {
           state.receipts[receiptKey] = { stage: 'uploading' };
           await save();
           try {
-            receipt = { ...await tfsUploadAttachment(result.files.buffers[index], `evidence-${entry.sha256}${entry.extension}`, { projectId: result.observed.pr.repository.project.id }), stage: 'uploaded', sha256: entry.sha256 };
+            receipt = { ...await tfsUploadAttachment(result.files.buffers[index], evidenceAttachmentName(entry), { projectId: result.observed.pr.repository.project.id }), stage: 'uploaded', sha256: entry.sha256 };
           } catch (error) {
             if (error.uploadRejected) { delete state.receipts[receiptKey]; await save(); }
             throw error;
@@ -141,7 +158,8 @@ async function publish(input, result) {
           state.receipts[receiptKey] = receipt;
           await save();
         }
-        attachments.push({ url: receipt.url, name: `evidence-${entry.sha256}${entry.extension}`, sha256: entry.sha256,
+        attachments.push({ url: receipt.url, name: evidenceAttachmentName(entry), sha256: entry.sha256,
+          ...(entry.title ? { title: entry.title } : {}), capturedAt: entry.provenance.finishedAt, timeZone: DELIVERY_CONFIG.timeZone,
           scenario: entry.scenario, kind: entry.kind, marker: `${sectionMarker(result.key)}:${receiptKey}` });
       }
       // Recheck the source and description immediately before each publication stage.
@@ -161,16 +179,22 @@ async function publish(input, result) {
         await save();
         throw new Error("PR publication changed concurrently or stripped managed markers; reconcile before retry.");
       }
+      const discussion = DELIVERY_CONFIG.discussionEnabled ? await reconcileDeliveryDiscussion({ id: input.work_item_id, key: result.key,
+        body: renderDiscussion(result.manifest, input.evidence_level, attachments), state, save,
+        projectId: result.observed.placement.projectId, recoveredId: input.recovered_discussion_comment_id }) : null;
+      const finalItem = await tfsGet(`/wit/workitems/${input.work_item_id}`);
+      if (hashObject(boardPlacement(finalItem)) !== hashObject(boardPlacement(wiCurrent))) throw new Error('Discussion/board placement changed externally during publication; preserved without automatic restoration.');
       state.lastPublication = { digest: result.digest, sourceSha: input.source_sha, evidenceLevel: input.evidence_level };
       await save();
       await audit({ stage: 'published', digest: result.digest, attachments: attachments.length });
       return { status: 'published', evidenceLevel: input.evidence_level, sourceSha: input.source_sha,
-        planDigest: result.digest, attachments: attachments.length, workItemRevision: wi.revision, pending: result.manifest.pending };
+        planDigest: result.digest, attachments: attachments.length, workItemRevision: finalItem.rev ?? wi.revision,
+        ...(discussion ? { discussionCommentId: discussion.id } : {}), pending: result.manifest.pending };
     } catch (error) {
       await audit({ stage: 'partial', digest: result.digest });
       return { status: 'partial', evidenceLevel: input.evidence_level, sourceSha: input.source_sha,
         planDigest: result.digest, attachments: attachments.length,
-        pending: [...result.manifest.pending, /^(?:PR target\/source\/status|Managed section|Attachment markers|Upload outcome unknown|Recovered attachment hash mismatch)/.test(error.message) ? error.message : 'Publication incomplete. Rerun the same plan to reconcile known uploads; inspect provider/revision errors before proceeding.'] };
+        pending: [...result.manifest.pending, /^(?:Discussion|Recovered discussion|PR target\/source\/status|Managed section|Attachment markers|Upload outcome unknown|Recovered attachment hash mismatch)/.test(error.message) ? error.message : 'Publication incomplete. Rerun the same plan to reconcile known uploads; inspect provider/revision errors before proceeding.'] };
     }
   }, { projectId: result.observed.pr.repository.project.id });
 }
@@ -185,9 +209,11 @@ export async function toolPublishPRDelivery(args) {
     sourceRef: result.observed.placement.sourceRef, targetRef: result.observed.placement.targetRef, targetSha: result.observed.placement.targetSha,
     pullRequestStatus: result.observed.placement.status },
     operation: 'publish final evidence', changes: { sourceSha: input.source_sha, digest: result.digest, evidenceLevel: input.evidence_level,
-      before: { managedMediaOnly: true }, after: { managedAttachments: result.files.media.length, managedSections: 2 } },
+      before: { managedMediaOnly: true }, after: { managedAttachments: result.files.media.length, managedSections: 2,
+        discussion: DELIVERY_CONFIG.discussionEnabled, boardPlacement: 'preserved',
+        attachmentNames: result.files.media.map((entry) => evidenceAttachmentName(entry)) } },
     controls, highImpact: impact.highImpact, highImpactMatch: impact.match, highImpactConfirmation: `${input.pull_request_id}:${result.digest}`,
     authAlias: getRequestContext().authAlias, repo: input.repo });
   const applied = await executeGuardedMutation({ plan, controls, apply: () => publish(input, result) });
-  return envelope(applied, ['PR description updates have no cross-process compare-and-swap guarantee; concurrent human edits require reconciliation.']);
+  return envelope(applied, ['PR descriptions and discussion comments have no cross-process compare-and-swap guarantee; detected concurrent human edits require reconciliation.']);
 }
