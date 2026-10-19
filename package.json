@@ -16,6 +16,10 @@
     "playwright-mcp",
     "tfs-mcp"
   ],
+  "overrides": {
+    "postcss": "^8.5.23",
+    "sharp": "^0.35.5"
+  },
   "scripts": {
     "doctor": "node scripts/repository-doctor.mjs",
     "test:policy": "node --test scripts/repository-policy.test.mjs",

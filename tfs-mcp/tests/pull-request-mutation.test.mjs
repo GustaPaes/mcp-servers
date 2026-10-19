@@ -119,6 +119,7 @@ test("confirmed PR update reconciles requested work item links", async () => {
   const requests = [];
   const pullRequest = {
     pullRequestId: 42,
+    description: `Human summary\n<!-- tfs-mcp-delivery:${'a'.repeat(64)}:begin -->\nFinal managed evidence\n<!-- tfs-mcp-delivery:${'a'.repeat(64)}:end -->`,
     title: "ajusta metadados dos itens relacionados",
     sourceRefName: "refs/heads/feature/exemplo",
     targetRefName: "refs/heads/develop",
@@ -173,6 +174,9 @@ test("confirmed PR update reconciles requested work item links", async () => {
       (request) => request.method === "PATCH" && request.url.includes("/pullrequests/42")
     );
     assert.equal(metadataRequest.contentType, "application/json");
+    assert(metadataRequest.body.description.includes('Final managed evidence'));
+    assert.equal(result.description, metadataRequest.body.description);
+    assert.equal(result.delivery.evidenceLevel, 'unverified');
     assert.equal("workItemRefs" in metadataRequest.body, false);
     const linkRequest = requests.find(
       (request) => request.method === "PATCH" && request.url.includes("/wit/workitems/302")

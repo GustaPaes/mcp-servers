@@ -22,6 +22,9 @@ risk classification. Contract tests must remain aligned with that manifest.
 `tfs_pipeline_status`, `tfs_wiki`, `tfs_sprint_info`, `tfs_list_repos`,
 `tfs_build_artifact_inventory`, `tfs_compare_build_artifacts`.
 
+`tfs_prepare_pr_delivery` is also READ: it parses confined local evidence and
+observes the current PR/builds; it does not run tests or persist a plan.
+
 READ tools may be used without extra confirmation, but summarize sensitive results instead of pasting large private payloads.
 
 ### REMOTE_WRITE
@@ -29,6 +32,13 @@ READ tools may be used without extra confirmation, but summarize sensitive resul
 `tfs_work_item_create`, `tfs_update_work_item`, `tfs_update_issue_analysis`,
 `tfs_add_pr_comment`, `tfs_comment_review_findings`, `tfs_create_pr`,
 `tfs_update_pr`.
+
+`tfs_publish_pr_delivery` publishes final evidence or explicitly partial results.
+Use the current preparation digest and declare the returned evidence level.
+Keep its receipt ledger and audit under the configured private state directory;
+an interrupted upload is not retried without a hash-verified recovery receipt.
+Only manifest-owned attachment relations may be replaced, under work-item
+revision control; never delete blobs or human/other-PR attachments.
 
 REMOTE_WRITE tools execute routine mutations requested by the caller by default. Use `dry_run:true` to request a mutation plan instead. High-impact targets still require a reviewed plan and `confirm:true`, `reason`, `requestedBy`/`requested_by`, plus the exact `confirm_high_impact` value returned by the plan.
 
@@ -74,6 +84,15 @@ installation root, including its path. Redirects are rejected. Retries are allow
 - Treat `specialistReview.specialistsUsed` as the source of truth for which expert lenses were applied. Do not invent extra specialists outside the returned rubrics unless the user asks for a human-level brainstorming answer outside the MCP.
 - Prefer `tfs_comment_review_findings` with `dry_run:true` first.
 - Avoid posting duplicate PR comments; use the server deduplication flow where available.
+- For delivery evidence, use prepare/publish once at the end of the requested
+  delivery. Consolidate concise current-commit tests, final scenario media and
+  pending checks in the managed PR/work-item sections. Do not post progress
+  threads or `System.History` entries for each adjustment. Local report
+  provenance is declared, not independently executed by this server. A passing
+  build alone does not prove that tests ran. See
+  [delivery evidence](./docs/pr-delivery-patterns.md).
+  Preserve actual CI merge provenance only when a supplied build matches the
+  current repository, source and target's observed merge; reject stale merges.
 - For PR work-item links, use the tool's revision-guarded reconciliation path.
   Do not add a second `workItemRefs` mutation around it. Report `partial` and
   the sanitized failed-item list when metadata succeeds but links do not.

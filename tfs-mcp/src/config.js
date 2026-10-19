@@ -22,7 +22,9 @@ import {
 } from "./work-item-profile.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.join(__dirname, "../.env") });
+if (process.env.TFS_MCP_LOAD_DOTENV !== "false") {
+  dotenv.config({ path: path.join(__dirname, "../.env") });
+}
 
 // ─── Internal helpers ───────────────────────────────────────────────────────
 
@@ -71,6 +73,20 @@ function integerInRange(value, fallback, label, min, max = Number.MAX_SAFE_INTEG
 function positiveInteger(value, fallback, label, max = Number.MAX_SAFE_INTEGER) {
   return integerInRange(value, fallback, label, 1, max);
 }
+
+const deliveryRoots = JSON.parse(process.env.TFS_DELIVERY_ROOTS_JSON || "[]");
+if (!Array.isArray(deliveryRoots) || deliveryRoots.length > 20
+  || deliveryRoots.some((root) => typeof root !== "string" || !path.isAbsolute(root))) {
+  throw new Error("TFS_DELIVERY_ROOTS_JSON must contain at most 20 absolute dedicated directories.");
+}
+export const DELIVERY_CONFIG = Object.freeze({
+  roots: deliveryRoots.map((root) => path.resolve(root)),
+  stateDirectory: path.resolve(process.env.TFS_DELIVERY_STATE_DIRECTORY || path.join(__dirname, "../data/delivery")),
+  maxReportBytes: positiveInteger(process.env.TFS_DELIVERY_MAX_REPORT_BYTES, 5_242_880, "TFS_DELIVERY_MAX_REPORT_BYTES", 10_485_760),
+  maxMediaBytes: positiveInteger(process.env.TFS_DELIVERY_MAX_MEDIA_BYTES, 26_214_400, "TFS_DELIVERY_MAX_MEDIA_BYTES", 104_857_600),
+  maxTotalBytes: positiveInteger(process.env.TFS_DELIVERY_MAX_TOTAL_BYTES, 104_857_600, "TFS_DELIVERY_MAX_TOTAL_BYTES", 209_715_200),
+  maxLedgers: positiveInteger(process.env.TFS_DELIVERY_MAX_LEDGERS, 1000, "TFS_DELIVERY_MAX_LEDGERS", 10_000),
+});
 
 function normalizeTfsRoot(value) {
   const url = new URL(value);

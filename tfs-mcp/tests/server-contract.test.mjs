@@ -11,7 +11,8 @@ test("publishes the complete safe tool contract", async () => {
     stderr: "pipe",
     env: {
       ...process.env,
-      TFS_MCP_CONFIG_FILE: "",
+      TFS_MCP_LOAD_DOTENV: "false",
+      TFS_MCP_CONFIG_FILE: "./tests/fixtures/absent-config.json",
       TFS_URL: "https://tfs.example.com",
       TFS_COLLECTION: "ExampleCollection",
       TFS_PROJECT: "ExampleProject",
@@ -24,8 +25,12 @@ test("publishes the complete safe tool contract", async () => {
   try {
     await client.connect(transport);
     const { tools } = await client.listTools();
-    assert.equal(tools.length, 40);
+    assert.equal(tools.length, 42);
     const names = new Set(tools.map((tool) => tool.name));
+    assert(names.has('tfs_prepare_pr_delivery'));
+    assert(names.has('tfs_publish_pr_delivery'));
+    assert.equal(tools.find((tool) => tool.name === 'tfs_prepare_pr_delivery').annotations.readOnlyHint, true);
+    assert.equal(tools.find((tool) => tool.name === 'tfs_publish_pr_delivery').annotations.idempotentHint, false);
     assert(names.has("tfs_doctor"));
     assert(names.has("tfs_list_collections"));
     assert(names.has("tfs_list_projects"));

@@ -1,5 +1,11 @@
 # tfs-mcp
 
+Final pull-request evidence is prepared with `tfs_prepare_pr_delivery` and
+published with `tfs_publish_pr_delivery`. They verify current-commit report and
+media hashes, expose real pending checks, and consolidate one managed section
+in the PR and work item without progress comments. The server does not execute
+tests. See [configuration, contracts and recovery](docs/pr-delivery-patterns.md).
+
 > **MCP server for on-prem TFS / Azure DevOps Server.** Built for the daily flow of an engineering team: backlog hygiene, refinement, PR review, release readiness, work-item writing template and executive risk score.
 
 [![Node](https://img.shields.io/badge/Node-%E2%89%A520-339933?logo=node.js&logoColor=white)](https://nodejs.org)
