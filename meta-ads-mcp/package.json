@@ -38,7 +38,7 @@
   "license": "MIT",
   "dependencies": {
     "@gustapaes/mcp-runtime": "file:../packages/mcp-runtime",
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "dotenv": "^16.4.5",
     "pino": "^9.5.0",
     "pino-pretty": "^11.3.0",
