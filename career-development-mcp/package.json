@@ -30,6 +30,6 @@
     "@modelcontextprotocol/sdk": "^1.31.0",
     "dotenv": "^16.4.7",
     "pino": "^9.6.0",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   }
 }
