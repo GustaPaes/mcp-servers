@@ -139,6 +139,15 @@ test('same-PR old build is not final evidence; observed current merge tip is acc
   assert.equal((await fresh.prepare()).data.evidenceLevel, 'verified');
 });
 
+test('missing PR merge tip stays nullable and cannot associate pipeline evidence', async () => {
+  const f = await fixture(); f.input.build_ids = [9]; delete f.pr.lastMergeCommit;
+  const prepared = await f.prepare();
+  assert.equal(prepared.data.mergeSha, null);
+  assert.equal(prepared.data.builds[0].matching, false);
+  assert.equal(prepared.data.evidenceLevel, 'partial');
+  assert(f.calls.every(entry => entry.method === 'GET'));
+});
+
 test('current pipeline merge provenance is preserved rather than relabeled as the source', async () => {
   const f = await fixture(); f.input.build_ids = [9];
   for (const entry of [...f.input.reports, ...f.input.media]) entry.provenance = { ...entry.provenance, commit: 'c'.repeat(40) };

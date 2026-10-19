@@ -25,7 +25,7 @@ async function observe(input) {
   const targetRef = targetRefs.value?.find((entry) => entry.name === pr.targetRefName);
   if (!targetRef?.objectId) throw new Error("PR target branch is missing.");
   const mergeSha = pr.lastMergeSourceCommit?.commitId === ref.objectId
-    && pr.lastMergeTargetCommit?.commitId === targetRef.objectId ? pr.lastMergeCommit?.commitId : null;
+    && pr.lastMergeTargetCommit?.commitId === targetRef.objectId ? (pr.lastMergeCommit?.commitId ?? null) : null;
   const builds = [];
   for (const id of input.build_ids) {
     const build = await tfsGet(`/build/builds/${id}`);
