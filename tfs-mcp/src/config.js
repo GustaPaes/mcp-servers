@@ -79,7 +79,17 @@ if (!Array.isArray(deliveryRoots) || deliveryRoots.length > 20
   || deliveryRoots.some((root) => typeof root !== "string" || !path.isAbsolute(root))) {
   throw new Error("TFS_DELIVERY_ROOTS_JSON must contain at most 20 absolute dedicated directories.");
 }
+const deliveryLocale = process.env.TFS_DELIVERY_LOCALE || 'en';
+if (!['en', 'pt-BR'].includes(deliveryLocale)) throw new Error('TFS_DELIVERY_LOCALE must be en or pt-BR.');
+const deliveryTimeZone = process.env.TFS_DELIVERY_TIME_ZONE || 'UTC';
+try { new Intl.DateTimeFormat('en', { timeZone: deliveryTimeZone }).format(); }
+catch { throw new Error('TFS_DELIVERY_TIME_ZONE must be an IANA time zone.'); }
+const discussionEnabled = process.env.TFS_DELIVERY_DISCUSSION_ENABLED || 'false';
+if (!['true', 'false'].includes(discussionEnabled)) throw new Error('TFS_DELIVERY_DISCUSSION_ENABLED must be true or false.');
+const deliveryCommitPrefix = process.env.TFS_DELIVERY_COMMIT_PREFIX ?? '#{work_item_id}: ';
+if (deliveryCommitPrefix.length > 100 || /[\r\n\x00-\x1f]/.test(deliveryCommitPrefix)) throw new Error('Invalid TFS_DELIVERY_COMMIT_PREFIX.');
 export const DELIVERY_CONFIG = Object.freeze({
+  locale: deliveryLocale, timeZone: deliveryTimeZone, discussionEnabled: discussionEnabled === 'true', commitPrefix: deliveryCommitPrefix,
   roots: deliveryRoots.map((root) => path.resolve(root)),
   stateDirectory: path.resolve(process.env.TFS_DELIVERY_STATE_DIRECTORY || path.join(__dirname, "../data/delivery")),
   maxReportBytes: positiveInteger(process.env.TFS_DELIVERY_MAX_REPORT_BYTES, 5_242_880, "TFS_DELIVERY_MAX_REPORT_BYTES", 10_485_760),

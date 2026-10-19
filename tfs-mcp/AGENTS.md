@@ -93,6 +93,17 @@ installation root, including its path. Redirects are rejected. Retries are allow
   [delivery evidence](./docs/pr-delivery-patterns.md).
   Preserve actual CI merge provenance only when a supplied build matches the
   current repository, source and target's observed merge; reject stale merges.
+- When an entire work-item delivery is authorized, use the configured commit
+  prefix for new commits (default `#{work_item_id}: `). Preserve the work item's
+  state, board column/lane/rank, area and iteration; evidence is not permission
+  to move or close it. Never rewrite existing commits to add a prefix.
+- With `TFS_DELIVERY_DISCUSSION_ENABLED=true`, final publication also maintains
+  one receipt-owned discussion comment per PR/work item: short outcome, test
+  cases/results, at most three inline screenshots and readable video links.
+  Use the capture date last in attachment names. Disclose partial validation;
+  never call an incomplete delivery concluded. Do not automatically edit or
+  delete historical/human comments. Retire old notes only when specifically
+  authorized, after preserving their private before-state.
 - For PR work-item links, use the tool's revision-guarded reconciliation path.
   Do not add a second `workItemRefs` mutation around it. Report `partial` and
   the sanitized failed-item list when metadata succeeds but links do not.

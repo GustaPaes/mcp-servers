@@ -4,6 +4,7 @@ import { MutationControlsSchema } from "./safety.js";
 const sha = z.string().regex(/^[a-f0-9]{40}$/);
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 const label = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9 ._-]{0,79}$/);
+const readable = z.string().trim().min(1).max(160).regex(/^[^\x00-\x1f\x7f]+$/u);
 const provenance = z.strictObject({
   commit: sha,
   executor: label,
@@ -16,6 +17,9 @@ export const DeliveryInput = z.strictObject({
   pull_request_id: z.number().int().positive(),
   work_item_id: z.number().int().positive(),
   source_sha: sha,
+  summary: readable.optional(),
+  test_cases: z.array(z.strictObject({ title: readable, result: z.enum(['passed', 'failed', 'blocked']),
+    evidence_scenarios: z.array(label).min(1).max(5) })).max(12).default([]),
   reports: z.array(z.strictObject({
     path: z.string().min(1).max(4096), sha256: digest,
     format: z.enum(["summary-json", "jest-json", "junit", "trx"]), provenance,
@@ -23,7 +27,7 @@ export const DeliveryInput = z.strictObject({
   })).max(20).default([]),
   media: z.array(z.strictObject({
     path: z.string().min(1).max(4096), sha256: digest,
-    scenario: label, kind: z.enum(["image", "video"]), provenance,
+    scenario: label, title: readable.optional(), kind: z.enum(["image", "video"]), provenance,
     redacted: z.literal(true),
   })).max(20).default([]),
   required_scenarios: z.array(label).max(20).default([]),
@@ -36,6 +40,7 @@ export const PublishDeliveryInput = DeliveryInput.extend({
   evidence_level: z.enum(["unverified", "partial", "verified"]),
   final: z.literal(true),
   recovered_uploads: z.array(z.strictObject({ sha256: digest, attachment_id: z.string().uuid() })).max(20).default([]),
+  recovered_discussion_comment_id: z.number().int().positive().optional(),
   dry_run: z.boolean().default(false),
   confirm: z.boolean().optional(), reason: z.string().max(500).optional(),
   requestedBy: z.string().max(200).optional(), requested_by: z.string().max(200).optional(),
@@ -54,7 +59,7 @@ const preparedData = z.strictObject({ planDigest: digest, evidenceLevel, sourceS
     sourceRef: z.string().max(1000), targetRef: z.string().max(1000), targetSha: sha, status: z.string().max(100) }),
   mergeSha: sha.nullable(),
   reports: z.array(z.strictObject({ ...observedFile, label: label.optional(), format: z.enum(['summary-json', 'jest-json', 'junit', 'trx']), counts })).max(20),
-  media: z.array(z.strictObject({ ...observedFile, scenario: label, kind: z.enum(['image', 'video']),
+  media: z.array(z.strictObject({ ...observedFile, scenario: label, title: readable.optional(), kind: z.enum(['image', 'video']),
     mime: z.enum(['image/png', 'image/jpeg', 'image/webp', 'video/mp4', 'video/webm']),
     extension: z.enum(['.png', '.jpg', '.jpeg', '.webp', '.mp4', '.webm']) })).max(20),
   builds: z.array(z.strictObject({ id: z.number().int().positive(), matching: z.boolean(), sourceSha: z.string().max(100).nullable(),
@@ -64,6 +69,7 @@ const publishedData = z.strictObject({
   status: z.enum(['published', 'partial']).optional(), evidenceLevel: evidenceLevel.optional(), sourceSha: sha.optional(),
   planDigest: digest.optional(), attachments: z.number().int().min(0).max(20).optional(),
   workItemRevision: z.number().int().positive().optional(), pending: strings.optional(),
+  discussionCommentId: z.number().int().positive().optional(),
   correlationId: z.string().uuid(), dryRun: z.boolean(), willMutate: z.boolean(),
   blockReasons: strings.optional(), mutationPlan: z.record(z.string(), z.unknown()).optional(),
 });
@@ -78,6 +84,6 @@ export const DELIVERY_TOOLS = [
   definition("tfs_prepare_pr_delivery", DeliveryInput, preparedData,
     "Prepare final evidence for the current PR commit. Parse bounded local reports, verify hashes, inspect pipeline runs and return honest pending checks. Does not execute tests or publish."),
   definition("tfs_publish_pr_delivery", PublishDeliveryInput, publishedData,
-    "Publish final or explicitly partial evidence once: managed PR/work-item sections and owned media attachments. Requires a fresh preparation digest; never posts progress comments, closes items or merges PRs."),
+    "Publish final or explicitly partial evidence once: managed PR/work-item sections, readable dated media and optionally one owned final discussion comment with cases/results/screenshots. Preserves board placement. Requires a fresh preparation digest; never posts progress comments, closes items or merges PRs."),
 ];
 Object.assign(DELIVERY_TOOLS[1].inputSchema.properties, MutationControlsSchema);

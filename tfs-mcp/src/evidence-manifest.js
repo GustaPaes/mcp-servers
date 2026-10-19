@@ -71,7 +71,7 @@ export async function inspectEvidence(input, allowedCommits = [input.source_sha]
       } };
       if (group === 'report') reports.push({ ...common, ...(entry.label ? { label: entry.label } : {}), format: entry.format, counts: parseTestEvidence(bytes, entry.format) });
       else {
-        media.push({ ...common, scenario: entry.scenario, kind: entry.kind, ...mediaType(bytes, entry.path, entry.kind) });
+        media.push({ ...common, scenario: entry.scenario, ...(entry.title ? { title: entry.title } : {}), kind: entry.kind, ...mediaType(bytes, entry.path, entry.kind) });
         buffers.push(bytes);
       }
     }

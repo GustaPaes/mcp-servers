@@ -270,7 +270,8 @@ export async function tfsPost(endpoint, body, params = {}, { authAlias } = {}) {
 // Uploads are never retried: a timeout may occur after the server stores the blob.
 export async function tfsUploadAttachment(bytes, fileName, { authAlias, projectId } = {}) {
   if (!Buffer.isBuffer(bytes) || bytes.length === 0 || bytes.length > 104_857_600
-    || !/^evidence-[a-f0-9]{64}\.(png|jpg|jpeg|webp|mp4|webm)$/.test(fileName)) {
+    || typeof fileName !== 'string' || fileName.length > 100
+    || !/^(?:evidence-[a-f0-9]{64}|[\p{L}\p{N}][\p{L}\p{N} ._-]{0,74} - \d{4}-\d{2}-\d{2})\.(?:png|jpg|jpeg|webp|mp4|webm)$/u.test(fileName)) {
     throw new Error("Invalid bounded attachment.");
   }
   const url = buildApiUrl('/wit/attachments');

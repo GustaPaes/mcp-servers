@@ -29,8 +29,68 @@ The public section uses a short commit, test-count table, readable media links
 and pending checks. Full hashes and declared provenance remain in structured
 preparation output and the private publication manifest. The PR and work-item
 description each receive one managed section for this PR/work-item identity.
-No progress thread or `System.History` entry is created. Existing manual review
-comment tools remain available when the user explicitly requests a comment.
+No progress thread or `System.History` entry is created. If discussion evidence
+is enabled, one final receipt-owned comment is created and subsequently updated
+in place. Existing manual review tools remain available for requested comments.
+
+## Concise discussion and full work-item delivery
+
+For an explicitly authorized full delivery, use the configured prefix for new
+commits (`#{work_item_id}: ` by default), prepare a reviewable PR and publish
+final evidence. This is guidance, not a Git executor: the MCP does not create
+commits or run tests. Do not rewrite history. State, board column/lane/rank,
+area and iteration remain unchanged; completion evidence never implies a board
+transition, approval or PR merge.
+
+Set `TFS_DELIVERY_DISCUSSION_ENABLED=true` to opt in. The default stays `false`
+for installations without the Comments API. It uses the documented
+[Comments Add](https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/comments/add?view=azure-devops-rest-7.0)
+and [Update](https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/comments/update?view=azure-devops-rest-7.0)
+contracts (`7.0-preview.3`). An unsupported endpoint fails explicitly before
+uploads, without falling back to noisy history entries.
+
+The format is deliberately short:
+
+- **Outcome:** one sentence (`summary`, optional, maximum 160 characters).
+- **Tests:** suite counts from parsed reports; a successful build is insufficient.
+- **Cases:** up to 12 `test_cases` with `title`, `result` (`passed`, `failed`,
+  `blocked`) and `evidence_scenarios` referring to supplied media. These labels
+  are caller-declared, not test execution inferred by this server.
+- **Proof:** up to three inline images, readable media links, PR and short SHA.
+- **Pending:** required checks that have not passed. Only verified evidence is
+  titled validated; partial evidence remains explicitly partial.
+
+Media may supply a readable `title`; `scenario` remains a stable ASCII identity.
+Names become `Scenario - YYYY-MM-DD.mp4` (or the matching image extension).
+The date comes from `provenance.finished_at` in `TFS_DELIVERY_TIME_ZONE`, not
+publication time. `TFS_DELIVERY_LOCALE` supports `en` and `pt-BR` for discussion
+labels. Configure installation preferences in ignored `.env`; tracked examples
+remain neutral. Report hashes and upload receipts stay private. Renaming an
+owned relation changes only its name attribute under revision control and reuses
+the existing blob; unchanged media are not uploaded again. Do not remove and
+re-add an identical attachment in one PATCH: some providers reject that as a
+duplicate relation. Numeric image width uses the provider-stable HTML form.
+
+The comment ID, author and intended content hashes are durable receipts.
+Unknown POST outcomes never trigger a second POST: inspect the provider, then
+pass `recovered_discussion_comment_id` whose full managed content matches the
+saved intention. Lost PATCH responses are reconciled by readback. Changed or
+deleted comments, unknown ownership and truncated discovery fail closed.
+First publication inspects at most 100 recent comments; larger histories need
+manual reconciliation. The publisher never deletes old comments or adopts a
+human comment. Known IDs are read directly on later publications.
+
+The Comments API has no documented cross-process CAS contract. Re-reads detect
+known version/content changes before writing; readback detects mismatches.
+This reduces races but cannot guarantee atomic protection against another
+writer in the final interval. Stop and reconcile detected human edits rather
+than automatically overwriting or re-appending.
+
+For example, a final review could read: **Validated delivery** → “Draft resumes
+at the confirmed step” → “Android: 8/8” → case/result/video → two screenshots.
+Keep execution logs, exploratory failures and verbose chronology in private
+artifacts. Historical notes may be retired only under specific authorization;
+the generic publisher leaves them intact.
 
 ## Configuration and limits
 

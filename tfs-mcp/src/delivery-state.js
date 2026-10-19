@@ -4,10 +4,12 @@ import { atomicWriteJson, resolveInside } from "@gustapaes/mcp-runtime";
 import { z } from "zod";
 import { DELIVERY_CONFIG } from "./config.js";
 import { validateTfsAttachmentReceipt } from "./tfs-client.js";
+import { evidenceAttachmentName } from './delivery-presentation.js';
 
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 const ownedAttachment = z.strictObject({ url: z.string().max(2048), name: z.string().max(100), sha256: digest,
-  scenario: z.string().max(80), kind: z.enum(['image', 'video']), marker: z.string().max(200) });
+  scenario: z.string().max(80), title: z.string().max(160).optional(), capturedAt: z.string().datetime().optional(), timeZone: z.string().max(100).optional(),
+  kind: z.enum(['image', 'video']), marker: z.string().max(200) });
 const sectionWrite = z.strictObject({ beforeHash: digest, afterHash: digest, ambiguous: z.boolean(),
   normalization: z.literal('work-item-html-v1').optional() });
 const ledger = z.strictObject({ schemaVersion: z.literal(1), key: digest,
@@ -15,6 +17,11 @@ const ledger = z.strictObject({ schemaVersion: z.literal(1), key: digest,
     z.strictObject({ stage: z.literal('uploaded'), id: z.string().uuid(), url: z.string().max(2048), sha256: digest })])),
   managed: z.array(ownedAttachment).max(1000), pendingAttachments: z.array(ownedAttachment).max(20).optional(),
   ambiguousRelations: z.boolean().optional(),
+  discussion: z.discriminatedUnion('stage', [
+    z.strictObject({ stage: z.literal('creating'), afterHash: digest }),
+    ...['writing', 'ready'].map((stage) => z.strictObject({ stage: z.literal(stage), id: z.number().int().positive(),
+      authorId: z.string().min(1).max(200), beforeHash: digest.optional(), afterHash: digest })),
+  ]).optional(),
   lastManifest: z.record(z.string(), z.unknown()).optional(),
   lastPublication: z.strictObject({ digest, sourceSha: z.string().regex(/^[a-f0-9]{40}$/),
     evidenceLevel: z.enum(['unverified', 'partial', 'verified']) }).optional(),
@@ -32,7 +39,9 @@ function validateLedger(state, key, projectId) {
       const receipt = state.receipts[entry.marker.split(':').at(-1)];
       if (validateTfsAttachmentReceipt({ id, url: entry.url }, { projectId }).url !== entry.url
         || !new RegExp(`^tfs-mcp-delivery:${key}:[a-f0-9]{64}$`).test(entry.marker)
-        || !new RegExp(`^evidence-${entry.sha256}\\.(?:png|jpg|jpeg|webp|mp4|webm)$`).test(entry.name)
+        || (!new RegExp(`^evidence-${entry.sha256}\\.(?:png|jpg|jpeg|webp|mp4|webm)$`).test(entry.name)
+          && (!entry.capturedAt || !/\.(?:png|jpg|jpeg|webp|mp4|webm)$/.test(entry.name)
+            || evidenceAttachmentName({ ...entry, extension: path.extname(entry.name), provenance: { finishedAt: entry.capturedAt } }, entry.timeZone) !== entry.name))
         || receipt?.stage !== 'uploaded' || receipt.url !== entry.url || receipt.sha256 !== entry.sha256) throw new Error();
     }
   } catch { throw new Error('Invalid delivery ledger; reconcile private state before publishing.'); }
