@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import os from 'node:os';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
 Object.assign(process.env, { TFS_MCP_LOAD_DOTENV: 'false', TFS_MCP_CONFIG_FILE: path.join(os.tmpdir(), 'absent-delivery-html-config.json'),
   TFS_URL: 'https://tfs.example.com/install', TFS_COLLECTION: 'ExampleCollection', TFS_PROJECT: 'ExampleProject' });
@@ -36,12 +38,45 @@ test('normalization preserves meaningful text, attributes, pre/code and nonbreak
     ['<code><p>A </p></code>', '<code><p>A</p></code>'],
     ['<p>A\u00a0</p>', '<p>A</p>'],
     ['<p class="important">A</p>', '<p>A</p>'],
+    [`<p>href="${url}"</p>`, `<p>href="${url}?fileName=changed"</p>`],
+    [`<a title='href="${url}"'>A</a>`, `<a title='href="${url}?fileName=changed"'>A</a>`],
   ]) {
     const before = replaceManagedSection('', key, body.replace('<p>Commit atual</p>', original), context);
     const after = replaceManagedSection('', key, body.replace('<p>Commit atual</p>', changed), context);
     assert.notEqual(managedHtmlHash(before, key, context), managedHtmlHash(after, key, context));
   }
 });
+
+test('descriptions and generated replacements are bounded by UTF-8 bytes', () => {
+  for (const oversized of ['x'.repeat(262_145), 'é'.repeat(131_073)]) {
+    assert.throws(() => normalizeManagedHtml(oversized, key, context), /256 KiB/);
+    assert.throws(() => replaceManagedSection('', key, oversized, context), /256 KiB/);
+  }
+  assert.throws(() => replaceManagedSection('x'.repeat(262_144), key, body, context), /256 KiB/);
+});
+
+for (const variant of ['open-anchors', 'incomplete-literals', 'long-whitespace']) {
+  test(`bounded HTML scanning completes for ${variant} in an isolated process`, { timeout: 10_000 }, async () => {
+    const source = `
+      import assert from 'node:assert/strict';
+      const { normalizeManagedHtml, replaceManagedSection } = await import(${JSON.stringify(new URL('../src/evidence-manifest.js', import.meta.url).href)});
+      const key = 'a'.repeat(64), context = { workItemId: 301 }, variant = ${JSON.stringify(variant)};
+      const basic = '<h3>Evidence</h3><p>Body</p><p>Provenance</p>';
+      for (let repeat = 0; repeat < 3; repeat++) {
+        const inputs = variant === 'open-anchors' ? ['<a href="https://example.invalid/">'.repeat(5800)]
+          : variant === 'incomplete-literals' ? ['<pre '.repeat(40000), '<code '.repeat(33000)]
+          : [replaceManagedSection('', key, basic.replace('<p>Body</p>', '<p>A' + ' '.repeat(200000) + 'Z</p>'), context)];
+        for (const input of inputs) assert.equal(normalizeManagedHtml(input, key, context), input);
+      }
+      process.stdout.write('bounded-ok');
+    `;
+    const result = await promisify(execFile)(process.execPath, ['--input-type=module', '--eval', source], {
+      timeout: 5000, maxBuffer: 4096, windowsHide: true,
+    });
+    assert.equal(result.stdout, 'bounded-ok');
+    assert.equal(result.stderr, '');
+  });
+}
 
 test('canonical attachment identity accepts observed project/collection forms but preserves ownership metadata', () => {
   const entry = { url, marker: `tfs-mcp-delivery:${key}:receipt`, name: 'evidence.png' };

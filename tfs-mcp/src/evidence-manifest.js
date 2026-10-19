@@ -82,6 +82,11 @@ export async function inspectEvidence(input, allowedCommits = [input.source_sha]
 }
 
 export function sectionMarker(key) { return `tfs-mcp-delivery:${key}`; }
+const MAX_DESCRIPTION_BYTES = 262_144;
+function assertDescriptionLimit(text) {
+  if (typeof text !== 'string' || Buffer.byteLength(text, 'utf8') > MAX_DESCRIPTION_BYTES) throw new Error('Delivery description exceeds the 256 KiB limit.');
+}
+const asciiSpace = (character) => character === ' ' || character === '\t' || character === '\r' || character === '\n';
 const escapeAttribute = (value) => value.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
 const decodeAttribute = (value) => value.replace(/&(?:amp|quot|apos|#(\d+)|#x([a-f\d]+));/gi, (entity, decimal, hex) => {
   if (decimal || hex) {
@@ -90,20 +95,73 @@ const decodeAttribute = (value) => value.replace(/&(?:amp|quot|apos|#(\d+)|#x([a
   }
   return { '&amp;': '&', '&quot;': '"', '&apos;': "'" }[entity.toLowerCase()] ?? entity;
 });
+function* htmlTags(text) {
+  let cursor = 0;
+  const namePattern = /<\/?([a-z][a-z\d]*)\b/iy;
+  while (cursor < text.length) {
+    const start = text.indexOf('<', cursor);
+    if (start < 0) return;
+    namePattern.lastIndex = start;
+    const nameMatch = namePattern.exec(text), name = nameMatch?.[1].toLowerCase();
+    let end = start + 1, quote = null, complete = false;
+    if (text.startsWith('<!--', start)) {
+      const finish = text.indexOf('-->', start + 4);
+      end = finish < 0 ? text.length : finish + 3;
+    } else {
+      for (; end < text.length; end++) {
+        const character = text[end];
+        if (quote) { if (character === quote) quote = null; }
+        else if (character === '"' || character === "'") quote = character;
+        else if (character === '<') break;
+        else if (character === '>') { end++; complete = true; break; }
+      }
+    }
+    yield { start, end, name, closing: text[start + 1] === '/', complete, nameEnd: nameMatch ? namePattern.lastIndex : end, raw: text.slice(start, end) };
+    cursor = end;
+  }
+}
+function hrefAttributes(tag) {
+  const attributes = [];
+  let cursor = tag.nameEnd - tag.start;
+  while (cursor < tag.raw.length) {
+    while (asciiSpace(tag.raw[cursor])) cursor++;
+    const start = cursor;
+    while (cursor < tag.raw.length && !asciiSpace(tag.raw[cursor]) && !'=/><'.includes(tag.raw[cursor])) cursor++;
+    if (cursor === start) { cursor++; continue; }
+    const name = tag.raw.slice(start, cursor).toLowerCase();
+    while (asciiSpace(tag.raw[cursor])) cursor++;
+    if (tag.raw[cursor] !== '=') continue;
+    cursor++;
+    while (asciiSpace(tag.raw[cursor])) cursor++;
+    const quote = tag.raw[cursor];
+    if (quote !== '"' && quote !== "'") {
+      while (cursor < tag.raw.length && !asciiSpace(tag.raw[cursor]) && tag.raw[cursor] !== '>') cursor++;
+      continue;
+    }
+    const valueStart = ++cursor, valueEnd = tag.raw.indexOf(quote, valueStart);
+    if (valueEnd < 0) break;
+    if (name === 'href') attributes.push({ start: valueStart, end: valueEnd, value: tag.raw.slice(valueStart, valueEnd) });
+    cursor = valueEnd + 1;
+  }
+  return attributes;
+}
 function mapOutsideLiterals(text, transform, literal = (value) => value) {
-  const tags = /<\/?(pre|code)\b[^>]*>/gi, stack = [];
-  let cursor = 0, protectedStart = 0, output = '';
-  for (const match of text.matchAll(tags)) {
-    const name = match[1].toLowerCase(), closing = match[0].startsWith('</');
-    if (!closing) {
-      if (!stack.length) { output += transform(text.slice(cursor, match.index)); protectedStart = match.index; }
-      stack.push(name);
-    } else if (stack.at(-1) === name) {
+  const stack = [];
+  const output = [];
+  let cursor = 0, protectedStart = 0;
+  for (const tag of htmlTags(text)) {
+    if (!['pre', 'code'].includes(tag.name)) continue;
+    if (!tag.closing) {
+      if (!stack.length) { output.push(transform(text.slice(cursor, tag.start))); protectedStart = tag.start; }
+      stack.push(tag.name);
+      if (!tag.complete) break;
+    } else if (tag.complete && stack.at(-1) === tag.name) {
       stack.pop();
-      if (!stack.length) { cursor = match.index + match[0].length; output += literal(text.slice(protectedStart, cursor)); }
+      if (!stack.length) { cursor = tag.end; output.push(literal(text.slice(protectedStart, cursor))); }
     }
   }
-  return output + (stack.length ? literal(text.slice(protectedStart)) : transform(text.slice(cursor)));
+  output.push(stack.length ? literal(text.slice(protectedStart)) : transform(text.slice(cursor)));
+  return output.join('');
 }
 function markerHref(key, role, { workItemId }) {
   if (!Number.isSafeInteger(workItemId) || workItemId < 1) throw new Error('Work item identity required for HTML evidence markers.');
@@ -125,6 +183,7 @@ function canonicalMarkerHref(value, key, role, context) {
   return expected.toString();
 }
 function sectionRange(text, key, context = {}) {
+  assertDescriptionLimit(text);
   const marker = sectionMarker(key), begin = `<!-- ${marker}:begin -->`, end = `<!-- ${marker}:end -->`;
   const start = text.indexOf(begin), finish = text.indexOf(end);
   const comments = start >= 0 || finish >= 0;
@@ -132,45 +191,79 @@ function sectionRange(text, key, context = {}) {
     throw new Error('Managed section is ambiguous; human reconciliation required.');
   }
   const anchors = [];
+  let tags;
   if (context.workItemId) {
     const visible = mapOutsideLiterals(text, (value) => value, (value) => ' '.repeat(value.length));
-    for (const match of visible.matchAll(/<a\b[^>]*\bhref\s*=\s*(["'])(.*?)\1[^>]*>[\s\S]*?<\/a\s*>/gi)) {
-      const href = decodeAttribute(match[2]);
-      let fragment;
-      try { fragment = decodeURIComponent(new URL(href).hash.slice(1)); } catch { continue; }
-      if (!fragment.startsWith(`${marker}:`)) continue;
-      const role = fragment.slice(marker.length + 1);
-      if (!['begin', 'end'].includes(role)) throw new Error('Managed section marker is ambiguous.');
-      canonicalMarkerHref(match[2], key, role, context);
-      anchors.push({ role, start: match.index, end: match.index + match[0].length });
+    tags = [...htmlTags(visible)];
+    const open = [];
+    for (const [index, tag] of tags.entries()) {
+      if (tag.name !== 'a' || !tag.complete) continue;
+      if (tag.closing) {
+        const anchor = open.pop();
+        if (anchor?.role) anchors.push({ ...anchor, endIndex: index });
+        continue;
+      }
+      const attributes = hrefAttributes(tag);
+      const anchor = { startIndex: index };
+      for (const attribute of attributes) {
+        let fragment;
+        try { fragment = decodeURIComponent(new URL(decodeAttribute(attribute.value)).hash.slice(1)); } catch { continue; }
+        if (!fragment.startsWith(`${marker}:`)) continue;
+        const role = fragment.slice(marker.length + 1);
+        if (!['begin', 'end'].includes(role) || attributes.length !== 1 || open.length) throw new Error('Managed section marker is ambiguous.');
+        canonicalMarkerHref(attribute.value, key, role, context);
+        anchor.role = role;
+      }
+      if (open.at(-1)?.role) throw new Error('Managed section marker is ambiguous.');
+      open.push(anchor);
     }
+    if (open.some((entry) => entry.role)) throw new Error('Managed section HTML boundaries are ambiguous.');
   }
   if (anchors.length) {
     if (comments || anchors.length !== 2 || anchors[0].role !== 'begin' || anchors[1].role !== 'end') throw new Error('Managed section is ambiguous; human reconciliation required.');
-    const heading = /<h3\b[^>]*>[ \t\r\n]*$/i.exec(text.slice(0, anchors[0].start));
-    const headingEnd = /^[ \t\r\n]*<\/h3\s*>/i.exec(text.slice(anchors[0].end));
-    const footer = /<p\b[^>]*>[ \t\r\n]*$/i.exec(text.slice(0, anchors[1].start));
-    const footerEnd = /^[ \t\r\n]*<\/p\s*>/i.exec(text.slice(anchors[1].end));
-    if (!heading || !headingEnd || !footer || !footerEnd || heading.index >= footer.index) throw new Error('Managed section HTML boundaries are ambiguous.');
-    return { start: heading.index, end: anchors[1].end + footerEnd[0].length, html: true };
+    const boundaries = anchors.map((anchor, index) => {
+      const before = tags[anchor.startIndex - 1], after = tags[anchor.endIndex + 1], name = index ? 'p' : 'h3';
+      if (!before?.complete || before.name !== name || before.closing || !after?.complete || after.name !== name || !after.closing || !/^<\/(?:h3|p)[ \t\r\n]*>$/i.test(after.raw)
+        || !/^[ \t\r\n]*$/.test(text.slice(before.end, tags[anchor.startIndex].start))
+        || !/^[ \t\r\n]*$/.test(text.slice(tags[anchor.endIndex].end, after.start))) throw new Error('Managed section HTML boundaries are ambiguous.');
+      return { start: before.start, end: after.end };
+    });
+    return { start: boundaries[0].start, end: boundaries[1].end, html: true };
   }
   return comments ? { start, end: finish + end.length, html: false } : null;
 }
 export function normalizeManagedHtml(text, key, context) {
   const range = sectionRange(text, key, context);
   if (!range?.html) return text;
-  const managed = mapOutsideLiterals(text.slice(range.start, range.end), (value) => value
-    .replace(/[ \t\r\n]+(?=<\/(?:p|h3|td|th)\s*>)/gi, '')
-    .replace(/(\bhref\s*=\s*)(["'])(.*?)\2/gi, (original, prefix, quote, href) => {
-      const decoded = decodeAttribute(href);
-      try {
-        const url = new URL(decoded), fragment = decodeURIComponent(url.hash.slice(1));
-        if (fragment === `${sectionMarker(key)}:begin` || fragment === `${sectionMarker(key)}:end`) {
-          return `${prefix}${quote}${escapeAttribute(canonicalMarkerHref(href, key, fragment.split(':').at(-1), context))}${quote}`;
+  const managed = mapOutsideLiterals(text.slice(range.start, range.end), (value) => {
+    let cursor = 0;
+    const parts = [];
+    for (const tag of htmlTags(value)) {
+      let textEnd = tag.start;
+      if (tag.complete && /^<\/(?:p|h3|td|th)[ \t\r\n]*>$/i.test(tag.raw)) {
+        while (textEnd > cursor && asciiSpace(value[textEnd - 1])) textEnd--;
+      }
+      parts.push(value.slice(cursor, textEnd));
+      let raw = tag.raw;
+      if (tag.complete && !tag.closing && tag.name === 'a') {
+        const attributes = hrefAttributes(tag);
+        if (attributes.length === 1) {
+          const attribute = attributes[0], decoded = decodeAttribute(attribute.value);
+          try {
+            const fragment = decodeURIComponent(new URL(decoded).hash.slice(1));
+            const url = [':begin', ':end'].some((role) => fragment === sectionMarker(key) + role)
+              ? canonicalMarkerHref(attribute.value, key, fragment.split(':').at(-1), context)
+              : canonicalAttachmentUrl(decoded, context);
+            raw = raw.slice(0, attribute.start) + escapeAttribute(url) + raw.slice(attribute.end);
+          } catch { /* Unrecognized links remain byte-exact. */ }
         }
-        return `${prefix}${quote}${escapeAttribute(canonicalAttachmentUrl(decoded, context))}${quote}`;
-      } catch { return original; }
-    }));
+      }
+      parts.push(raw);
+      cursor = tag.end;
+    }
+    parts.push(value.slice(cursor));
+    return parts.join('');
+  });
   return text.slice(0, range.start) + managed + text.slice(range.end);
 }
 export const managedHtmlHash = (text, key, context) => hash(normalizeManagedHtml(text, key, context));
@@ -197,6 +290,7 @@ export async function beginSectionWrite(before, after, side, state, save, contex
   await save();
 }
 export function replaceManagedSection(text = '', key, body, context = {}) {
+  assertDescriptionLimit(body);
   const marker = sectionMarker(key);
   const begin = `<!-- ${marker}:begin -->`, end = `<!-- ${marker}:end -->`;
   const range = sectionRange(text, key, context);
@@ -206,7 +300,9 @@ export function replaceManagedSection(text = '', key, body, context = {}) {
     section = body.replace(/^<h3>([^<]*)<\/h3>/, `<h3><a href="${escapeAttribute(markerHref(key, 'begin', context))}">$1</a></h3>`)
       .replace(/<p>([^<]*)<\/p>$/, `<p><a href="${escapeAttribute(markerHref(key, 'end', context))}">$1</a></p>`);
   }
-  return !range ? `${text}${text ? '\n\n' : ''}${section}` : text.slice(0, range.start) + section + text.slice(range.end);
+  const result = !range ? `${text}${text ? '\n\n' : ''}${section}` : text.slice(0, range.start) + section + text.slice(range.end);
+  assertDescriptionLimit(result);
+  return result;
 }
 export function preserveDeliverySections(previous, replacement) {
   const sections = String(previous ?? '').match(/<!-- tfs-mcp-delivery:([a-f0-9]{64}):begin -->[\s\S]*?<!-- tfs-mcp-delivery:\1:end -->/g) ?? [];

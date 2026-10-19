@@ -141,6 +141,9 @@ before closing `p`, `h3`, `td` and `th` tags and equivalent scoped attachment
 URLs. Code/preformatted content, meaningful text, attributes and human content
 outside the section remain exact. Missing, duplicated or foreign markers fail
 closed.
+Descriptions and generated replacements are limited to 256 KiB of UTF-8.
+HTML scanning advances through bounded tokens, including malformed or unclosed
+tags; unsupported input fails closed rather than triggering unbounded rescans.
 
 Lost work-item/PR PATCH responses are reconciled by re-reading the managed
 section and scoped relations. If a provider strips markers or a section becomes
