@@ -66,6 +66,8 @@ import { toolQueuePipeline, toolUpsertYamlPipeline } from "./tools/pipeline.js";
 import { toolUpsertBuildValidationPolicy, toolListPolicies, toolUpsertStatusPolicy, toolToggleBuildValidationPolicy } from "./tools/branch-policy.js";
 import { toolSavedQueriesList, toolTfsDoctor } from "./tools/doctor.js";
 import { toolListCollections, toolListProjects } from "./tools/collections.js";
+import { toolPreparePRDelivery, toolPublishPRDelivery } from "./tools/pull-request-delivery.js";
+import { DELIVERY_TOOLS } from "./delivery-contract.js";
 import { runWithRequestContext } from "./request-context.js";
 import { MutationControlsSchema } from "./safety.js";
 
@@ -129,6 +131,7 @@ function formatToolResult(result) {
 // ─── Tool definitions ──────────────────────────────────────────────────────
 
 export const TOOL_DEFS = [
+  ...DELIVERY_TOOLS,
   {
     name: "tfs_list_collections",
     title: "List Project Collections",
@@ -927,6 +930,8 @@ export function getToolCount() {
 // ─── Dispatch table ────────────────────────────────────────────────────────
 
 const TOOL_HANDLERS = {
+  tfs_prepare_pr_delivery: (args) => toolPreparePRDelivery(args),
+  tfs_publish_pr_delivery: (args) => toolPublishPRDelivery(args),
   tfs_doctor: (args) => toolTfsDoctor(args),
   tfs_list_collections: (args) => toolListCollections(args),
   tfs_list_projects: (args) => toolListProjects(args),
@@ -980,7 +985,7 @@ export function buildMcpServer() {
     {
       capabilities: { tools: { listChanged: false } },
       instructions:
-        "TFS/Azure DevOps Server workflows. Routine requested operations, such as creating or editing pull requests, comments and work-item fields, execute directly; use dry_run:true when a preview is useful. Pipeline-definition and branch-policy edits remain preview-first. High-impact targets and destructive changes require a reviewed plan plus explicit confirmation. Never invent confirm_high_impact values or expose PATs/private payloads.",
+        "TFS/Azure DevOps Server workflows. Routine requested operations, such as creating or editing pull requests, comments and work-item fields, execute directly; use dry_run:true when a preview is useful. For delivery evidence, prepare current-commit real test reports and final media, then publish one concise managed PR/work-item section at the end; do not post progress comments for each adjustment. This server does not execute tests; report partial/unverified checks honestly. Pipeline-definition and branch-policy edits remain preview-first. High-impact targets and destructive changes require a reviewed plan plus explicit confirmation. Never invent confirm_high_impact values or expose PATs/private payloads.",
     }
   );
 
@@ -1024,6 +1029,9 @@ export function buildMcpServer() {
       }
       const { auth_alias: _authAlias, collection: _collection, project: _project, ...toolArgs } = args ?? {};
       const result = await runWithRequestContext(context, () => handler(toolArgs));
+      if (name === 'tfs_prepare_pr_delivery' || name === 'tfs_publish_pr_delivery') {
+        validateToolArguments(definition.outputSchema, result);
+      }
       return formatToolResult(result);
     } catch (err) {
       const safeMessage = String(redactSensitiveValue(err?.message ?? String(err)))

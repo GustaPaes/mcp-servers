@@ -4,6 +4,8 @@ const READ = (overrides = {}) => ({ risk: TOOL_RISK.READ, idempotent: true, open
 const WRITE = (overrides = {}) => ({ risk: TOOL_RISK.REMOTE_WRITE, idempotent: true, openWorld: true, ...overrides });
 
 export const TOOL_POLICY = Object.freeze({
+  tfs_prepare_pr_delivery: READ(),
+  tfs_publish_pr_delivery: WRITE({ idempotent: false }),
   tfs_list_collections: READ(),
   tfs_list_projects: READ(),
   tfs_doctor: READ(),

@@ -29,6 +29,8 @@ import {
   normalizePRWorkItemIds,
 } from "./pull-request-links.js";
 import { loadPullRequestPipelines } from "./pull-request-builds.js";
+import { deliveryChecklist } from "./pull-request-delivery.js";
+import { preserveDeliverySections } from "../evidence-manifest.js";
 
 // Convenience wrapper that falls back to configured default repo
 function resolveRepo(preferredRepo) {
@@ -524,6 +526,7 @@ export async function toolCreatePR(args) {
         repository,
         sourceBranch,
         targetBranch,
+        delivery: deliveryChecklist(),
         ...summarizeWorkItemLinkMutation(workItemLinks),
         url: `${buildProjectUrl(`/_git/${repository}/pullrequest/${result.pullRequestId}`)}`,
       };
@@ -535,7 +538,7 @@ export async function toolUpdatePR(args) {
   const input = parsePortuguesePRInput(args, { includeBranches: false });
   const { repository, pr, parsedRef } = await resolvePullRequestTarget(input.id, input.repo);
   const formattedPr = formatPR(pr);
-  const description = buildPortuguesePRDescription(input);
+  const description = preserveDeliverySections(pr.description, buildPortuguesePRDescription(input));
   const controls = normalizeMutationControls(input);
   const context = getRequestContext();
   const impact = detectHighImpact(repository, formattedPr.sourceBranch, formattedPr.targetBranch);
@@ -556,9 +559,11 @@ export async function toolUpdatePR(args) {
     plan,
     controls,
     apply: async () => {
+      const latest = await tfsGet(`/git/repositories/${repository}/pullrequests/${parsedRef.id}`);
+      const effectiveDescription = preserveDeliverySections(latest.description, buildPortuguesePRDescription(input));
       const result = await tfsPatch(`/git/repositories/${repository}/pullrequests/${parsedRef.id}`, {
         title: input.titulo,
-        description,
+        description: effectiveDescription,
       });
       const workItemLinks = await ensurePullRequestWorkItemLinks({
         pr: { ...pr, ...result, repository: result.repository ?? pr.repository },
@@ -569,7 +574,8 @@ export async function toolUpdatePR(args) {
       return {
         pullRequestId: result.pullRequestId,
         title: result.title,
-        description,
+        description: result.description ?? effectiveDescription,
+        delivery: deliveryChecklist(),
         ...summarizeWorkItemLinkMutation(workItemLinks),
         url: `${buildProjectUrl(`/_git/${repository}/pullrequest/${result.pullRequestId}`)}`,
       };

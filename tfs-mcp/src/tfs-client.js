@@ -267,6 +267,74 @@ export async function tfsPost(endpoint, body, params = {}, { authAlias } = {}) {
   });
 }
 
+// Uploads are never retried: a timeout may occur after the server stores the blob.
+export async function tfsUploadAttachment(bytes, fileName, { authAlias, projectId } = {}) {
+  if (!Buffer.isBuffer(bytes) || bytes.length === 0 || bytes.length > 104_857_600
+    || !/^evidence-[a-f0-9]{64}\.(png|jpg|jpeg|webp|mp4|webm)$/.test(fileName)) {
+    throw new Error("Invalid bounded attachment.");
+  }
+  const url = buildApiUrl('/wit/attachments');
+  url.searchParams.set('fileName', fileName);
+  url.searchParams.set('api-version', '7.0');
+  const res = await fetchWithTimeout(url, { method: 'POST',
+    headers: buildHeaders({ 'Content-Type': 'application/octet-stream' }, { authAlias }), body: bytes });
+  if (!res.ok) {
+    const error = new Error(`TFS attachment upload failed (HTTP ${res.status}); reconcile before retry.`);
+    error.status = res.status;
+    error.uploadRejected = [400, 401, 403, 404, 413, 415, 422].includes(res.status);
+    throw error;
+  }
+  const receipt = JSON.parse((await readBoundedBody(res, 16_384)).toString('utf8'));
+  return validateTfsAttachmentReceipt(receipt, { projectId });
+}
+
+export function validateTfsAttachmentReceipt(receipt, { projectId } = {}) {
+  if (!receipt || !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(receipt.id ?? '')) throw new Error("Upload receipt lacks an attachment identifier; reconcile before retry.");
+  const attachmentUrl = assertTrustedTfsUrl(receipt.url);
+  const expected = buildApiUrl(`/wit/attachments/${receipt.id}`);
+  const { collection } = getTfsScope();
+  const collectionPath = `${new URL(TFS_URL).pathname.replace(/\/+$/, '')}/${encodeURIComponent(collection)}/_apis/wit/attachments/${receipt.id}`;
+  const permittedPaths = [expected.pathname, collectionPath];
+  if (projectId && /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(projectId)) {
+    permittedPaths.push(`${new URL(TFS_URL).pathname.replace(/\/+$/, '')}/${encodeURIComponent(collection)}/${projectId}/_apis/wit/attachments/${receipt.id}`);
+  }
+  if (!permittedPaths.map((value) => value.toLowerCase()).includes(attachmentUrl.pathname.toLowerCase())) {
+    throw new Error("Unexpected attachment receipt path.");
+  }
+  return { id: receipt.id, url: expected.toString() };
+}
+
+export async function tfsReadAttachment(id, maxBytes, { authAlias } = {}) {
+  if (!/^[a-f0-9-]{36}$/i.test(id)) throw new Error("Invalid attachment identifier.");
+  const url = buildApiUrl(`/wit/attachments/${id}`);
+  url.searchParams.set('api-version', '7.0');
+  const res = await fetchWithTimeout(url, { headers: buildHeaders({}, { authAlias }) });
+  if (!res.ok) throw new Error(`Attachment recovery failed (HTTP ${res.status}).`);
+  const bytes = await readBoundedBody(res, maxBytes);
+  url.search = '';
+  return { bytes, url: url.toString() };
+}
+
+async function readBoundedBody(res, maxBytes) {
+  const reader = res.body.getReader(), chunks = [];
+  let length = 0;
+  let timeout;
+  try {
+    return await Promise.race([(async () => {
+      while (true) {
+        const part = await reader.read();
+        if (part.done) break;
+        length += part.value.length;
+        if (length > maxBytes) throw new Error("Attachment response size exceeded.");
+        chunks.push(Buffer.from(part.value));
+      }
+      return Buffer.concat(chunks);
+    })(), new Promise((_, reject) => {
+      timeout = setTimeout(() => { reject(new Error("Attachment response timeout.")); void reader.cancel().catch(() => {}); }, TFS_REQUEST_TIMEOUT_MS);
+    })]);
+  } finally { clearTimeout(timeout); await reader.cancel().catch(() => {}); }
+}
+
 /**
  * PATCH ou POST com Content-Type: application/json-patch+json.
  * Usado para criar (POST) e atualizar (PATCH) work items.
