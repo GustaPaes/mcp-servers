@@ -24,7 +24,7 @@ export function renderDiscussion(manifest, level, attachments) {
   const unlisted = attachments.filter((entry) => !cases.some((item) => item.evidence_scenarios.includes(entry.scenario)));
   if (unlisted.length) html += `<p>${links(unlisted)}</p>`;
   for (const image of attachments.filter((entry) => entry.kind === 'image').slice(0, 3)) {
-    html += `<p>${e(image.title || image.scenario)}<br><a href="${e(image.url)}"><img src="${e(image.url)}" alt="${e(image.title || image.scenario)}" width="480"></a></p>`;
+    html += `<p>${e(image.title || image.scenario)}<br><a href="${e(image.url)}"><img src="${e(image.url)}" alt="${e(image.title || image.scenario)}" width=480></a></p>`;
   }
   if (manifest.pending.length) html += `<p><b>${pt ? 'Pendências' : 'Pending'}:</b></p><ul>${manifest.pending.map((item) => `<li>${e(item.replace(/^Declared limitation: /, ''))}</li>`).join('')}</ul>`;
   if (manifest.pullRequestUrl) html += `<p><a href="${e(manifest.pullRequestUrl)}">PR ${manifest.identity.pullRequestId}</a> · ${manifest.sourceSha.slice(0, 12)}</p>`;

@@ -46,8 +46,10 @@ async function fixture() {
     if (pathname.endsWith('/workitems/301')) {
       if (method === 'PATCH') {
         const ops = JSON.parse(request.body); assert.equal(ops[0].value, wi.rev);
+        if (ops.some((op) => op.op === 'add' && op.path === '/relations/-' && wi.relations.some((relation) => relation.url === op.value.url))) return json({ typeKey: 'RelationAlreadyExistsException' }, 400);
         for (const op of ops.slice(1)) {
           if (op.path === '/fields/System.Description') wi.fields['System.Description'] = op.value;
+          else if (/^\/relations\/\d+\/attributes\/name$/.test(op.path)) wi.relations[Number(op.path.split('/')[2])].attributes.name = op.value;
           else if (op.op === 'remove') wi.relations.splice(Number(op.path.split('/').at(-1)), 1);
           else if (op.path === '/relations/-') wi.relations.push(op.value);
           else assert.fail('Must not modify board/state fields');
@@ -61,7 +63,7 @@ async function fixture() {
         if (control.unsupported) return json({}, 404);
         return json({ comments, totalCount: control.truncated ? 101 : comments.length });
       }
-      const comment = { id: 20, version: 1, workItemId: 301, createdBy: { id: 'publisher' }, text: JSON.parse(request.body).text };
+      const comment = { id: 20, version: 1, workItemId: 301, createdBy: { id: 'publisher' }, text: JSON.parse(request.body).text.replaceAll('width="480"', 'width=480') };
       comments.push(comment);
       if (control.lostPost) { control.lostPost = false; throw new Error('Synthetic lost POST response'); }
       return json(comment);
@@ -71,7 +73,7 @@ async function fixture() {
       const comment = comments.find((item) => item.id === commentId);
       if (!comment) return json({}, 404);
       if (method === 'PATCH') {
-        comment.text = JSON.parse(request.body).text; comment.version++;
+        comment.text = JSON.parse(request.body).text.replaceAll('width="480"', 'width=480'); comment.version++;
         if (control.moveBoard) wi.fields['System.BoardColumn'] = 'Review';
         if (control.lostPatch) { control.lostPatch = false; throw new Error('Synthetic lost PATCH response'); }
       }
@@ -124,6 +126,7 @@ test('legacy hash-named relations are renamed using existing receipts without up
   assert.equal((await f.publish()).status, 'published');
   assert.equal(f.calls.filter((call) => call.method === 'POST' && call.pathname.endsWith('/wit/attachments')).length, uploads);
   assert.equal(f.wi.relations.length, 1); assert(f.wi.relations[0].attributes.name.endsWith('2026-01-02.png'));
+  assert(f.calls.some((call) => call.method === 'PATCH' && call.body?.includes('/attributes/name')));
 });
 test('discussion dry run, unavailable endpoint and truncated discovery never upload or post', async () => {
   for (const mode of ['dry', 'unsupported', 'truncated']) {
@@ -147,6 +150,14 @@ test('lost discussion PATCH is reconciled by readback without rewriting or dupli
   assert.equal((await f.publish()).status, 'partial');
   const writes = f.calls.filter((call) => call.method !== 'GET').length;
   assert.equal((await f.publish()).status, 'published');
+  assert.equal(f.calls.filter((call) => call.method !== 'GET').length, writes);
+});
+test('duplicate receipt identities with different names cannot be silently renamed', async () => {
+  const f = await fixture(); await f.publish();
+  const duplicate = structuredClone(f.wi.relations[0]); duplicate.attributes.name = 'Human renamed attachment.png';
+  f.wi.relations.push(duplicate);
+  const writes = f.calls.filter((call) => call.method !== 'GET').length;
+  assert.equal((await f.publish()).status, 'partial');
   assert.equal(f.calls.filter((call) => call.method !== 'GET').length, writes);
 });
 test('human edits, deleted comments and foreign ownership stop publication', async () => {

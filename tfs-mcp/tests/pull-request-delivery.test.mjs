@@ -70,6 +70,7 @@ async function fixture(options = {}) {
         for (const op of patch.slice(1)) {
           if (op.path === '/fields/System.Description') wi.fields['System.Description'] = state.stripMarkers ? 'Provider stripped markers' : options.normalizeHtml
             ? op.value.replace(/<!--[\s\S]*?-->/g, '').replace(/<\/(p|h3|td|th)>/g, ' </$1>') : op.value;
+          else if (/^\/relations\/\d+\/attributes\/name$/.test(op.path)) wi.relations[Number(op.path.split('/')[2])].attributes.name = op.value;
           else if (op.op === 'remove') wi.relations.splice(Number(op.path.split('/').at(-1)), 1);
           else if (op.path === '/relations/-') wi.relations.push(options.normalizeRelations ? { ...op.value,
             url: op.value.url.replace('/ExampleProject/', '/') + '?fileName=normalized.png' } : op.value);

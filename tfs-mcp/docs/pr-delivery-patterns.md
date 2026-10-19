@@ -66,7 +66,10 @@ The date comes from `provenance.finished_at` in `TFS_DELIVERY_TIME_ZONE`, not
 publication time. `TFS_DELIVERY_LOCALE` supports `en` and `pt-BR` for discussion
 labels. Configure installation preferences in ignored `.env`; tracked examples
 remain neutral. Report hashes and upload receipts stay private. Renaming an
-owned relation reuses the existing blob; unchanged media are not uploaded again.
+owned relation changes only its name attribute under revision control and reuses
+the existing blob; unchanged media are not uploaded again. Do not remove and
+re-add an identical attachment in one PATCH: some providers reject that as a
+duplicate relation. Numeric image width uses the provider-stable HTML form.
 
 The comment ID, author and intended content hashes are durable receipts.
 Unknown POST outcomes never trigger a second POST: inspect the provider, then
