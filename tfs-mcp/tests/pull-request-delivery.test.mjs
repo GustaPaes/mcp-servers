@@ -39,6 +39,7 @@ async function fixture(options = {}) {
     { rel: 'AttachedFile', url: `${base}/wit/attachments/other`, attributes: { comment: `tfs-mcp-delivery:${'b'.repeat(64)}:other-pr` } },
   ] };
   const calls = [], state = { uploadFailure: options.uploadFailure, conflict: options.conflict, ref: sha, targetRef: 'e'.repeat(40), stripMarkers: false };
+  let uploadSequence = 0;
   const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
   global.fetch = async (url, request = {}) => {
     const target = new URL(url), method = request.method ?? 'GET';
@@ -57,7 +58,8 @@ async function fixture(options = {}) {
     if (target.pathname.endsWith('/wit/attachments') && method === 'POST') {
       if (state.uploadFailure) throw new Error('Simulated unknown upload timeout');
       if (state.changeTargetOnUpload) pr.targetRefName = 'refs/heads/main';
-      return json({ id: attachmentId, url: `${base}/wit/attachments/${attachmentId}` }, 201);
+      const id = options.uniqueAttachments ? `00000000-0000-4000-8000-${(++uploadSequence).toString(16).padStart(12, '0')}` : attachmentId;
+      return json({ id, url: `${base}/wit/attachments/${id}` }, 201);
     }
     if (target.pathname.endsWith(`/wit/attachments/${attachmentId}`)) return new Response(png);
     if (/\/wit\/workitems\/301$/.test(target.pathname)) {
@@ -66,9 +68,11 @@ async function fixture(options = {}) {
         assert.equal(patch[0].path, '/rev'); assert.equal(patch[0].value, wi.rev);
         if (state.conflict) { state.conflict = false; wi.rev++; wi.fields['System.Description'] += '\nConcurrent human edit'; return json({}, 412); }
         for (const op of patch.slice(1)) {
-          if (op.path === '/fields/System.Description') wi.fields['System.Description'] = state.stripMarkers ? 'Provider stripped markers' : op.value;
+          if (op.path === '/fields/System.Description') wi.fields['System.Description'] = state.stripMarkers ? 'Provider stripped markers' : options.normalizeHtml
+            ? op.value.replace(/<!--[\s\S]*?-->/g, '').replace(/<\/(p|h3|td|th)>/g, ' </$1>') : op.value;
           else if (op.op === 'remove') wi.relations.splice(Number(op.path.split('/').at(-1)), 1);
-          else if (op.path === '/relations/-') wi.relations.push(op.value);
+          else if (op.path === '/relations/-') wi.relations.push(options.normalizeRelations ? { ...op.value,
+            url: op.value.url.replace('/ExampleProject/', '/') + '?fileName=normalized.png' } : op.value);
         }
         wi.rev++;
         if (state.loseWiResponse) { state.loseWiResponse = false; throw new Error('Synthetic lost PATCH response'); }
@@ -203,6 +207,27 @@ test('provider marker stripping is partial and never deletes human attachments',
   assert.equal(f.calls.filter((entry) => entry.method !== 'GET').length, writes);
   assert(f.wi.relations.some((entry) => entry.attributes.comment === 'Human attachment'));
 });
+
+test('seven durable uploads survive comment stripping, HTML padding and scoped relation normalization without duplicate writes', async () => {
+  const f = await fixture({ normalizeHtml: true, normalizeRelations: true, uniqueAttachments: true });
+  const source = f.input.media[0];
+  f.input.media = await Promise.all(Array.from({ length: 7 }, async (_, index) => {
+    const bytes = Buffer.concat([png, Buffer.from([index])]), file = path.join(directory, `final-${f.input.pull_request_id}-${index}.png`);
+    await fs.writeFile(file, bytes);
+    return { ...source, path: file, sha256: hash(bytes), scenario: `Scenario ${index + 1}` };
+  }));
+  f.input.required_scenarios = f.input.media.map((entry) => entry.scenario);
+  assert.equal((await f.publish()).data.status, 'published');
+  const writes = f.calls.filter((entry) => entry.method !== 'GET').length;
+  assert.equal((await f.publish()).data.status, 'published');
+  assert.equal(f.calls.filter((entry) => entry.method === 'POST').length, 7);
+  assert.equal(f.calls.filter((entry) => entry.method !== 'GET').length, writes);
+  assert.equal(f.wi.relations.length, 9);
+  assert.equal(new Set(f.wi.relations.slice(2).map((entry) => new URL(entry.url).pathname)).size, 7);
+  assert(!f.wi.fields['System.Description'].includes('<!--'));
+  assert.equal((f.wi.fields['System.Description'].match(/tfs-mcp-delivery:[a-f0-9]{64}:begin/g) ?? []).length, 1);
+  assert.equal((f.pr.description.match(/:begin -->/g) ?? []).length, 1);
+});
 test('target/status changes invalidate the digest and a high-impact change during upload stops linking', async () => {
   const f = await fixture(); const prepared = await f.prepare();
   f.pr.status = 'completed';
@@ -213,12 +238,12 @@ test('target/status changes invalidate the digest and a high-impact change durin
   assert.equal((await f.publish()).data.willMutate, false);
 });
 test('lost PATCH replies recover existing sections rather than duplicate publication', async () => {
-  for (const side of ['loseWiResponse', 'losePrResponse']) {
-    const f = await fixture(); f.state[side] = true;
+  for (const [side, normalized] of [['loseWiResponse', false], ['losePrResponse', false], ['loseWiResponse', true], ['losePrResponse', true]]) {
+    const f = await fixture({ normalizeHtml: normalized, normalizeRelations: normalized }); f.state[side] = true;
     assert.equal((await f.publish()).data.status, 'partial');
     assert.equal((await f.publish()).data.status, 'published');
     assert.equal(f.calls.filter((entry) => entry.method === 'POST').length, 1);
-    assert.equal((f.wi.fields['System.Description'].match(/:begin -->/g) ?? []).length, 1);
+    assert.equal((f.wi.fields['System.Description'].match(/:begin["']/g) ?? []).length, 1);
     assert.equal((f.pr.description.match(/:begin -->/g) ?? []).length, 1);
   }
 });
@@ -228,6 +253,47 @@ test('PR marker stripping blocks automatic reappend until remote reconciliation'
   const writes = f.calls.filter((entry) => entry.method !== 'GET').length;
   assert.equal((await f.publish()).data.status, 'partial');
   assert.equal(f.calls.filter((entry) => entry.method !== 'GET').length, writes);
+});
+
+test('ambiguous relation recovery accepts canonical identity and blocks changed scope or ownership', async () => {
+  for (const mutation of ['equivalent', 'foreignProject', 'foreignHost', 'changedName', 'changedComment', 'duplicate']) {
+    const f = await fixture({ normalizeHtml: true, normalizeRelations: true });
+    assert.equal((await f.publish()).data.status, 'published');
+    const files = (await fs.readdir(path.join(directory, 'state'))).filter((name) => name.endsWith('.json'));
+    let ledgerPath, ledger;
+    for (const name of files) {
+      const file = path.join(directory, 'state', name), value = JSON.parse(await fs.readFile(file, 'utf8'));
+      if (value.lastManifest?.identity?.pullRequestId === f.input.pull_request_id) { ledgerPath = file; ledger = value; break; }
+    }
+    assert(ledgerPath);
+    ledger.pendingAttachments = ledger.managed;
+    ledger.ambiguousRelations = true;
+    await fs.writeFile(ledgerPath, JSON.stringify(ledger));
+    const relation = f.wi.relations.find((entry) => entry.attributes.name?.startsWith('evidence-'));
+    if (mutation === 'foreignProject') relation.url = relation.url.replace('/_apis/', '/OtherProject/_apis/');
+    if (mutation === 'foreignHost') relation.url = relation.url.replace('tfs.example.com', 'attacker.example');
+    if (mutation === 'changedName') relation.attributes.name = 'Human name';
+    if (mutation === 'changedComment') relation.attributes.comment = 'Human comment';
+    if (mutation === 'duplicate') f.wi.relations.push({ ...relation, url: ledger.managed[0].url });
+    const writes = f.calls.filter((entry) => entry.method !== 'GET').length;
+    const result = await f.publish();
+    assert.equal(result.data.status, mutation === 'equivalent' ? 'published' : 'partial');
+    assert.equal(f.calls.filter((entry) => entry.method !== 'GET').length, writes);
+    assert.equal(f.calls.filter((entry) => entry.method === 'POST').length, 1);
+    const persisted = JSON.parse(await fs.readFile(ledgerPath, 'utf8'));
+    assert.equal(persisted.ambiguousRelations, mutation !== 'equivalent');
+  }
+});
+
+test('duplicate canonical owned relations stop reconciliation without adding or removing links', async () => {
+  const f = await fixture({ normalizeRelations: true });
+  assert.equal((await f.publish()).data.status, 'published');
+  const relation = f.wi.relations.find((entry) => entry.attributes.name?.startsWith('evidence-'));
+  f.wi.relations.push({ ...relation, url: relation.url.replace('/_apis/', '/ExampleProject/_apis/') });
+  const writes = f.calls.filter((entry) => entry.method !== 'GET').length;
+  assert.equal((await f.publish()).data.status, 'partial');
+  assert.equal(f.calls.filter((entry) => entry.method !== 'GET').length, writes);
+  assert.equal(f.wi.relations.length, 4);
 });
 test('new commit replaces only manifest-owned relations and retains another PR attachment', async () => {
   const f = await fixture(); assert.equal((await f.publish()).data.status, 'published');
