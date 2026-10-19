@@ -10,9 +10,14 @@ close a work item, complete a PR or merge a branch. PR creation/update returns a
 2. Call `tfs_prepare_pr_delivery` for the current source SHA, repository, PR and
    work item. Supply bounded reports/media under configured dedicated roots,
    their SHA256 hashes, and provenance: commit, executor, command, start/end UTC.
+   CI evidence may retain its actual merge SHA when a supplied build matches the
+   current repository and observed merge for the current source and target.
+   Keep that provenance unchanged; do not relabel the merge as the source SHA.
+   Historical/unassociated merges remain rejected.
    Use each report's optional bounded `label` to identify its suite/component in
-   the concise table (for example `API unit` or `Android E2E`). Evidence from a
-   different repository/commit belongs in its own PR; do not relabel its origin.
+   the concise table (for example `API unit` or `Android E2E`). Evidence from
+   another repository or an unassociated commit belongs in its own PR; do not
+   relabel its origin.
 3. Review its evidence level, pending checks and digest. Change the files or PR
    source, target, status or observed merge tip: prepare again.
 4. Call `tfs_publish_pr_delivery` with the same inputs, `plan_digest`,

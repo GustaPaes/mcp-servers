@@ -91,6 +91,8 @@ installation root, including its path. Redirects are rejected. Retries are allow
   provenance is declared, not independently executed by this server. A passing
   build alone does not prove that tests ran. See
   [delivery evidence](./docs/pr-delivery-patterns.md).
+  Preserve actual CI merge provenance only when a supplied build matches the
+  current repository, source and target's observed merge; reject stale merges.
 - For PR work-item links, use the tool's revision-guarded reconciliation path.
   Do not add a second `workItemRefs` mutation around it. Report `partial` and
   the sanitized failed-item list when metadata succeeds but links do not.

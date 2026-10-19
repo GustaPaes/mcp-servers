@@ -45,7 +45,7 @@ async function fixture(options = {}) {
     calls.push({ method, path: target.pathname, body: Buffer.isBuffer(request.body) ? 'binary' : request.body });
     if (target.pathname.endsWith('/refs')) return json({ value: target.searchParams.get('filter') === pr.sourceRefName.slice(5)
       ? [{ name: pr.sourceRefName, objectId: state.ref }] : [{ name: pr.targetRefName, objectId: state.targetRef }] });
-    if (/\/build\/builds\//.test(target.pathname)) return json({ id: 9, repository: { id: repoId }, sourceVersion: options.oldBuild ? 'b'.repeat(40) : options.sourceBuild ? sha : mergeSha, status: 'completed', result: 'succeeded' });
+    if (/\/build\/builds\//.test(target.pathname)) return json({ id: 9, repository: { id: options.wrongRepository ? attachmentId : repoId }, sourceVersion: options.oldBuild ? 'b'.repeat(40) : options.sourceBuild ? sha : mergeSha, status: 'completed', result: 'succeeded' });
     if (/\/pullrequests\//.test(target.pathname)) {
       if (method === 'PATCH') {
         pr.description = JSON.parse(request.body).description;
@@ -137,6 +137,30 @@ test('same-PR old build is not final evidence; observed current merge tip is acc
   assert.equal((await stale.prepare()).data.evidenceLevel, 'partial');
   const fresh = await fixture(); fresh.input.build_ids = [9];
   assert.equal((await fresh.prepare()).data.evidenceLevel, 'verified');
+});
+
+test('current pipeline merge provenance is preserved rather than relabeled as the source', async () => {
+  const f = await fixture(); f.input.build_ids = [9];
+  for (const entry of [...f.input.reports, ...f.input.media]) entry.provenance = { ...entry.provenance, commit: 'c'.repeat(40) };
+  const prepared = await f.prepare();
+  assert.equal(prepared.data.sourceSha, 'a'.repeat(40));
+  assert.equal(prepared.data.reports[0].provenance.commit, 'c'.repeat(40));
+  assert.equal(prepared.data.media[0].provenance.commit, 'c'.repeat(40));
+  assert.equal(prepared.data.evidenceLevel, 'verified');
+  assert.equal((await f.publish()).data.status, 'published');
+});
+
+for (const [name, options, mutate] of [
+  ['without a supplied build', {}, f => { f.input.build_ids = []; }],
+  ['from another repository', { wrongRepository: true }, () => {}],
+  ['from a historical build', { oldBuild: true }, () => {}],
+  ['with a stale merge source', {}, f => { f.pr.lastMergeSourceCommit.commitId = 'b'.repeat(40); }],
+  ['after the target advances', {}, f => { f.state.targetRef = 'f'.repeat(40); }],
+]) test(`pipeline merge provenance is rejected ${name}`, async () => {
+  const f = await fixture(options); f.input.build_ids = [9]; mutate(f);
+  f.input.reports[0].provenance = { ...f.input.reports[0].provenance, commit: 'c'.repeat(40) };
+  await assert.rejects(f.prepare(), /provenance/);
+  assert(f.calls.every(entry => entry.method === 'GET'));
 });
 test('requires distinct final video for each configured scenario', async () => {
   const f = await fixture(); f.input.require_video_per_scenario = true;

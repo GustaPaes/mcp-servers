@@ -50,7 +50,7 @@ export function mediaType(bytes, file, kind) {
   if (!match) throw new Error("Media extension, signature and kind must agree.");
   return { mime: match[1], extension: match[0] };
 }
-export async function inspectEvidence(input) {
+export async function inspectEvidence(input, allowedCommits = [input.source_sha]) {
   const reports = [], media = [], buffers = [];
   let totalBytes = 0;
   for (const [group, entries, maxBytes] of [
@@ -59,7 +59,7 @@ export async function inspectEvidence(input) {
     for (const entry of entries) {
       const start = Date.parse(entry.provenance.started_at), finish = Date.parse(entry.provenance.finished_at);
       if (finish < start || finish > Date.now() + 60_000) throw new Error("Invalid evidence provenance interval.");
-      if (entry.provenance.commit !== input.source_sha) throw new Error("Evidence provenance does not match the requested source commit.");
+      if (!allowedCommits.includes(entry.provenance.commit)) throw new Error("Evidence provenance does not match the requested source or its current observed pipeline merge commit.");
       const bytes = await readEvidenceFile(entry.path, maxBytes);
       totalBytes += bytes.length;
       if (totalBytes > DELIVERY_CONFIG.maxTotalBytes) throw new Error("Total evidence quota exceeded.");

@@ -40,7 +40,8 @@ async function observe(input) {
 }
 async function prepare(input) {
   const observed = await observe(input);
-  const files = await inspectEvidence(input);
+  const mergeBuild = observed.builds.some((build) => build.matching && build.sourceSha === observed.mergeSha);
+  const files = await inspectEvidence(input, [input.source_sha, ...(mergeBuild ? [observed.mergeSha] : [])]);
   const pending = input.limitations.map((item) => `Declared limitation: ${item}`);
   if (!files.reports.length) pending.push('No current-commit parsed test report. A successful build alone does not prove tests ran.');
   if (files.reports.some((item) => !item.counts.total || item.counts.failed || item.counts.executionFailed)) pending.push('Tests contain failures, runtime errors or zero executed cases.');
