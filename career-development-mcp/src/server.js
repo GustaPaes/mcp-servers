@@ -27,10 +27,12 @@ import { toolOnlineReviewSuggestions, toolOnlineStateGet } from "./tools/online.
 import { toolSnapshotImport, toolSnapshotValidate } from "./tools/snapshots.js";
 import { toolDailyBrief } from "./tools/daily.js";
 import { toolCareerDoctor } from "./tools/doctor.js";
+import { REMOTE_TOOLS } from "./tools/remote.js";
 
 export { TOOL_RISK };
 
 const TOOL_POLICIES = Object.freeze({
+  ...Object.fromEntries(REMOTE_TOOLS.map(entry => [entry.name, entry.policy])),
   guide_doctor: { risk: TOOL_RISK.READ, idempotent: true },
   guide_daily_brief: { risk: TOOL_RISK.READ, idempotent: true },
   guide_snapshot_validate: { risk: TOOL_RISK.READ, idempotent: true },
@@ -168,6 +170,7 @@ const EXTERNAL_SNAPSHOT_INPUT_SCHEMA = {
 };
 
 const TOOL_DEFS = [
+  ...REMOTE_TOOLS.map(entry => entry.definition),
   {
     name: "guide_doctor",
     title: "Career MCP Doctor",
@@ -479,6 +482,7 @@ const TOOL_DEFS = [
 ];
 
 const TOOL_HANDLERS = {
+  ...Object.fromEntries(REMOTE_TOOLS.map(entry => [entry.name, entry.handler])),
   guide_doctor: () => toolCareerDoctor(),
   guide_daily_brief: (args) => toolDailyBrief(args),
   guide_snapshot_validate: (args) => toolSnapshotValidate(args),
@@ -539,7 +543,7 @@ export function buildMcpServer() {
     {
       capabilities: { tools: { listChanged: false } },
       instructions:
-        "Local-first career development MCP for PDIs, goals, competencies and evidence. Treat all stored career/review data as private. Read tools may run directly. Before writes that affect a real review or promotion packet, show the proposed record and obtain explicit approval. External snapshots are analyzed locally and are never mutated by this server.",
+        "Career development MCP with separate local records and optional live remote provider tools. Treat career/review data as private. Read tools may run directly. Local guide_pdi_* tools do not access the live provider. Use guide_remote_* for current external data; never silently substitute snapshots. Before writes affecting a review or promotion, show the exact proposed record and obtain explicit approval. Remote writes require an expiring before/after preview and its confirmation digest. Publish evidence before completing an action. Evidence links and learning completion must be assessed separately from product work-item status. Never retry uncertain remote writes blindly.",
     }
   );
 

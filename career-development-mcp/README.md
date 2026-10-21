@@ -21,6 +21,9 @@ or Azure DevOps Server work item as evidence through the sibling
 - stdio and authenticated Streamable HTTP transports
 - structured MCP results, bounded pagination and explicit safety annotations
 - optimistic revisions and retained local backups for recoverable updates
+- optional live IDP web API provider for personal plans, actions and evidence comments
+- explicit evidence-to-criterion assessment and draft completion comments
+- expiring before/after previews, confirmation digests and private audit receipts
 
 ## Install
 
@@ -65,6 +68,95 @@ Keep real feedback, review exports, organization-specific adapters, browser
 profiles and credentials there. Public fixtures must be fictional and neutral.
 
 See [`AGENTS.md`](./AGENTS.md) for the operating policy.
+
+## Live provider
+
+The existing `guide_pdi_*`, goal and snapshot tools operate on local records.
+They do **not** represent the current state of an external platform. Use
+`guide_remote_plans_list` and `guide_remote_plan_get` to read live data, and
+`guide_remote_plan_analyze` to inspect action progress and writing gaps. Remote
+authentication failure is reported; it never falls back silently to an old
+snapshot. `guide_remote_status` checks configuration and optionally connectivity.
+
+Configure `CAREER_REMOTE_PROVIDER=idp` with the provider's HTTPS API origin
+and its exact hostname in `CAREER_REMOTE_ALLOWED_HOSTS`. Supply one authentication
+source in private `.env`: `CAREER_REMOTE_AUTH_TOKEN`, `CAREER_REMOTE_AUTH_COOKIE`,
+or `CAREER_REMOTE_SESSION_FILE`. The last option accepts a dedicated JSON object
+containing only a `cookies` array from an authorized session; only matching
+domain/path, unexpired cookies are forwarded. Keep that file inside
+`CAREER_REMOTE_SESSION_ROOT` (default `./local-private/auth`) after symlink
+resolution. Signing in to another browser or to the MCP client does not grant
+this server access to that browser's credentials. Renew expired credentials
+privately; never paste them in chat or tool arguments.
+
+The `idp` adapter implements a reusable IDP web API contract with `employee`
+identity, plans, actions and comments. Route paths can be configured with
+`CAREER_REMOTE_ROUTES_JSON`; its fixed keys are `self`, `plans`, `plan`, `actions`,
+`actionCreate`, `action`, `actionStatus` and `comments`. Paths remain relative
+to the configured origin, and `{planId}`/`{actionId}` placeholders must match
+the default contract. See `DEFAULT_IDP_ROUTES` in the configuration module.
+The adapter accepts flat plan lists or `content` pages, `{plan}` details,
+`{action}` entries and flat or `{comment}` comment entries. Provider-specific
+configuration remains private; incompatible response models require a separate
+adapter rather than silent field guessing.
+
+Additional bounds are documented in `.env.example`: request timeout, response
+bytes, preview expiry and retained record quota. Requests run sequentially,
+with zero automatic retries, HTTPS certificate verification, pinned public DNS
+resolution and no redirects. Private, loopback, metadata, transition and mapped
+IP ranges are denied. Errors omit upstream bodies, headers and credentials.
+Unknown `CAREER_REMOTE_*` keys are reported without their values.
+
+Use `guide_action_assess` with the actual action description, its complete
+criteria and explicit evidence for each criterion. It prepares a linked comment
+and identifies gaps. It does not independently verify supplied links, invent
+metrics, infer completion from a closed PBI or substitute experience with a
+different technology for a required course. Review the proposed text and sources.
+
+For writing, `guide_remote_change_prepare` accepts one of these operations:
+
+| Operation | Target | Allowed changes |
+|---|---|---|
+| `plan_create` | authenticated employee | title, description, startDate, endDate, actions, expectations |
+| `plan_update` | planId | title, description, startDate, endDate |
+| `action_create` | planId | title, description, dueDate |
+| `action_update` | planId + actionId | title, description, dueDate |
+| `comment_add` | planId, optional actionId | text; action title is prepended when linked |
+| `action_status` | planId + actionId | status; commentId and optional commentPage for completion |
+
+Fields outside the selected operation are rejected. Dates must be real calendar
+dates and action deadlines must fit the plan. New plans require at least one
+action. Provider-specific identifiers, tags, permissions and arbitrary HTTP
+requests are not public tool inputs. Only the authenticated employee's plans
+can be accessed. Remote deletion and editing another employee are unsupported.
+
+Preparation returns the target, before/after, preview ID, confirmation digest
+and expiry. The `before`/`after` maps intentionally vary by the selected operation;
+all mutating inputs remain strict. Show the preview and obtain explicit approval
+before `guide_remote_change_apply`. Publish the approved evidence comment first;
+then prepare completion using its returned `commentId`. The comment must name
+the action and link evidence. Other statuses are `PENDING` and `IN_PROGRESS`.
+
+Apply rechecks identity and the remote content digest, serializes local writes
+across processes, persists audit intent before writing and verifies updates.
+It never resends an uncertain create/comment. An applied preview can be replayed
+to retrieve its stored receipt without writing again. After an interrupted or
+uncertain write, read the source and reconcile before preparing a replacement.
+An interrupted process may leave `data/remote-previews/apply.lock`; remove it
+only after confirming no process is applying and reconciling outstanding records.
+The bounded private records retain the preview and audit history; archive
+reconciled records when the quota is reached. No automatic purge loses receipts.
+
+IDP web API does not expose a documented atomic conditional update contract. The
+immediate digest comparison prevents stale local previews but cannot prevent an
+external editor racing the provider's write. Avoid concurrent editing in other
+clients; mismatches after update are reported for reconciliation. No remote
+transaction or atomic multi-step completion is claimed.
+
+The adapter uses the provider's web API contract, which can change independently
+of this server. Unsupported shapes fail closed. Public tests use synthetic data;
+validate a read with your authorized account after configuring the provider.
+Reload MCP tools in already-open clients after installing this version.
 
 ## Daily workflow
 
