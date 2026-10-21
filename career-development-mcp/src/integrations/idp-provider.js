@@ -250,7 +250,7 @@ export function createIdpProvider(http, routes = DEFAULT_IDP_ROUTES) {
       if (operation === "comment_add")
         return http(route("comments"), {
           method: "POST",
-          body: { plan: target.planId, text: changes.text },
+          body: { form: { plan: Number(target.planId), text: changes.text } },
           form: true,
         });
       throw new Error("Unsupported remote operation.");
