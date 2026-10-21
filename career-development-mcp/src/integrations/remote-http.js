@@ -151,9 +151,13 @@ export function createRemoteHttp(
         payload = form
           ? Object.entries(body)
               .map(([name, value]) => {
-                if (!/^[a-zA-Z]+$/.test(name) || typeof value !== "string")
+                if (!/^[a-zA-Z]+$/.test(name))
                   throw new Error("Invalid remote form field.");
-                return `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`;
+                if (typeof value === "string")
+                  return `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`;
+                if (value && Object.getPrototypeOf(value) === Object.prototype)
+                  return `--${boundary}\r\nContent-Disposition: form-data; name="${name}"; filename="blob"\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(value)}\r\n`;
+                throw new Error("Invalid remote form field.");
               })
               .join("") + `--${boundary}--\r\n`
           : JSON.stringify(body);

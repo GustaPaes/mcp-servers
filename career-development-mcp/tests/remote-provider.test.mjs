@@ -236,6 +236,44 @@ test("cancels before transmission and aborts an in-flight HTTPS request", async 
   assert.equal(sent.length, 1);
 });
 
+test("sends evidence comments as a typed JSON multipart part with correct UTF-8 length", async () => {
+  const seen = [];
+  const provider = createIdpProvider(
+    createRemoteHttp(config, { request: fakeRequest({}, seen) }),
+  );
+  const text = "Ação: Validar piloto\n\nResultado: https://example.com/pr/1";
+  await provider.execute("comment_add", { planId: "1" }, { text });
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].options.method, "POST");
+  assert.equal(seen[0].url.pathname, "/idp/plans/comments");
+  assert.equal(
+    seen[0].options.headers["content-length"],
+    Buffer.byteLength(seen[0].body),
+  );
+  const multipart = await new Response(seen[0].body, {
+    headers: { "content-type": seen[0].options.headers["content-type"] },
+  }).formData();
+  assert.deepEqual([...multipart.keys()], ["form"]);
+  const part = multipart.get("form");
+  assert.equal(part.type, "application/json");
+  assert.deepEqual(JSON.parse(await part.text()), { plan: 1, text });
+});
+
+test("rejects invalid or oversized multipart fields before transmitting", async () => {
+  const seen = [];
+  const http = createRemoteHttp(config, { request: fakeRequest({}, seen) });
+  for (const body of [
+    { "bad\r\nfield": "value" },
+    { form: null },
+    { form: [] },
+    { form: { text: "x".repeat(131072) } },
+  ])
+    await assert.rejects(() =>
+      http("/comments", { method: "POST", form: true, body }),
+    );
+  assert.equal(seen.length, 0);
+});
+
 test("scopes dedicated session cookies and denies secret files outside their root", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "career-auth-"));
   try {
@@ -771,8 +809,8 @@ test("executes and verifies the complete synthetic plan/action/comment workflow 
         assert.equal(form, true);
         const comment = {
           id: 40,
-          plan: Number(body.plan),
-          text: body.text,
+          plan: body.form.plan,
+          text: body.form.text,
           createdAt: "2026-10-01",
         };
         comments.push(comment);
