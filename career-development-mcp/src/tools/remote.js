@@ -138,6 +138,10 @@ const byOperation = {
 export function validateRemoteChange(args) {
   const input = prepareInput.parse(args);
   input.changes = byOperation[input.operation].parse(input.changes);
+  if (Buffer.byteLength(JSON.stringify(input.changes)) > 65536)
+    throw new Error(
+      "The combined change payload exceeds 64 KiB. Reduce the text or number of actions.",
+    );
   if (
     redactSensitiveValue(JSON.stringify(input.changes)) !==
     JSON.stringify(input.changes)

@@ -129,6 +129,7 @@ dates and action deadlines must fit the plan. New plans require at least one
 action. Provider-specific identifiers, tags, permissions and arbitrary HTTP
 requests are not public tool inputs. Only the authenticated employee's plans
 can be accessed. Remote deletion and editing another employee are unsupported.
+The combined change payload is limited to 64 KiB before a preview is created.
 
 Preparation returns the target, before/after, preview ID, confirmation digest
 and expiry. The `before`/`after` maps intentionally vary by the selected operation;
@@ -142,6 +143,10 @@ across processes, persists audit intent before writing and verifies updates.
 It never resends an uncertain create/comment. An applied preview can be replayed
 to retrieve its stored receipt without writing again. After an interrupted or
 uncertain write, read the source and reconcile before preparing a replacement.
+An unresolved attempt blocks new previews for the same plan (or new-plan scope).
+A fresh preview cannot bypass an uncertain write. After an operator verifies the
+outcome, archive the reconciled record privately with its audit history; do not
+discard an unresolved record to retry a mutation.
 An interrupted process may leave `data/remote-previews/apply.lock`; remove it
 only after confirming no process is applying and reconciling outstanding records.
 The bounded private records retain the preview and audit history; archive

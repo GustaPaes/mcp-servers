@@ -570,6 +570,15 @@ test("records uncertain writes and refuses resend, including concurrent calls", 
     assert.ok(results.every((r) => r.status === "rejected"));
     assert.equal(provider.state.calls, 1);
     assert.ok(results.every((r) => !r.reason.message.includes("hidden")));
+    await assert.rejects(
+      () =>
+        changes.prepare({
+          operation: "comment_add",
+          planId: "1",
+          changes: { text: "Another attempt: https://example.com/evidence" },
+        }),
+      /unresolved remote write/,
+    );
   }));
 
 test("aborts for another process lock or a tampered preview", async () =>

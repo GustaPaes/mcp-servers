@@ -96,6 +96,22 @@ export function createRemoteChanges({
       const current = await currentFor(record);
       checkTarget(record, current);
       record.scope = scope(current.employee);
+      for (const name of entries.filter((name) => name.endsWith(".json"))) {
+        const file = resolveInside(directory, name);
+        if ((await fs.stat(file)).size > 1048576)
+          throw new Error(
+            "A private preview exceeds the supported storage limit. Reconcile it before proceeding.",
+          );
+        const previous = JSON.parse(await fs.readFile(file, "utf8"));
+        if (
+          previous.scope === record.scope &&
+          previous.target?.planId === record.target.planId &&
+          ["attempted", "uncertain"].includes(previous.state)
+        )
+          throw new Error(
+            "An unresolved remote write exists for this plan. Reconcile its outcome before preparing another write; a new preview cannot bypass an uncertain attempt.",
+          );
+      }
       record.expectedRevision = current.data?.revision ?? null;
       record.before =
         input.operation === "plan_create"
