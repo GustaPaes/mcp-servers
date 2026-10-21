@@ -14,7 +14,7 @@ const { TOOL_MANIFEST, TOOL_RISK, TOTAL_TOOLS } = await import("../src/server.js
 const { normalizeWorkItemId } = await import("../src/integrations/tfs-bridge.js");
 
 test.after(async () => {
-  await fs.rm(root, { recursive: true, force: true });
+  await fs.rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
 });
 
 test("keeps definitions, handlers and explicit risk policies in one manifest", () => {

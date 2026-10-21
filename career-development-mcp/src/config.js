@@ -21,7 +21,7 @@ function positiveInteger(value, fallback, label, max = Number.MAX_SAFE_INTEGER) 
 }
 
 export const SERVER_NAME = "career-development-mcp";
-export const SERVER_VERSION = "1.1.0";
+export const SERVER_VERSION = "1.2.0";
 export const MCP_HTTP_PORT = positiveInteger(process.env.MCP_HTTP_PORT, 3020, "MCP_HTTP_PORT", 65_535);
 export const MCP_HTTP_TOKEN = firstNonEmpty(process.env.MCP_HTTP_TOKEN);
 export const MCP_HTTP_HOST = firstNonEmpty(process.env.MCP_HTTP_HOST, "127.0.0.1");

@@ -16,7 +16,7 @@ const snapshots = await import("../src/tools/snapshots.js");
 const daily = await import("../src/tools/daily.js");
 
 test.after(async () => {
-  await fs.rm(root, { recursive: true, force: true });
+  await fs.rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
 });
 
 test("rejects path traversal in entity identifiers", async () => {

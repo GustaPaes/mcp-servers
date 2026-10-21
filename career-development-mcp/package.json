@@ -1,6 +1,6 @@
 {
   "name": "career-development-mcp",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "description": "MCP server for PDIs, SMART goals, competencies, evidence and career review workflows.",

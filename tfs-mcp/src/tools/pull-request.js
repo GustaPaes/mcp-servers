@@ -590,6 +590,7 @@ export async function toolListPRs(args) {
     created_by,
     target_branch,
     top = 10,
+    skip = 0,
   } = z
     .strictObject({
       repo: z.string().optional(),
@@ -597,15 +598,19 @@ export async function toolListPRs(args) {
       created_by: z.string().optional(),
       target_branch: z.string().optional(),
       top: z.number().int().min(1).max(100).default(10),
+      skip: z.number().int().min(0).max(100000).default(0),
     })
     .parse(args);
+
+  if (skip > 0 && !repo) throw new Error("Informe repo para paginar o histórico de PRs sem perder a ordenação entre repositórios.");
 
   const repositories = repo ? [resolveRepo(repo)] : getConfiguredRepositories();
   const queryParams = {
     "$top": top,
+    "$skip": skip,
   };
-  if (status !== "all") queryParams["searchCriteria.status"] = status;
-  if (created_by) queryParams["searchCriteria.reviewerId"] = created_by;
+  queryParams["searchCriteria.status"] = status;
+  if (created_by) queryParams["searchCriteria.creatorId"] = created_by;
   if (target_branch)
     queryParams["searchCriteria.targetRefName"] = `refs/heads/${target_branch}`;
 
