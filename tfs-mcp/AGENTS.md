@@ -27,6 +27,13 @@ observes the current PR/builds; it does not run tests or persist a plan.
 
 READ tools may be used without extra confirmation, but summarize sensitive results instead of pasting large private payloads.
 
+For `tfs_list_prs`, `created_by` is the creator's identity GUID, and `status:all`
+includes active, completed and abandoned PRs. An authored-activity report must
+use creator identity; review participation is a separate contribution.
+For a full historical inventory, enumerate repositories and page each one with
+`top` (maximum 100) and `skip`. A nonzero `skip` requires an explicit repository;
+the combined default list is a bounded recent overview, not a complete history.
+
 ### REMOTE_WRITE
 
 `tfs_work_item_create`, `tfs_update_work_item`, `tfs_update_issue_analysis`,
