@@ -106,6 +106,8 @@ with zero automatic retries, HTTPS certificate verification, pinned public DNS
 resolution and no redirects. Private, loopback, metadata, transition and mapped
 IP ranges are denied. Errors omit upstream bodies, headers and credentials.
 Unknown `CAREER_REMOTE_*` keys are reported without their values.
+MCP request cancellation stops queued requests and destroys an in-flight HTTPS
+request. A cancelled write with uncertain delivery still requires reconciliation.
 
 Use `guide_action_assess` with the actual action description, its complete
 criteria and explicit evidence for each criterion. It prepares a linked comment

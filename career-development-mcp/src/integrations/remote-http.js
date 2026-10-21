@@ -4,7 +4,13 @@ import net from "node:net";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { requireRemoteConfig } from "./remote-config.js";
+
+const cancellationContext = new AsyncLocalStorage();
+export function withRemoteCancellation(signal, task) {
+  return cancellationContext.run(signal, task);
+}
 
 // Deny non-global ranges, including IPv4-mapped IPv6 and cloud metadata targets.
 export function isPublicAddress(address) {
@@ -121,6 +127,7 @@ export function createRemoteHttp(
   let queue = Promise.resolve();
   return async (route, { method = "GET", body, form = false } = {}) => {
     requireRemoteConfig(config);
+    const signal = cancellationContext.getStore();
     const target = new URL(route, config.origin);
     if (
       !route.startsWith("/") ||
@@ -132,6 +139,8 @@ export function createRemoteHttp(
     )
       throw new Error("Remote request escaped the configured API origin.");
     const run = async () => {
+      if (signal?.aborted)
+        throw new Error("Remote request cancelled before transmission.");
       const headers = {
         accept: "application/json",
         ...(await authentication(config, target)),
@@ -158,10 +167,12 @@ export function createRemoteHttp(
       return new Promise((resolveResult, reject) => {
         let settled = false;
         let timer;
+        let cancel;
         const finish = (error, value) => {
           if (settled) return;
           settled = true;
           clearTimeout(timer);
+          if (cancel) signal?.removeEventListener("abort", cancel);
           error ? reject(error) : resolveResult(value);
         };
         const req = request(
@@ -223,6 +234,19 @@ export function createRemoteHttp(
             ),
           ),
         );
+        cancel = () => {
+          finish(
+            new Error(
+              "Remote request cancelled. Outcome may be unknown for writes; reconcile before retrying.",
+            ),
+          );
+          req.destroy();
+        };
+        signal?.addEventListener("abort", cancel, { once: true });
+        if (signal?.aborted) {
+          cancel();
+          return;
+        }
         timer = setTimeout(() => {
           finish(
             new Error(

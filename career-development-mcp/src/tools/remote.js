@@ -6,7 +6,10 @@ import {
   readRemoteConfig,
   requireRemoteConfig,
 } from "../integrations/remote-config.js";
-import { createRemoteHttp } from "../integrations/remote-http.js";
+import {
+  createRemoteHttp,
+  withRemoteCancellation,
+} from "../integrations/remote-http.js";
 import { createIdpProvider } from "../integrations/idp-provider.js";
 import { createRemoteChanges } from "../integrations/remote-changes.js";
 import {
@@ -270,7 +273,10 @@ export function createRemoteTools({
       inputSchema: z.toJSONSchema(input),
       outputSchema: z.toJSONSchema(output),
     },
-    handler: async (args) => output.parse(await handler(input.parse(args))),
+    handler: async (args, { signal } = {}) =>
+      withRemoteCancellation(signal, async () =>
+        output.parse(await handler(input.parse(args))),
+      ),
     policy: { risk, idempotent: risk === TOOL_RISK.READ, openWorld },
   });
   const empty = z.object({}).strict();

@@ -549,14 +549,14 @@ export function buildMcpServer() {
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOL_MANIFEST.map((entry) => entry.definition) }));
 
-  server.setRequestHandler(CallToolRequestSchema, async (req) => {
+  server.setRequestHandler(CallToolRequestSchema, async (req, extra) => {
     const { name, arguments: args } = req.params;
     const entry = TOOL_BY_NAME.get(name);
     if (!entry) {
       return { content: [{ type: "text", text: `Tool desconhecida: ${name}` }], isError: true };
     }
     try {
-      const result = await entry.handler(args ?? {});
+      const result = await entry.handler(args ?? {}, { signal: extra?.signal });
       return formatToolResult(result);
     } catch (error) {
       return { content: [{ type: "text", text: `Erro: ${error.message}` }], isError: true };

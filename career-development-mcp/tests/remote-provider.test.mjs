@@ -14,6 +14,7 @@ import {
   createRemoteHttp,
   isPublicAddress,
   publicLookup,
+  withRemoteCancellation,
 } from "../src/integrations/remote-http.js";
 import {
   createIdpProvider,
@@ -207,6 +208,32 @@ test("bounds HTTP, denies redirects/origin escape, redacts errors and never retr
       )("/me"),
     /timed out/,
   );
+});
+
+test("cancels before transmission and aborts an in-flight HTTPS request", async () => {
+  const cancelled = new AbortController();
+  cancelled.abort();
+  const neverSent = [];
+  const first = createRemoteHttp(config, {
+    request: fakeRequest({}, neverSent),
+  });
+  await assert.rejects(
+    () => withRemoteCancellation(cancelled.signal, () => first("/me")),
+    /cancelled before transmission/,
+  );
+  assert.equal(neverSent.length, 0);
+  const controller = new AbortController();
+  const sent = [];
+  const second = createRemoteHttp(config, {
+    request: fakeRequest({ hang: true }, sent),
+  });
+  const pending = withRemoteCancellation(controller.signal, () =>
+    second("/me"),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  controller.abort();
+  await assert.rejects(() => pending, /cancelled/);
+  assert.equal(sent.length, 1);
 });
 
 test("scopes dedicated session cookies and denies secret files outside their root", async () => {
