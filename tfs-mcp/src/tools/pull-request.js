@@ -449,11 +449,12 @@ function parsePortuguesePRInput(args, { includeBranches }) {
         }
       : { id: z.union([z.number(), z.string()]) }),
     repo: z.string().optional(),
-    titulo: z.string().min(8),
-    resumo: z.string().min(20),
+    titulo: includeBranches ? z.string().min(8) : z.string().min(8).optional(),
+    resumo: includeBranches ? z.string().min(20) : z.string().min(20).optional(),
     alteracoes: z.array(z.string().min(1)).max(20).optional(),
     validacoes: z.array(z.string().min(1)).max(20).optional(),
     work_item_ids: z.array(z.union([z.number(), z.string()])).max(20).optional(),
+    isDraft: z.boolean().optional(),
     dry_run: z.boolean().default(false),
     confirm: z.boolean().optional(),
     reason: z.string().optional(),
@@ -462,8 +463,13 @@ function parsePortuguesePRInput(args, { includeBranches }) {
     confirm_high_impact: z.string().optional(),
   });
   const input = schema.parse(args);
-  assertPortugueseText(input.titulo, "titulo");
-  assertPortugueseText(input.resumo, "resumo");
+  const hasMetadata = ["titulo", "resumo", "alteracoes", "validacoes", "work_item_ids"]
+    .some(field => input[field] !== undefined);
+  if (!includeBranches && (hasMetadata ? input.titulo === undefined || input.resumo === undefined : input.isDraft === undefined)) {
+    throw new Error("Informe titulo e resumo para alterar metadados, ou apenas isDraft para mudar Draft/Ready.");
+  }
+  if (input.titulo !== undefined) assertPortugueseText(input.titulo, "titulo");
+  if (input.resumo !== undefined) assertPortugueseText(input.resumo, "resumo");
   for (const item of [...(input.alteracoes ?? []), ...(input.validacoes ?? [])]) {
     assertPortugueseText(item, "conteudo");
   }
@@ -482,6 +488,15 @@ function summarizeWorkItemLinkMutation(workItemLinks) {
   };
 }
 
+async function confirmRequestedDraftState(repository, pullRequestId, expected) {
+  if (expected === undefined) return {};
+  const persisted = await tfsGet(`/git/repositories/${repository}/pullrequests/${pullRequestId}`);
+  if (persisted.isDraft !== expected) {
+    throw new Error(`PR ${pullRequestId} gravado, mas o estado Draft solicitado não foi confirmado. Consulte o PR antes de repetir a operação.`);
+  }
+  return { isDraft: persisted.isDraft };
+}
+
 export async function toolCreatePR(args) {
   const input = parsePortuguesePRInput(args, { includeBranches: true });
   const repository = resolveRepo(input.repo);
@@ -495,7 +510,10 @@ export async function toolCreatePR(args) {
     tool: "tfs_create_pr",
     target: { repository, sourceBranch, targetBranch },
     operation: "create pull request",
-    changes: { title: input.titulo, description, workItemIds: input.work_item_ids ?? [] },
+    changes: {
+      title: input.titulo, description, workItemIds: input.work_item_ids ?? [],
+      ...(input.isDraft === undefined ? {} : { isDraft: input.isDraft }),
+    },
     controls,
     highImpact: impact.highImpact,
     highImpactMatch: impact.match,
@@ -513,6 +531,7 @@ export async function toolCreatePR(args) {
         targetRefName: `refs/heads/${targetBranch}`,
         title: input.titulo,
         description,
+        ...(input.isDraft === undefined ? {} : { isDraft: input.isDraft }),
       });
       const workItemLinks = await ensurePullRequestWorkItemLinks({
         pr: result,
@@ -526,6 +545,7 @@ export async function toolCreatePR(args) {
         repository,
         sourceBranch,
         targetBranch,
+        ...await confirmRequestedDraftState(repository, result.pullRequestId, input.isDraft),
         delivery: deliveryChecklist(),
         ...summarizeWorkItemLinkMutation(workItemLinks),
         url: `${buildProjectUrl(`/_git/${repository}/pullrequest/${result.pullRequestId}`)}`,
@@ -536,17 +556,21 @@ export async function toolCreatePR(args) {
 
 export async function toolUpdatePR(args) {
   const input = parsePortuguesePRInput(args, { includeBranches: false });
+  const stateOnly = input.titulo === undefined;
   const { repository, pr, parsedRef } = await resolvePullRequestTarget(input.id, input.repo);
   const formattedPr = formatPR(pr);
-  const description = preserveDeliverySections(pr.description, buildPortuguesePRDescription(input));
+  const description = stateOnly ? undefined : preserveDeliverySections(pr.description, buildPortuguesePRDescription(input));
   const controls = normalizeMutationControls(input);
   const context = getRequestContext();
   const impact = detectHighImpact(repository, formattedPr.sourceBranch, formattedPr.targetBranch);
   const plan = buildMutationPlan({
     tool: "tfs_update_pr",
     target: { pullRequestId: parsedRef.id, repository, sourceBranch: formattedPr.sourceBranch, targetBranch: formattedPr.targetBranch },
-    operation: "update pull request metadata",
-    changes: { title: input.titulo, description, workItemIds: input.work_item_ids ?? [] },
+    operation: stateOnly ? "update pull request draft state" : "update pull request metadata",
+    changes: {
+      ...(stateOnly ? {} : { title: input.titulo, description, workItemIds: input.work_item_ids ?? [] }),
+      ...(input.isDraft === undefined ? {} : { isDraft: { before: pr.isDraft ?? false, after: input.isDraft } }),
+    },
     controls,
     highImpact: impact.highImpact,
     highImpactMatch: impact.match,
@@ -559,11 +583,11 @@ export async function toolUpdatePR(args) {
     plan,
     controls,
     apply: async () => {
-      const latest = await tfsGet(`/git/repositories/${repository}/pullrequests/${parsedRef.id}`);
-      const effectiveDescription = preserveDeliverySections(latest.description, buildPortuguesePRDescription(input));
+      const latest = stateOnly ? pr : await tfsGet(`/git/repositories/${repository}/pullrequests/${parsedRef.id}`);
+      const effectiveDescription = stateOnly ? undefined : preserveDeliverySections(latest.description, buildPortuguesePRDescription(input));
       const result = await tfsPatch(`/git/repositories/${repository}/pullrequests/${parsedRef.id}`, {
-        title: input.titulo,
-        description: effectiveDescription,
+        ...(stateOnly ? {} : { title: input.titulo, description: effectiveDescription }),
+        ...(input.isDraft === undefined ? {} : { isDraft: input.isDraft }),
       });
       const workItemLinks = await ensurePullRequestWorkItemLinks({
         pr: { ...pr, ...result, repository: result.repository ?? pr.repository },
@@ -575,6 +599,7 @@ export async function toolUpdatePR(args) {
         pullRequestId: result.pullRequestId,
         title: result.title,
         description: result.description ?? effectiveDescription,
+        ...await confirmRequestedDraftState(repository, parsedRef.id, input.isDraft),
         delivery: deliveryChecklist(),
         ...summarizeWorkItemLinkMutation(workItemLinks),
         url: `${buildProjectUrl(`/_git/${repository}/pullrequest/${result.pullRequestId}`)}`,
