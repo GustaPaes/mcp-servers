@@ -34,7 +34,7 @@
     "@gustapaes/mcp-config-kit": "file:../packages/config-kit",
     "@gustapaes/mcp-runtime": "file:../packages/mcp-runtime",
     "@modelcontextprotocol/sdk": "^1.31.0",
-    "dotenv": "^16.4.7",
+    "dotenv": "^18.0.8",
     "fast-xml-parser": "5.11.2",
     "pino": "^9.6.0",
     "zod": "^4.6.5"
