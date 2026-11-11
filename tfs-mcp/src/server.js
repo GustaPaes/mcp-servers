@@ -377,12 +377,13 @@ export const TOOL_DEFS = [
     name: "tfs_create_pr",
     title: "Create Pull Request",
     description:
-      "Cria Pull Request com titulo e descricao padronizados em portugues e vincula work_item_ids como ArtifactLinks reais, com reconciliacao idempotente e resultado por item.",
+      "Cria Pull Request com titulo e descricao padronizados em portugues, isDraft opcional e vinculos work_item_ids como ArtifactLinks reais.",
     inputSchema: {
       type: "object",
       properties: {
         source_branch: { type: "string", description: "Branch de origem, sem refs/heads/." },
         target_branch: { type: "string", description: "Branch de destino, sem refs/heads/." },
+        isDraft: { type: "boolean", description: "Cria como Draft quando true ou Ready quando false; omitido preserva o padrao do servidor. O estado solicitado e confirmado por leitura." },
         repo: { type: "string" },
         titulo: { type: "string", description: "Titulo obrigatoriamente em portugues." },
         resumo: { type: "string", description: "Resumo em portugues do objetivo e impacto da mudanca." },
@@ -402,13 +403,14 @@ export const TOOL_DEFS = [
     name: "tfs_update_pr",
     title: "Update Pull Request",
     description:
-      "Atualiza titulo e descricao de um Pull Request ativo e adiciona work_item_ids como ArtifactLinks reais sem duplicar vinculos existentes.",
+      "Atualiza titulo e descricao e adiciona work_item_ids como ArtifactLinks reais. Para mudar somente Draft/Ready preservando textos e vinculos, informe apenas id e isDraft.",
     inputSchema: {
       type: "object",
       properties: {
         id: { type: ["number", "string"] },
         repo: { type: "string" },
         titulo: { type: "string", description: "Titulo obrigatoriamente em portugues." },
+        isDraft: { type: "boolean", description: "true move para Draft; false move para Ready; omitido preserva o estado atual. O estado solicitado e confirmado por leitura." },
         resumo: { type: "string", description: "Resumo em portugues do objetivo e impacto da mudanca." },
         alteracoes: { type: "array", items: { type: "string" } },
         validacoes: { type: "array", items: { type: "string" } },
@@ -419,7 +421,14 @@ export const TOOL_DEFS = [
         },
         ...MutationControlsSchema,
       },
-      required: ["id", "titulo", "resumo"],
+      required: ["id"],
+      anyOf: [
+        { required: ["titulo", "resumo"] },
+        {
+          required: ["isDraft"],
+          not: { anyOf: ["titulo", "resumo", "alteracoes", "validacoes", "work_item_ids"].map(field => ({ required: [field] })) },
+        },
+      ],
     },
   },
   {

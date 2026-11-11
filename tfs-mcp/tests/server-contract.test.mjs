@@ -30,6 +30,20 @@ test("publishes the complete safe tool contract", async () => {
     const { tools } = await client.listTools();
     assert.equal(tools.length, 42);
     const names = new Set(tools.map((tool) => tool.name));
+    for (const name of ["tfs_create_pr", "tfs_update_pr"]) {
+      const schema = tools.find(tool => tool.name === name).inputSchema;
+      assert.equal(schema.properties.isDraft.type, "boolean");
+      assert.equal(schema.required.includes("isDraft"), false);
+      assert.equal(schema.properties.isDraft.default, undefined);
+    }
+    const updatePrSchema = tools.find(tool => tool.name === "tfs_update_pr").inputSchema;
+    assert.deepEqual(updatePrSchema.required, ["id"]);
+    assert.deepEqual(updatePrSchema.anyOf[0].required, ["titulo", "resumo"]);
+    assert.deepEqual(updatePrSchema.anyOf[1].required, ["isDraft"]);
+    assert.deepEqual(updatePrSchema.anyOf[1].not.anyOf.map(option => option.required[0]),
+      ["titulo", "resumo", "alteracoes", "validacoes", "work_item_ids"]);
+    assert.deepEqual(tools.find(tool => tool.name === "tfs_create_pr").inputSchema.required,
+      ["source_branch", "target_branch", "titulo", "resumo"]);
     assert(names.has('tfs_prepare_pr_delivery'));
     assert(names.has('tfs_publish_pr_delivery'));
     assert.equal(tools.find((tool) => tool.name === 'tfs_prepare_pr_delivery').annotations.readOnlyHint, true);

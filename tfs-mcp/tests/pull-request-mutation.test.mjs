@@ -81,6 +81,8 @@ test("confirmed PR creation writes and audits a real work item ArtifactLink", as
     });
 
     const createRequest = requests.find((request) => request.method === "POST");
+    assert.equal("isDraft" in createRequest.body, false);
+    assert.equal(requests.filter(request => request.method === "GET" && request.url.includes("/pullrequests/")).length, 0);
     assert.equal("workItemRefs" in createRequest.body, false);
     assert.equal(result.partial, false);
     assert.deepEqual(result.warnings, []);
@@ -174,6 +176,8 @@ test("confirmed PR update reconciles requested work item links", async () => {
       (request) => request.method === "PATCH" && request.url.includes("/pullrequests/42")
     );
     assert.equal(metadataRequest.contentType, "application/json");
+    assert.equal("isDraft" in metadataRequest.body, false);
+    assert.equal(requests.filter(request => request.method === "GET" && request.url.includes("/pullrequests/42")).length, 2);
     assert(metadataRequest.body.description.includes('Final managed evidence'));
     assert.equal(result.description, metadataRequest.body.description);
     assert.equal(result.delivery.evidenceLevel, 'unverified');

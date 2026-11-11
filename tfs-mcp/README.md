@@ -205,6 +205,8 @@ See the [root README](../README.md#%EF%B8%8F-install-in-your-mcp-client) for rea
 ### Pull requests & review
 - `tfs_list_prs`, `tfs_get_pr`
 - `tfs_create_pr`, `tfs_update_pr` — create/update standardized PR metadata and reconcile requested work items as idempotent, direct PR artifact links
+  - Optional `isDraft: true` creates/moves to Draft; `false` creates/moves to Ready. Omit it to keep existing behavior (creation uses the server default; updates preserve the current state). Explicit changes are included in the mutation preview and verified by readback; no automatic state repair or retry follows an unconfirmed result.
+  - For a state-only update, send `id` and `isDraft` (plus optional repository/mutation controls). Only `isDraft` is patched, preserving human text and links, including concurrent edits. Metadata updates still require both `titulo` and `resumo`.
 - `tfs_review_pr` — automated code review with project-specific rules + modern frontend/backend best practices
 - `tfs_comment_review_findings` — turn findings into PR comments with suggested fixes
 - `tfs_prepare_pr_review` — **premium** review-prep workflow (work items, threads, risks, areas, automated review, and pipeline runs matched by repository plus PR identity or commit SHA)
