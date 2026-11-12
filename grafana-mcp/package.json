@@ -1,0 +1,19 @@
+{
+  "name": "grafana-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "Read-only Grafana dashboard inspection with bounded, query-free summaries.",
+  "engines": { "node": ">=20.19.0" },
+  "scripts": {
+    "start": "node index.js",
+    "lint": "node --check index.js && node --check src/server.js && node --check src/client.js",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.31.0",
+    "dotenv": "^16.4.7",
+    "zod": "^4.6.6"
+  }
+}

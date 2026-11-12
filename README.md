@@ -13,6 +13,8 @@
 
 ## Projects
 
+- [`grafana-mcp`](./grafana-mcp) - Read-only dashboard inspection, export analysis and alert candidates.
+
 - [`azure-mcp`](./azure-mcp) - Azure Cloud operations through the official Microsoft Azure MCP server.
 - [`meta-ads-mcp`](./meta-ads-mcp) - Multi-account Facebook / Instagram Ads MCP with dry-run, audit and budget caps.
 - [`tfs-mcp`](./tfs-mcp) - Generic TFS / Azure DevOps Server work items, custom process profiles, PRs, review, delivery workflows and specialist-routed guidance.

@@ -9,6 +9,7 @@ if (!npmCli || !fs.existsSync(npmCli)) {
 }
 
 const jobs = [
+  { name: "grafana-mcp", cwd: "grafana-mcp", commands: [["run", "lint"], ["test"]] },
   {
     name: "azure-mcp",
     cwd: "azure-mcp",

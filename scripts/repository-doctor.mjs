@@ -7,6 +7,7 @@ import { inspectPublishableText, isPrivatePublishablePath } from "./repository-p
 const root = path.resolve(import.meta.dirname, "..");
 const expectedServers = [
   "azure-mcp",
+  "grafana-mcp",
   "career-development-mcp",
   "meta-ads-mcp",
   "oci-mcp",

@@ -14,7 +14,8 @@
     "meta-ads-mcp/web-panel",
     "oci-mcp/oci-extras-mcp",
     "playwright-mcp",
-    "tfs-mcp"
+    "tfs-mcp",
+    "grafana-mcp"
   ],
   "overrides": {
     "postcss": "^8.5.23",

@@ -20,6 +20,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - name: grafana-mcp
+            dir: grafana-mcp
+            command: npm run lint && npm test
           - name: tfs-mcp
             dir: tfs-mcp
             command: npm test && npm run smoke:http
